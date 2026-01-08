@@ -7,7 +7,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+COPY src/{{app_name}}/ ./{{app_name}}/
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+ENV PYTHONPATH=/app
+CMD ["python", "-m", "uvicorn", "{{app_name}}.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -5,16 +5,16 @@ on:
     branches:
       - main
     paths:
-      - {{app_name}}/**
+      - src/**
       - .github/workflows/ci-{{app_name}}.yml
   pull_request:
     paths:
-      - {{app_name}}/**
+      - src/**
       - .github/workflows/ci-{{app_name}}.yml
 
 defaults:
   run:
-    working-directory: ./{{app_name}}
+    working-directory: ./
 
 jobs:
   # As an enhancement, it is possible to share the built docker image and share

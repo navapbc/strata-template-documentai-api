@@ -1,0 +1,22 @@
+import json
+from pathlib import Path
+from enum import Enum
+
+def load_settings():
+    config_path = Path(__file__).parent / "settings.json"
+    with open(config_path) as f:
+        return json.load(f)
+
+SETTINGS = load_settings()
+API_VERSION = SETTINGS["api"]["version"]
+DEFAULT_TIMEOUT = SETTINGS["api"]["default_timeout"]
+SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
+DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
+UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
+
+# generate DocumentCategory enum dynamically
+DocumentCategory = Enum(
+    'DocumentCategory',
+    {category.upper(): category for category in SETTINGS["document_categories"]},
+    type=str
+)

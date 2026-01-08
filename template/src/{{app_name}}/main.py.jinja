@@ -1,0 +1,62 @@
+import os
+import uuid
+
+from fastapi import FastAPI, Form, Header, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+
+from {{app_name}}.config.settings import API_VERSION, SUPPORTED_CONTENT_TYPES, DocumentCategory
+
+app = FastAPI(
+    title="{{app_name | title}} Document Processing API",
+    description="API for {{app_name}} document processing",
+    version=API_VERSION,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def root():
+    return {"message": "{{app_name | title}} Document Processing API", "status": "healthy"}
+
+
+@app.get("/health")
+async def health():
+    return {"message": "healthy"}
+
+
+@app.get("/config")
+def get_config():
+    return {
+        "apiUrl": f"http://localhost:8000",
+        "version": API_VERSION,
+        "environment": os.getenv("ENVIRONMENT", "local"),
+        "endpoints": {
+            "upload": "/v1/documents",
+            "status": "/v1/documents/{job_id}",
+            "health": "/health"
+        },
+        "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
+    }
+
+@app.post("/v1/documents")
+async def create_document(
+    request: Request,
+    response: Response,
+    file: UploadFile,
+    category: DocumentCategory | None = Form(None, description="Type of document being uploaded"),
+    trace_id: str = Header(None, alias="X-Trace-ID")
+):
+    """Upload a document for processing and return a job ID."""
+    return {"job_id": str(uuid.uuid4())}
+
+
+@app.get("/v1/documents/{job_id}")
+async def get_document_results(job_id: str, include_pii=False):
+    """Get processing results by job ID"""
+    return {"job_id": job_id, "status": "processing"}

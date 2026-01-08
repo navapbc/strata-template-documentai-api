@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "idp-platform"
+version = "0.1.0"
+description = "Intelligent document processing platform"
+authors = ["IDP <noreply@noreply.com>"] 
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.34.0"
+fastapi = "^0.104.0"
+pypdf = "^3.17.4"
+python-magic = "^0.4.27"
+python-multipart = "^0.0.6"
+opencv-python-headless = "4.9.0.80"
+numpy = "1.26.4"
+pdf2image = "^1.16.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.0.0"
+isort = "^5.12.0"
+pytest = "^7.0.0"
+pytest-xdist = "^3.0.0"
+ruff = "^0.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
