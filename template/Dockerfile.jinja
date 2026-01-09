@@ -3,6 +3,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# install curl for health check and libmagic for file type detection
+RUN apt-get update && apt-get install -y curl libmagic1 && rm -rf /var/lib/apt/lists/*
+
 RUN pip install uv
 
 COPY pyproject.toml .

@@ -1,14 +1,18 @@
 import os
+import magic
 import uuid
 
-from fastapi import FastAPI, Form, Header, Request, Response, UploadFile
+from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from {{app_name}}.config.settings import (
     API_VERSION,
     SUPPORTED_CONTENT_TYPES,
     DocumentCategory,
+    ProcessStatus,
 )
+
+from {{app_name}}.services.s3 import upload_document_for_processing
 
 app = FastAPI(
     title="{{app_name | title}} Document Processing API",
@@ -59,10 +63,48 @@ async def create_document(
     trace_id: str = Header(None, alias="X-Trace-ID"),
 ):
     """Upload a document for processing and return a job ID."""
-    return {"job_id": str(uuid.uuid4())}
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+
+    file_content = await file.read()
+    actual_content_type = magic.from_buffer(file_content, mime=True)
+
+    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type detected '{actual_content_type}'. File must be "
+                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
+            ),
+        )
+
+    print(f"Processing {file.filename}; "
+          f"category: {category}; "
+          f"content-type: {actual_content_type}")
+
+    file.file.seek(0)
+    file_extension = file.filename.split(".")[-1]
+    file_name = file.filename.split(".")[0]
+    unique_file_name = f"{file_name}-{uuid.uuid4()}.{file_extension}"
+    job_id = str(uuid.uuid4())
+
+    await upload_document_for_processing(
+        file=file, 
+        unique_file_name=unique_file_name, 
+        content_type=actual_content_type, 
+        user_provided_document_category=category,
+        job_id=job_id,
+        trace_id=trace_id)
+    
+    response.headers["X-Trace-ID"] = trace_id
+    return {
+        "jobId": job_id,
+        "status": ProcessStatus.NOT_STARTED.value,
+        "message": "Document uploaded successfully"
+    }
 
 
 @app.get("/v1/documents/{job_id}")
 async def get_document_results(job_id: str, include_pii=False):
     """Get processing results by job ID"""
-    return {"job_id": job_id, "status": "processing"}
+    return {"job_id": job_id, "status": ProcessStatus.PROCESSING.value}

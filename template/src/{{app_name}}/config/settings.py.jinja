@@ -22,3 +22,9 @@ DocumentCategory = Enum(
     {category.upper(): category for category in SETTINGS["document_categories"]},
     type=str,
 )
+
+ProcessStatus = Enum(
+    "ProcessStatus",
+    {status.upper(): status for status in SETTINGS["processing_statuses"].values()},
+    type=str,
+)

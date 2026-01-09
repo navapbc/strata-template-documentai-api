@@ -1,0 +1,76 @@
+
+import asyncio
+import logging
+import os
+from fastapi import HTTPException, UploadFile
+from {{app_name}}.config.settings import (
+    UPLOAD_METADATA_KEYS,
+    DocumentCategory
+)
+
+from {{app_name}}.utils.aws_client_factory import AWSClientFactory
+
+DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+
+async def upload_document_for_processing(
+    file: UploadFile,
+    unique_file_name: str,
+    content_type: str,
+    user_provided_document_category: DocumentCategory = None,
+    job_id: str = None,
+    trace_id: str = None
+):
+    print("=== S3 UPLOAD STARTED ===")
+    print(f"DEBUG S3: user_provided_document_category = {repr(user_provided_document_category)}")
+    print(f"DEBUG S3: type = {type(user_provided_document_category)}")
+    if not DDE_INPUT_LOCATION:
+        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+
+    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+
+    try:
+        metadata = {}
+        if user_provided_document_category:
+            # add type check for safety
+            if not isinstance(user_provided_document_category, DocumentCategory):
+                raise ValueError(
+                    f"Expected DocumentCategory, got {type(user_provided_document_category)}"
+                )
+
+            print(f"DEBUG S3: Converting to string: {str(user_provided_document_category)}")
+            metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
+                user_provided_document_category.value
+            )
+
+        if job_id:
+            metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
+
+        if trace_id:
+            metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        print(f"DEBUG S3: About to upload with metadata: {metadata}")
+        print(f"DEBUG S3: file.file = {file.file}")
+        print(f"DEBUG S3: document_upload_bucket_name = {repr(bucket_name)}")
+        print(f"DEBUG S3: unique_file_name = {repr(unique_file_name)}")
+
+
+        extra_args = {"Metadata": metadata} if metadata else {}
+        extra_args["ContentType"] = content_type
+
+        s3_client = AWSClientFactory.get_s3_client()
+
+        s3_client.upload_fileobj(
+            file.file,
+            bucket_name,
+            unique_file_name,
+            ExtraArgs=extra_args,
+        )
+        print("=== S3 UPLOAD SUCCESS ===")
+
+    except Exception as e:
+        logging.error(f"Error uploading file to S3: {e}")
+        print(f"=== S3 UPLOAD FAILED: {e} ===")
+        raise HTTPException(
+            status_code=500,
+            detail="Document upload failed",
+        )
