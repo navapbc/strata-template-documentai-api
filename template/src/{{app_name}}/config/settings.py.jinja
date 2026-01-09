@@ -1,11 +1,13 @@
 import json
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
+
 
 def load_settings():
     config_path = Path(__file__).parent / "settings.json"
     with open(config_path) as f:
         return json.load(f)
+
 
 SETTINGS = load_settings()
 API_VERSION = SETTINGS["api"]["version"]
@@ -16,7 +18,7 @@ UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
 
 # generate DocumentCategory enum dynamically
 DocumentCategory = Enum(
-    'DocumentCategory',
+    "DocumentCategory",
     {category.upper(): category for category in SETTINGS["document_categories"]},
-    type=str
+    type=str,
 )

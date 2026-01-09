@@ -31,7 +31,6 @@ class DocumentMetadata:
     DOCUMENT_METRICS_RAW = "documentMetricsRaw"
     DOCUMENT_METRICS_NORMALIZED = "documentMetricsNormalized"
     OVERALL_BLUR_SCORE = "overallBlurScore"
-    
 
     # operational intelligence
     ADDITIONAL_INFO = "additionalInfo"
@@ -43,9 +42,11 @@ class DocumentMetadata:
     BDA_MATCHED_BLUEPRINT_NAME = "matchedBlueprintName"
     BDA_MATCHED_BLUEPRINT_CONFIDENCE = "matchedBlueprintConfidence"
 
-     # list of blueprint fields that were expected but did not have any data extracted
-    BDA_MATCHED_BLUEPRINT_FIELD_EMPTY_LIST = "matchedBlueprintFieldEmptyList" 
+    # list of blueprint fields that were expected but did not have any data extracted
+    BDA_MATCHED_BLUEPRINT_FIELD_EMPTY_LIST = "matchedBlueprintFieldEmptyList"
     BDA_MATCHED_BLUEPRINT_FIELD_BELOW_THRESHOLD_LIST = "matchedBlueprintFieldBelowThresholdList"
     BDA_MATCHED_BLUEPRINT_FIELD_COUNT = "matchedBlueprintFieldCount"
     BDA_MATCHED_BLUEPRINT_FIELD_COUNT_NOT_EMPTY = "matchedBlueprintFieldCountNotEmpty"
-    BDA_MATCHED_BLUEPRINT_FIELD_NOT_EMPTY_AVG_CONFIDENCE = "matchedBlueprintFieldNotEmptyAvgConfidence"
+    BDA_MATCHED_BLUEPRINT_FIELD_NOT_EMPTY_AVG_CONFIDENCE = (
+        "matchedBlueprintFieldNotEmptyAvgConfidence"
+    )

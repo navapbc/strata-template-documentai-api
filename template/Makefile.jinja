@@ -1,1 +1,32 @@
-# Add your build and development commands here
+DOCKER_RUN = docker-compose run --rm {{app_name}}
+
+.PHONY: install test lint format clean run
+
+# install dependencies
+install:
+	$(DOCKER_RUN) uv pip install --system ".[dev]"
+
+# run tests
+test:
+	$(DOCKER_RUN) python -m pytest
+
+# lint code
+lint:
+	$(DOCKER_RUN) python -m ruff check .
+
+# format code
+# format code
+format:
+	$(DOCKER_RUN) sh -c "python -m black . && python -m isort . && python -m ruff check --fix ."
+
+# start the development server
+start:
+	docker-compose up
+
+# stop the development server
+stop:
+	docker-compose down
+
+# clean up
+clean:
+	$(DOCKER_RUN) rm -rf .pytest_cache htmlcov .coverage

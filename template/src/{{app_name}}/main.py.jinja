@@ -4,7 +4,11 @@ import uuid
 from fastapi import FastAPI, Form, Header, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from {{app_name}}.config.settings import API_VERSION, SUPPORTED_CONTENT_TYPES, DocumentCategory
+from {{app_name}}.config.settings import (
+    API_VERSION,
+    SUPPORTED_CONTENT_TYPES,
+    DocumentCategory,
+)
 
 app = FastAPI(
     title="{{app_name | title}} Document Processing API",
@@ -20,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def root():
     return {"message": "{{app_name | title}} Document Processing API", "status": "healthy"}
@@ -33,16 +38,17 @@ async def health():
 @app.get("/config")
 def get_config():
     return {
-        "apiUrl": f"http://localhost:8000",
+        "apiUrl": "http://localhost:8000",
         "version": API_VERSION,
         "environment": os.getenv("ENVIRONMENT", "local"),
         "endpoints": {
             "upload": "/v1/documents",
             "status": "/v1/documents/{job_id}",
-            "health": "/health"
+            "health": "/health",
         },
         "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
     }
+
 
 @app.post("/v1/documents")
 async def create_document(
@@ -50,7 +56,7 @@ async def create_document(
     response: Response,
     file: UploadFile,
     category: DocumentCategory | None = Form(None, description="Type of document being uploaded"),
-    trace_id: str = Header(None, alias="X-Trace-ID")
+    trace_id: str = Header(None, alias="X-Trace-ID"),
 ):
     """Upload a document for processing and return a job ID."""
     return {"job_id": str(uuid.uuid4())}
