@@ -11,6 +11,21 @@
       "image/tiff"
     ]
   },
+  "config_defaults": {
+    "field_confidence_threshold": 0.7,
+    "poll_interval_seconds": 5,
+    "max_wait_seconds": 120,
+    "alb_timeout_buffer_seconds": 15,
+    "user_document_type_not_provided": "Not specified",
+    "bda_region_not_available": "N/A",
+    "log_retention_days": 30,
+    "bda_document_detection_min_char_length": 50,
+    "blurry_document_threshold": 25,
+    "bda_max_image_size_bytes": 5242880,
+    "bda_max_document_file_size_bytes": 524288000,
+    "ddb_emit_custom_cloudwatch_metrics": false,
+    "empty_field_percentage_threshold": 50
+ },
   "document_categories": [
     "income",
     "expenses",
@@ -18,10 +33,37 @@
     "employment_training"
   ],
   "processing_statuses": {
-    "not_started": "not_started",
-    "processing": "processing",
-    "completed": "completed",
-    "failed": "failed"
+    "all": {
+      "multipage": "multipage", 
+      "no_custom_blueprint_matched": "no_custom_blueprint_matched",
+      "no_document_detected": "no_document_detected",
+      "not_implemented": "not_implemented",
+      "password_protected": "password_protected",
+      "pending_grayscale_conversion": "pending_grayscale_conversion",
+      "success": "success"
+    },
+    "completed": [
+      "success",
+      "failed",
+      "no_document_detected",
+      "no_custom_blueprint_matched"
+    ],
+    "not_supported": [
+        "multipage",
+        "password_protected",
+        "no_document_detected"
+    ],
+    "pending_extraction": [
+      "not_started",
+      "pending_grayscale_conversion"
+    ],
+    "success": [
+      "success",
+      "miscategorized", 
+      "no_custom_blueprint_matched",
+      "not_sampled",
+      "not_implemented"
+    ]
   },
   "upload_metadata_keys": {
     "user_provided_document_category": "user-provided-document-category",

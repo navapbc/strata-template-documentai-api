@@ -16,7 +16,18 @@ SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
 UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
 
-# generate DocumentCategory enum dynamically
+PROCESSING_STATUS_COMPLETED = SETTINGS["processing_statuses"]["completed"]
+PROCESSING_STATUS_SUCCESS = SETTINGS["processing_statuses"]["success"]
+PROCESSING_STATUS_NOT_SUPPORTED = SETTINGS["processing_statuses"]["not_supported"]
+PROCESSING_STATUS_PENDING_EXTRACTION = SETTINGS["processing_statuses"]["pending_extraction"]
+
+# ----- generate enums dynamically from settings -----
+ConfigDefaults = Enum(
+    "ConfigDefaults",
+    {key.upper(): value for key, value in SETTINGS["config_defaults"].items()},
+    type=str,
+)
+
 DocumentCategory = Enum(
     "DocumentCategory",
     {category.upper(): category for category in SETTINGS["document_categories"]},
@@ -25,6 +36,6 @@ DocumentCategory = Enum(
 
 ProcessStatus = Enum(
     "ProcessStatus",
-    {status.upper(): status for status in SETTINGS["processing_statuses"].values()},
+    {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
