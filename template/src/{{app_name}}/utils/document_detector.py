@@ -173,7 +173,7 @@ class DocumentDetector:
         images = []
 
         if self._is_password_protected(file_bytes):
-            print("MultiPageDetector: Password-protected PDF - cannot process")
+            print("DocumentDetector: Password-protected PDF - cannot process")
             return images
     
         try:
@@ -567,8 +567,25 @@ class DocumentDetector:
         Returns:
             tuple: (raw_metrics, normalized_metrics, ranges, overall_blur_score)
         """
-        return self._process_image_bytes(file_bytes, file_name, self._get_quality_metrics)
-
+        try:
+            file_type = self.detect_file_type(file_bytes)
+            
+            if file_type in IMAGE_FILE_TYPES:
+                return self._process_image_bytes(file_bytes, file_name, self._get_quality_metrics)
+            elif file_type in DOCUMENT_FILE_TYPES:
+                if file_type == "PDF":
+                    pages = self._split_pdf_into_images(file_bytes, max_pages=1)
+                else:
+                    pages = self._split_tiff_into_images(file_bytes, max_pages=1)
+                
+                if pages:
+                    return self._get_quality_metrics(pages[0], file_name)
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error calculating quality metrics for {file_name}: {e}")
+            return None
 
     def _get_quality_metrics(self, gray_image, file_name):
 
@@ -643,6 +660,9 @@ class DocumentDetector:
         Returns:
             bool: True if document is considered blurry
         """
+        if not raw_metrics or not normalized_metrics or overall_blur_score is None:
+            return False
+            
         # high edge + high laplacian = legitimate sharpness (high-res scan)
         if (raw_metrics.edge_score > 0.08 and 
             raw_metrics.laplacian_variance > 1000):
@@ -857,7 +877,6 @@ class DocumentDetector:
             overall_blur_score=overall_blur_score,
             is_blurry=bool(
                 not is_password_protected and 
-                not self.is_pdf(file_bytes) and 
                 self._is_blurry(raw_metrics, normalized_metrics, overall_blur_score)
             ),
             is_multipage = bool(not is_password_protected and self._is_multipage_document(file_bytes, file_name)),
