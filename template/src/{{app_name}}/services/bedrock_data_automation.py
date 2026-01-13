@@ -1,5 +1,5 @@
 """Bedrock Data Automation service methods"""
-from {{app_name}}.utils.aws_client_factory import AWSClientFactory
+from utils.aws_client_factory import AWSClientFactory
 
 def invoke_data_automation_async(project_arn: str, input_config: dict, output_config: dict) -> dict:
     """Invoke BDA job asynchronously"""

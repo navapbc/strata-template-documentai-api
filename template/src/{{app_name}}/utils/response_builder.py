@@ -1,15 +1,15 @@
 """Utility to build standardized API responses for document processing results."""
 from datetime import datetime, timezone
 from typing import Any
-from {{app_name}}.utils.models import ClassificationData, V1ApiResponse
-from {{app_name}}.schemas.document_metadata import DocumentMetadata
-from {{app_name}}.config.settings import (
+from utils.models import ClassificationData, V1ApiResponse
+from schemas.document_metadata import DocumentMetadata
+from config.settings import (
     ProcessStatus,
     PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     PROCESSING_STATUS_SUCCESS
 )
-from {{app_name}}.utils.response_codes import ResponseCodes
+from utils.response_codes import ResponseCodes
 
 def _to_camel_case(snake_str: str) -> str:
     """Convert snake_case to camelCase"""
@@ -91,9 +91,9 @@ def build_v1_api_response(
     if status in PROCESSING_STATUS_SUCCESS:
         base_response["status"] = "completed"
     
-        if status == DocumentMetadata.ProcessStatus.SUCCESS:
+        if status == ProcessStatus.SUCCESS:
             base_response["message"] = "Document processed successfully"
-        elif status == DocumentMetadata.ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED:
+        elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED:
             base_response["message"] = "Document processed but no matching template found"
 
         if data:
@@ -103,7 +103,7 @@ def build_v1_api_response(
             })
     
     # error responses
-    elif status == DocumentMetadata.ProcessStatus.FAILED:
+    elif status == ProcessStatus.FAILED:
         base_response.update({
             "status": "failed",
             "error": error_message or "Processing failed",

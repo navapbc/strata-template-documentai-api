@@ -1,5 +1,5 @@
 """S3 Service methods"""
-from {{app_name}}.utils.aws_client_factory import AWSClientFactory
+from utils.aws_client_factory import AWSClientFactory
 
 def upload_file(bucket: str, key: str, file_obj, content_type: str = None, metadata: dict = None) -> None:
     """Upload file to S3"""

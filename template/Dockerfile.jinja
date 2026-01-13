@@ -12,5 +12,5 @@ COPY pyproject.toml .
 COPY src/{{app_name}}/ ./src/{{app_name}}/
 RUN uv pip install --system -e ".[dev]"
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src/{{app_name}}
 CMD ["python", "-m", "uvicorn", "{{app_name}}.main:app", "--host", "0.0.0.0", "--port", "8000"]

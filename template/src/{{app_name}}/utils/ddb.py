@@ -5,11 +5,11 @@ import random
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-from {{app_name}}.schemas.document_metadata import DocumentMetadata
-from {{app_name}}.services import ddb as ddb_service
-from {{app_name}}.services import s3 as s3_service
-from {{app_name}}.utils.response_builder import get_v1_api_response, build_v1_api_response
-from {{app_name}}.config.settings import (
+from schemas.document_metadata import DocumentMetadata
+from services import ddb as ddb_service
+from services import s3 as s3_service
+from utils.response_builder import get_v1_api_response, build_v1_api_response
+from config.settings import (
     ConfigDefaults,
     ProcessStatus,
     PROCESSING_STATUS_COMPLETED,
@@ -17,8 +17,8 @@ from {{app_name}}.config.settings import (
     PROCESSING_STATUS_PENDING_EXTRACTION,
     PROCESSING_STATUS_SUCCESS
 )
-from {{app_name}}.utils.models import FieldMetrics, V1ApiResponse, ClassificationData, ProcessingTimes
-from {{app_name}}.utils.response_codes import ResponseCodes
+from utils.models import FieldMetrics, V1ApiResponse, ClassificationData, ProcessingTimes
+from utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
     updates = []
     values = {}
 
-    if status == DocumentMetadata.ProcessStatus.STARTED:
+    if status == ProcessStatus.STARTED:
         updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
         values[":bdaStartedAt"] = datetime.now(timezone.utc).isoformat()
 
@@ -400,7 +400,7 @@ def insert_ddb(
 def set_bda_processing_status_not_started(object_key: str):
     update_ddb(
         object_key=object_key,
-        status=DocumentMetadata.ProcessStatus.NOT_STARTED,
+        status=ProcessStatus.NOT_STARTED,
         api_response_json=None,
     )
 
@@ -416,7 +416,7 @@ def classify_as_failed(object_key: str, error_message: str, data: Classification
 
     update_ddb(
         object_key=object_key,
-        status=DocumentMetadata.ProcessStatus.FAILED,
+        status=ProcessStatus.FAILED,
         api_response_json=api_response_json,
         error_message=error_message,
         data=data,
@@ -437,7 +437,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
 
     update_ddb(
         object_key=object_key,
-        status=DocumentMetadata.ProcessStatus.SUCCESS,
+        status=ProcessStatus.SUCCESS,
         api_response_json=api_response_json,
         data=data,
     )
@@ -458,7 +458,7 @@ def insert_initial_ddb_record(
     # has OpenCV/Poppler layers attached. including this import at the top of the 
     # file will cause the  container deployment to fail with a ModuleNotFoundError: 
     # No module named 'cv2' error
-    from {{app_name}}.utils.document_detector import DocumentDetector, QualityMetricsNormalized, QualityMetricsRaw  # noqa: E402
+    from utils.document_detector import DocumentDetector, QualityMetricsNormalized, QualityMetricsRaw  # noqa: E402
 
     
     print(f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}")
@@ -476,7 +476,7 @@ def insert_initial_ddb_record(
     is_multipage_detection_enabled = False # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
     api_response_json = None
-    process_status = DocumentMetadata.ProcessStatus.PENDING_GRAYSCALE_CONVERSION
+    process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
     document_detector = DocumentDetector()
@@ -489,29 +489,29 @@ def insert_initial_ddb_record(
     overall_blur_score = profile.overall_blur_score
 
     if content_type == "image/bmp":
-        process_status = DocumentMetadata.ProcessStatus.NOT_IMPLEMENTED
+        process_status = ProcessStatus.NOT_IMPLEMENTED
         response_code = ResponseCodes.BITMAP_RECEIVED
 
     elif is_password_protected:
-        process_status = DocumentMetadata.ProcessStatus.PASSWORD_PROTECTED
+        process_status = ProcessStatus.PASSWORD_PROTECTED
         response_code = ResponseCodes.MISSING_FIELDS
 
     elif bda_percentage == 0.0 or not bda_percentage:
-        process_status = DocumentMetadata.ProcessStatus.NOT_IMPLEMENTED
+        process_status = ProcessStatus.NOT_IMPLEMENTED
         response_code = ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED
 
     elif bda_percentage == 1.0 or random.random() <= bda_percentage:
         if is_document_blurry:
-            process_status = DocumentMetadata.ProcessStatus.BLURRY_DOCUMENT_DETECTED
+            process_status = ProcessStatus.BLURRY_DOCUMENT_DETECTED
             response_code = ResponseCodes.BLURRY_DOCUMENT_DETECTED
 
         else:
             if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
                 # image file - needs grayscale conversion first
-                process_status = DocumentMetadata.ProcessStatus.PENDING_GRAYSCALE_CONVERSION
+                process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
             else:
                 # non-image file - can go directly to BDA
-                process_status = DocumentMetadata.ProcessStatus.NOT_STARTED
+                process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
 
@@ -520,7 +520,7 @@ def insert_initial_ddb_record(
                 try:
                     if document_detector.is_multipage_document(file_bytes):
                         print(f"{source_object_key} is a multipage doc")
-                        process_status = DocumentMetadata.ProcessStatus.MULTIPAGE
+                        process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
                     else:
@@ -532,7 +532,7 @@ def insert_initial_ddb_record(
             print("=== Finished multi-page detection validation ===")
 
     else:
-        process_status = DocumentMetadata.ProcessStatus.NOT_SAMPLED
+        process_status = ProcessStatus.NOT_SAMPLED
         response_code = ResponseCodes.SUCCESS
 
     # initial status does not qualify for bda processing

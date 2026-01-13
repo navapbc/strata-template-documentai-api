@@ -3,10 +3,11 @@ class ResponseCodes:
     BITMAP_RECEIVED = "001"
     DOCUMENT_TYPE_NOT_IMPLEMENTED = "002"
     MISSING_FIELDS = "101"
-    DOCUMENT_IS_BLURRY = "104"
+    BLURRY_DOCUMENT_DETECTED = "104"
     MULTIPAGE_DOCUMENT = "400"
     INTERNAL_PROCESSING_ERROR = "999"
 
+    @classmethod
     def get_message(cls, code: str) -> str:
         """Get message for response code"""
         messages = {

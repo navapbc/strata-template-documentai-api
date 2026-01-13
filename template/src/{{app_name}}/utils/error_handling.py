@@ -27,12 +27,12 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
 
             # try to update DDB status to failed
             try:
-                from {{app_name}}.config.settings import (
+                from config.settings import (
                     UPLOAD_METADATA_KEYS,
                     DocumentCategory
                 )
-                from  {{app_name}}.utils.ddb import ClassificationData, classify_as_failed
-                from  {{app_name}}.services.s3 import extract_s3_info_from_event
+                from utils.ddb import ClassificationData, classify_as_failed
+                from utils.s3 import extract_s3_info_from_event
 
                 object_key, _, metadata = extract_s3_info_from_event(event, include_metadata=True)
 

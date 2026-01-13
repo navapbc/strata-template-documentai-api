@@ -50,12 +50,10 @@ class AWSClientFactory:
 
     @classmethod
     def get_ddb_metadata_table(cls):
-        table_name = os.getenv("DOCUMENT_UPLOAD_METADATA_TABLE_NAME")
+        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
 
-        # considered a separate get_ddb_table helper method, but seemed overkill
-        # for two methods
         if not table_name:
-            raise ValueError("DOCUMENT_UPLOAD_METADATA_TABLE_NAME environment variable not set")
+            raise ValueError("DDE_DOCUMENT_METADATA_TABLE_NAME environment variable not set")
 
         return cls._get_dynamodb_table(table_name)
 

@@ -1,18 +1,22 @@
 import os
+import logging
 import magic
 import uuid
 
+from config.settings import UPLOAD_METADATA_KEYS
+from services import s3 as s3_service
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from {{app_name}}.config.settings import (
+from config.settings import (
     API_VERSION,
     SUPPORTED_CONTENT_TYPES,
     DocumentCategory,
     ProcessStatus,
 )
 
-from {{app_name}}.services.s3 import upload_document_for_processing
+DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+
 
 app = FastAPI(
     title="{{app_name | title}} Document Processing API",
@@ -54,6 +58,58 @@ def get_config():
     }
 
 
+async def upload_document_for_processing(
+    file: UploadFile,
+    unique_file_name: str,
+    content_type: str,
+    user_provided_document_category: DocumentCategory = None,
+    job_id: str = None,
+    trace_id: str = None
+):
+    print("=== S3 UPLOAD STARTED ===")
+    print(f"DEBUG S3: user_provided_document_category = {repr(user_provided_document_category)}")
+    print(f"DEBUG S3: type = {type(user_provided_document_category)}")
+    if not DDE_INPUT_LOCATION:
+        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+
+    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+
+    try:
+        metadata = {}
+        if user_provided_document_category:
+            # add type check for safety
+            if not isinstance(user_provided_document_category, DocumentCategory):
+                raise ValueError(
+                    f"Expected DocumentCategory, got {type(user_provided_document_category)}"
+                )
+
+            print(f"DEBUG S3: Converting to string: {str(user_provided_document_category)}")
+            metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
+                user_provided_document_category.value
+            )
+
+        if job_id:
+            metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
+
+        if trace_id:
+            metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        print(f"DEBUG S3: About to upload with metadata: {metadata}")
+        print(f"DEBUG S3: file.file = {file.file}")
+        print(f"DEBUG S3: document_upload_bucket_name = {repr(bucket_name)}")
+        print(f"DEBUG S3: unique_file_name = {repr(unique_file_name)}")
+
+        s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
+        print("=== S3 UPLOAD SUCCESS ===")
+
+    except Exception as e:
+        logging.error(f"Error uploading file to S3: {e}")
+        print(f"=== S3 UPLOAD FAILED: {e} ===")
+        raise HTTPException(
+            status_code=500,
+            detail="Document upload failed",
+        )
+    
 @app.post("/v1/documents")
 async def create_document(
     request: Request,

@@ -16,8 +16,12 @@ SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
 UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
 
+# individual processing statuses
+PROCESSING_STATUS_SUCCESS = SETTINGS["processing_statuses"]["all"]["success"]
+PROCESSING_STATUS_NOT_STARTED = SETTINGS["processing_statuses"]["all"]["not_started"]
+
+# grouped processing statuses
 PROCESSING_STATUS_COMPLETED = SETTINGS["processing_statuses"]["completed"]
-PROCESSING_STATUS_SUCCESS = SETTINGS["processing_statuses"]["success"]
 PROCESSING_STATUS_NOT_SUPPORTED = SETTINGS["processing_statuses"]["not_supported"]
 PROCESSING_STATUS_PENDING_EXTRACTION = SETTINGS["processing_statuses"]["pending_extraction"]
 

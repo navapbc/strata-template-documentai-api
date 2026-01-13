@@ -1,19 +1,19 @@
 import os
 import sys
 
-from {{app_name}}.config.settings import ConfigDefaults, UPLOAD_METADATA_KEYS
-from {{app_name}}.schemas.document_metadata import DocumentMetadata
-from {{app_name}}.utils.ddb import (
+from config.settings import ConfigDefaults, ProcessStatus, UPLOAD_METADATA_KEYS
+from schemas.document_metadata import DocumentMetadata
+from utils.ddb import (
     classify_as_not_implemented,
     get_ddb_record,
     insert_initial_ddb_record,
     set_bda_processing_status_not_started,
 )
 
-from {{app_name}}.utils.models import ClassificationData
-from {{app_name}}.services import s3 as s3_service
-from {{app_name}}.utils.error_handling import handle_lambda_errors
-from {{app_name}}.utils.s3 import validate_s3_event, extract_s3_info_from_event
+from utils.models import ClassificationData
+from services import s3 as s3_service
+from utils.error_handling import handle_lambda_errors
+from utils.s3 import validate_s3_event, extract_s3_info_from_event
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
@@ -110,7 +110,7 @@ def handler(event, context):
         existing_record = get_ddb_record(upload_object_key)
         status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
 
-        if status == DocumentMetadata.ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
+        if status == ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
             response = s3_service.head_object(upload_bucket_name, upload_object_key)
             file_size_bytes = response['ContentLength']
             content_type = response.get('ContentType', 'application/octet-stream')
@@ -153,7 +153,7 @@ def handler(event, context):
         record = get_ddb_record(upload_object_key)
         status = record.get(DocumentMetadata.PROCESS_STATUS)
 
-        if status == DocumentMetadata.ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
+        if status == ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
             convert_s3_object_to_grayscale(upload_bucket_name, upload_object_key)
             print(f"Converted {upload_object_key} to grayscale for BDA processing")
 

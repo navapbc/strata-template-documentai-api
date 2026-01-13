@@ -1,6 +1,6 @@
 """Data models for document classification and field metrics"""
 from dataclasses import dataclass
-from {{app_name}}.settings import DocumentCategory
+from config.settings import DocumentCategory
 from typing import Any
 
 
