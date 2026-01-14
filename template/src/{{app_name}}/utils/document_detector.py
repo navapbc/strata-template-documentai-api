@@ -746,7 +746,7 @@ class DocumentDetector:
 
         return np.nan
 
-    def _get_page_count(self, file_bytes):
+    def get_page_count(self, file_bytes):
         """Count total pages in document."""
         if not file_bytes or file_bytes == 0 or self._is_password_protected(file_bytes):
             return None
@@ -860,7 +860,7 @@ class DocumentDetector:
             )
     
 
-        page_count = self._get_page_count(file_bytes)
+        page_count = self.get_page_count(file_bytes)
         is_password_protected = self._is_password_protected(file_bytes)
         quality_metrics = self._calculate_quality_metrics(file_bytes, file_name)
         

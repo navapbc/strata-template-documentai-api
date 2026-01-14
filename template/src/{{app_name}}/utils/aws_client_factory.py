@@ -1,9 +1,7 @@
 import os
 from functools import lru_cache
 from typing import Optional
-
 import boto3
-
 
 class AWSClientFactory:
     _session: Optional[boto3.Session] = None
@@ -11,7 +9,9 @@ class AWSClientFactory:
     @classmethod
     def get_session(cls) -> boto3.Session:
         if cls._session is None:
-            profile_name = os.getenv("AWS_PROFILE")
+            profile_name = os.getenv("AWS_PROFILE") if not os.getenv("AWS_LAMBDA_FUNCTION_NAME") else None
+            print(f"Using profile: {profile_name}")
+
             cls._session = (
                 boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
             )
@@ -20,7 +20,11 @@ class AWSClientFactory:
 
     @classmethod
     def _get_region(cls) -> str:
-        return os.getenv("STACK_REGION", "us-east-1")
+        return os.getenv("AWS_REGION", "us-east-1")
+
+    @classmethod
+    def _get_dde_region(cls) -> str:
+        return os.getenv("DDD_REGION", "us-east-1")
 
     @classmethod
     def _get_dynamodb_table(cls, table_name: str):
@@ -40,7 +44,7 @@ class AWSClientFactory:
     @lru_cache(maxsize=1)
     def get_bda_runtime_client(cls):
         return cls.get_session().client(
-            "bedrock-data-automation-runtime", region_name=cls._get_region()
+            "bedrock-data-automation-runtime", region_name=cls._get_dde_region()
         )
 
     @classmethod

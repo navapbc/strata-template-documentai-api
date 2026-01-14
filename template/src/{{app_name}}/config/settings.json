@@ -43,6 +43,7 @@
       "not_started": "not_started",
       "password_protected": "password_protected",
       "pending_grayscale_conversion": "pending_grayscale_conversion",
+      "started": "started",
       "success": "success"
     },
     "completed": [

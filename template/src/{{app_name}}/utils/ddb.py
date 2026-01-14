@@ -397,6 +397,15 @@ def insert_ddb(
         raise
 
 
+def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
+    """Mark file processing as started with BDA job ARN"""
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.STARTED,
+        api_response_json=None,
+        bda_invocation_arn=bda_invocation_arn,
+    )
+
 def set_bda_processing_status_not_started(object_key: str):
     update_ddb(
         object_key=object_key,
