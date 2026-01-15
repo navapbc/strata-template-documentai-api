@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from config.constants import BdaResponseFields, ConfigDefaults, DocumentCategory
 from utils.response_codes import ResponseCodes
+from utils.bda import BdaFieldProcessingData, get_text_from_standard_blueprint, extract_field_metadata_from_bda_results
 from utils.ddb import (
     ClassificationData,
     classify_as_no_custom_blueprint_matched,
@@ -33,43 +34,9 @@ class BdaProcessingResults:
     """Data elements derrived from BDA output"""
 
     empty_field_list: list = field(default_factory=list)
-    field_confidence_score_list: list = field(default_factory=list)
+    field_confidence_map_list: list = field(default_factory=list)
     response_code: str | None = None
 
-@dataclass
-class BdaFieldProcessingData:
-    confidence_scores: list
-    empty_fields: list
-    field_confidence_score_list: list
-    
-@dataclass
-class BdaFieldProcessingResult:
-    confidence: float
-    is_empty: bool
-
-
-def get_text_from_standard_blueprint(bda_result_json):
-    """Extract text from BDA standard output for both document and image modalities"""
-    if not bda_result_json:
-        return None
-    
-    semantic_modality = bda_result_json.get("metadata", {}).get("semantic_modality")
-    
-    if semantic_modality == "DOCUMENT" and bda_result_json.get("pages"):
-        page = bda_result_json["pages"][0]
-        text = page.get("representation", {}).get("text", "")
-        if text:
-            return text.strip()
-    
-    elif semantic_modality == "IMAGE" and bda_result_json.get("image"):
-        image_data = bda_result_json["image"]
-        text_words = image_data.get("text_words", [])
-        words = [word.get("text", "") for word in text_words if word.get("text")]
-        text = " ".join(words)
-        if text:
-            return text.strip()
-    
-    return None
 
 
 def get_bda_processing_results(bda_result_json: dict) -> BdaProcessingResults:
@@ -77,68 +44,15 @@ def get_bda_processing_results(bda_result_json: dict) -> BdaProcessingResults:
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
         return BdaProcessingResults(response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR)
     
-    field_data = _extract_field_data(bda_result_json)
+    field_data = extract_field_metadata_from_bda_results(bda_result_json)
     response_code = _determine_response_code(field_data)
     
     return BdaProcessingResults(
-        field_confidence_score_list=field_data.field_confidence_score_list,
+        field_confidence_map_list=field_data.field_confidence_map_list,
         empty_field_list=field_data.empty_fields,
         response_code=response_code
     )
 
-def _extract_field_data(bda_result_json: dict) -> BdaFieldProcessingData:
-    """Extract and categorize field data from BDA result."""
-    explainability_info = bda_result_json[BdaResponseFields.EXPLAINABILITY_INFO]
-    
-    confidence_scores = []
-    empty_fields = []
-    field_confidence_score_list = []
-    
-    for item in explainability_info:
-        if isinstance(item, dict):
-            _process_fields_recursive(item, "", confidence_scores, empty_fields, field_confidence_score_list)
-    
-    return BdaFieldProcessingData(
-        confidence_scores=confidence_scores,
-        empty_fields=empty_fields,
-        field_confidence_score_list=field_confidence_score_list
-    )
-
-
-def _process_fields_recursive(data: dict, parent_key: str, confidence_scores: list, empty_fields: list, field_confidence_score_list: list):
-    """Recursively process fields, handling both flat and nested structures."""
-    for field_name, field_data in data.items():
-        if not isinstance(field_data, dict):
-            continue
-            
-        full_field_name = f"{parent_key}.{field_name}" if parent_key else field_name
-        
-        # check field is an actual extracted value (e.g. confidence score or value) or a nested structure
-        if BdaResponseFields.FIELD_CONFIDENCE in field_data or BdaResponseFields.FIELD_VALUE in field_data:
-            # extracted field - process it
-            field_result = _process_single_field(full_field_name, field_data)
-            field_confidence_score_list.append({full_field_name: field_result.confidence})
-            
-            if field_result.is_empty:
-                empty_fields.append(full_field_name)
-            else:
-                confidence_scores.append(field_result.confidence)
-        else:
-            # nested structure - recursion required
-            _process_fields_recursive(field_data, full_field_name, confidence_scores, empty_fields, field_confidence_score_list)
-
-
-def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessingResult:
-    """Process a single field and return its results."""
-    confidence = field_data.get(BdaResponseFields.FIELD_CONFIDENCE, 0)
-    value = field_data.get(BdaResponseFields.FIELD_VALUE, "")
-    is_empty = len(str(value)) == 0
-    
-    msg = f"Extracted field name: {field_name}, confidence: {confidence}"
-    print(msg)
-    logger.info(msg)
-    
-    return BdaFieldProcessingResult(confidence, is_empty)
 
 def _determine_response_code(field_data: BdaFieldProcessingData) -> str:
     """Determine response code based on field results."""
@@ -182,9 +96,9 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
 
     classification_data = ClassificationData(
         bda_output_s3_uri=bda_output_s3_uri,
+        matched_document_class=document_class,
         matched_blueprint_name=matched_blueprint.name,
-        matched_blueprint_confidence=matched_blueprint.confidence,
-        document_type=document_class,
+        matched_blueprint_confidence=matched_blueprint.confidence,        
     )
 
     print(f"Matched blueprint: {matched_blueprint.name}")
@@ -216,15 +130,15 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         msg = "Custom matching blueprint found, and document type matches. Success."
         print(msg)
         logger.info(msg)
-        idp_info = get_bda_processing_results(bda_result_json)
+        results = get_bda_processing_results(bda_result_json)
 
-        classification_data.field_confidence_scores = idp_info.field_confidence_score_list
-        classification_data.field_empty_list = idp_info.empty_field_list
+        classification_data.field_confidence_scores = results.field_confidence_map_list
+        classification_data.field_empty_list = results.empty_field_list
         classification_data.additional_info = msg
 
         return classify_as_success(
             object_key=uploaded_filename,
-            response_code=idp_info.response_code,
+            response_code=results.response_code,
             data=classification_data,
         )
 

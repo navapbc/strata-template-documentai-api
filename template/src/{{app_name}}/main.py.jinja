@@ -55,11 +55,13 @@ def get_config(request: Request):
     return {
         "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
         "version": API_VERSION,
+        "imageTag": os.getenv("IMAGE_TAG"),
         "environment": os.getenv("ENVIRONMENT", "local"),
         "endpoints": {
             "upload": "/v1/documents",
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
+            "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
             "health": "/health",
         },
         "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
@@ -87,7 +89,7 @@ def _get_job_status(job_id: str) -> JobStatus:
     ddb_record = get_ddb_by_job_id(job_id)
         
     if not ddb_record:
-            return JobStatus(None, None, None, None)
+        return JobStatus(None, None, None, None)
     
     object_key = ddb_record.get(DocumentMetadata.FILE_NAME)
     process_status = ddb_record.get(DocumentMetadata.PROCESS_STATUS)
@@ -256,7 +258,7 @@ async def create_document(
 
 
 @app.get("/v1/documents/{job_id}")
-async def get_document_results(job_id: str, include_pii: bool = False):
+async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID"""
     try:
         job_status = _get_job_status(job_id)
@@ -271,8 +273,18 @@ async def get_document_results(job_id: str, include_pii: bool = False):
                 "message": "Processing in progress"
             }
         
-        # processing complete, return results
-        return json.loads(job_status.v1_response_json)
+        # processing complete
+        if include_extracted_data:
+            # rebuild response with extracted data
+            from utils.response_builder import build_v1_api_response
+            return build_v1_api_response(
+                object_key=job_status.object_key,
+                status=job_status.process_status,
+                include_extracted_data=True
+            )
+        else:
+            # return cached response without extracted data
+            return json.loads(job_status.v1_response_json)
         
     except HTTPException:
         raise

@@ -200,6 +200,7 @@ def _build_update_expression(
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_CONFIDENCE: data.matched_blueprint_confidence,
             DocumentMetadata.FIELD_CONFIDENCE_SCORES: data.field_confidence_scores,
             DocumentMetadata.ADDITIONAL_INFO: data.additional_info,
+            DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: data.matched_document_class,
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_EMPTY_LIST: data.field_empty_list,
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_BELOW_THRESHOLD_LIST: data.field_below_threshold_list,
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_COUNT: metrics.field_count,
@@ -311,8 +312,8 @@ def update_ddb(
     """Update DynamoDB processing status for a file"""
     try:
         # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
-        # and store v1 api response. completedAt, totalProcessingTime not yet
-        # calculated and won't be in the stored v1ApiResponseJson. 
+        # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
+        # stored in ddb and won't be in the stored v1ApiResponseJson. 
         v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
 
         # build base update expression
@@ -506,7 +507,7 @@ def insert_initial_ddb_record(
         internal_api_response: InternalApiResponse = get_internal_api_response(
             object_key=source_object_key,
             response_code=response_code,
-            document_type=None,
+            matched_document_class=None,
         )
 
     insert_ddb(
@@ -550,7 +551,7 @@ def classify_as_success(object_key: str, response_code: str, data: Classificatio
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=response_code,
-        document_type=data.document_type,
+        matched_document_class=data.matched_document_class,
     )
 
     update_ddb(
@@ -568,7 +569,7 @@ def classify_as_failed(object_key: str, error_message: str, data: Classification
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR,
-        document_type=None,
+        matched_document_class=None,
     )
 
     update_ddb(
@@ -588,7 +589,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
-        document_type=None,
+        matched_document_class=None,
     )
 
     update_ddb(
@@ -606,7 +607,7 @@ def classify_as_no_document_detected(object_key: str, data: ClassificationData):
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.NO_DOCUMENT_DETECTED,
-        document_type=None,
+        matched_document_class=None,
     )
 
     update_ddb(
@@ -624,7 +625,7 @@ def classify_as_no_custom_blueprint_matched(object_key: str, data: Classificatio
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
-        document_type=None,
+        matched_document_class=None,
     )
 
     update_ddb(

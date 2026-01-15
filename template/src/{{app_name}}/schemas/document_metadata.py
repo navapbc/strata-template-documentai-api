@@ -41,6 +41,7 @@ class DocumentMetadata:
     BDA_REGION_USED = "bdaRegionUsed"
     BDA_MATCHED_BLUEPRINT_NAME = "matchedBlueprintName"
     BDA_MATCHED_BLUEPRINT_CONFIDENCE = "matchedBlueprintConfidence"
+    BDA_MATCHED_DOCUMENT_CLASS = "bdaMatchedDocumentClass"
 
     # list of blueprint fields that were expected but did not have any data extracted
     BDA_MATCHED_BLUEPRINT_FIELD_EMPTY_LIST = "matchedBlueprintFieldEmptyList"

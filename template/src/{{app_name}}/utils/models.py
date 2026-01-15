@@ -10,7 +10,7 @@ class InternalApiResponse:
 
     validation_passed: bool
     document_category: DocumentCategory
-    document_type: str
+    matched_document_class: str
     response_code: str
     response_message: str
 
@@ -18,7 +18,7 @@ class InternalApiResponse:
 class ClassificationData:
     """Data required for document classification operations"""
     bda_output_s3_uri: str | None = None
-    document_type: str | None = None
+    matched_document_class: str | None = None
     matched_blueprint_name: str | None = None
     matched_blueprint_confidence: float | None = None
     field_confidence_scores: list[dict] | None = None
