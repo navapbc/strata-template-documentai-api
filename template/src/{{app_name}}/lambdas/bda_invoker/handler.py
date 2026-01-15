@@ -1,5 +1,5 @@
 import os
-from config.settings import ProcessStatus
+from config.constants import ProcessStatus
 from schemas.document_metadata import DocumentMetadata
 from utils.bda_invoker import invoke_bedrock_data_automation
 from utils.ddb import (
@@ -13,7 +13,6 @@ from utils.error_handling import handle_lambda_errors
 
 @handle_lambda_errors
 def handler(event, context):
-
     for record in event["Records"]:
         print(f"Processing record: {record['eventName']}")
 
@@ -25,7 +24,7 @@ def handler(event, context):
             .get("S")
         )
 
-        if process_status != ProcessStatus.NOT_STARTED:
+        if process_status != ProcessStatus.NOT_STARTED.value:
             print(f"Skipping {file_name} - status: {process_status}")
             continue
 

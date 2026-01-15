@@ -1,13 +1,13 @@
 """Utility to build standardized API responses for document processing results."""
 from datetime import datetime, timezone
 from typing import Any
-from utils.models import ClassificationData, V1ApiResponse
+from utils.models import ClassificationData, InternalApiResponse
 from schemas.document_metadata import DocumentMetadata
-from config.settings import (
+from config.constants import (
     ProcessStatus,
     PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
-    PROCESSING_STATUS_SUCCESS
+    PROCESSING_STATUSES_SUCCESSFUL
 )
 from utils.response_codes import ResponseCodes
 
@@ -38,26 +38,27 @@ def _get_real_field_values_from_s3(ddb_record: dict) -> dict:
     # get bda extracted values from s3
     pass
 
-def get_v1_api_response(
+def get_internal_api_response(
     object_key: str,
-    user_provided_document_category: str,
     response_code: str,
     document_type: str | None,
-) -> V1ApiResponse:
+) -> InternalApiResponse:
     """
-    Get API response object for external consumers.
+    Get API response object for internal use
     
     Args:
         object_key: S3 file key
-        document_type: Detected document type
         response_code: Processing result code
-        user_provided_document_category: User-specified category
-        
-    Returns:
-        V1ApiResponse: Response object for API endpoints
-    """
+        document_type: Detected document type
 
-    return V1ApiResponse(
+    Returns:
+        InternalApiResponse: Response object for API endpoints
+    """
+    # import here to avoid circular dependency
+    from utils.ddb import get_user_provided_document_category
+    user_provided_document_category = get_user_provided_document_category(object_key)
+
+    return InternalApiResponse(
         validation_passed=ResponseCodes.is_success_response_code(response_code),
         document_category=user_provided_document_category,
         document_type=document_type,
@@ -82,18 +83,22 @@ def build_v1_api_response(
         dict: Response data for DDB JSON storage
     """
     
+    status = status.value if isinstance(status, ProcessStatus) else status
+    print(f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}")
+    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
+
     base_response = {
         "status": status,
         "processedAt": datetime.now(timezone.utc).isoformat()
     }
-    
+
     # success response with full results
-    if status in PROCESSING_STATUS_SUCCESS:
+    if status in PROCESSING_STATUSES_SUCCESSFUL:
         base_response["status"] = "completed"
     
-        if status == ProcessStatus.SUCCESS:
+        if status == ProcessStatus.SUCCESS.value:
             base_response["message"] = "Document processed successfully"
-        elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED:
+        elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
             base_response["message"] = "Document processed but no matching template found"
 
         if data:
@@ -103,13 +108,20 @@ def build_v1_api_response(
             })
     
     # error responses
-    elif status == ProcessStatus.FAILED:
+    elif status == ProcessStatus.FAILED.value:
         base_response.update({
             "status": "failed",
             "error": error_message or "Processing failed",
             "additionalInfo": data.additional_info if data else None
         })
-    
+
+    elif status == ProcessStatus.NO_DOCUMENT_DETECTED.value:
+        base_response.update({
+            "status": "not_supported",
+            "message": "Unable to extract meaningful document content",
+            "additionalInfo": data.additional_info if data else None
+        })
+
     elif status in PROCESSING_STATUS_NOT_SUPPORTED:
         base_response.update({
             "status": "not_supported",
@@ -126,4 +138,4 @@ def build_v1_api_response(
     # Remove None values for cleaner response
     return {k: v for k, v in base_response.items() if v is not None}
 
-__all__ = ["get_v1_api_response", "build_v1_api_response"]
+__all__ = ["get_internal_api_response", "build_v1_api_response"]

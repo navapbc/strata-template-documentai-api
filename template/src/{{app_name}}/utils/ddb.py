@@ -8,16 +8,14 @@ from typing import Any
 from schemas.document_metadata import DocumentMetadata
 from services import ddb as ddb_service
 from services import s3 as s3_service
-from utils.response_builder import get_v1_api_response, build_v1_api_response
-from config.settings import (
+from utils.response_builder import get_internal_api_response, build_v1_api_response
+from config.constants import (
     ConfigDefaults,
     ProcessStatus,
     PROCESSING_STATUS_COMPLETED,
-    PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
-    PROCESSING_STATUS_SUCCESS
 )
-from utils.models import FieldMetrics, V1ApiResponse, ClassificationData, ProcessingTimes
+from utils.models import FieldMetrics, InternalApiResponse, ClassificationData, ProcessingTimes
 from utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
@@ -149,6 +147,8 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
 def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
     """Handle all timing-related updates for different statuses"""
+    status = status.value if isinstance(status, ProcessStatus) else status
+
     updates = []
     values = {}
 
@@ -178,7 +178,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
 def _build_update_expression(
     status: str,
     data: ClassificationData,
-    api_response_json: V1ApiResponse | None,
+    internal_api_response: InternalApiResponse | None,
     v1_api_response: str | None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
@@ -219,12 +219,12 @@ def _build_update_expression(
                 else:
                     values[param_key] = value
 
-    if api_response_json:
+    if internal_api_response:
         updates.append(f"{DocumentMetadata.RESPONSE_JSON} = :responseJson")
-        values[":responseJson"] = json.dumps(api_response_json.__dict__)
+        values[":responseJson"] = json.dumps(internal_api_response.__dict__)
 
         updates.append(f"{DocumentMetadata.RESPONSE_CODE} = :responseCode")
-        values[":responseCode"] = api_response_json.response_code
+        values[":responseCode"] = internal_api_response.response_code
 
     if v1_api_response:
         updates.append(f"{DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson")
@@ -248,7 +248,7 @@ def _build_update_expression(
     return "SET " + ", ".join(updates), values
 
 
-def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict, data: ClassificationData, api_response_json):
+def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update"""
     table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
     key = {"fileName": object_key}
@@ -289,11 +289,21 @@ def get_ddb_record(object_key: str) -> dict:
         logger.error(msg)
         raise
 
+def get_ddb_by_job_id(job_id: str) -> dict | None:
+    """Get document metadata record by job ID"""
+    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
+    
+    if not index_name:
+        raise ValueError("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME environment variable not set")
+    
+    items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
+    return items[0] if items else None
 
 def update_ddb(
     object_key: str,
     status: str,
-    api_response_json: V1ApiResponse,
+    internal_api_response: InternalApiResponse,
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
     error_message: str = None,
@@ -306,7 +316,7 @@ def update_ddb(
         update_expr, expr_values = _build_update_expression(
             status=status,
             data=data,
-            api_response_json=api_response_json,
+            internal_api_response=internal_api_response,
             v1_api_response=v1_response,
             bda_invocation_arn=bda_invocation_arn,
             error_message=error_message,
@@ -318,7 +328,7 @@ def update_ddb(
             update_expr += f", {timing_updates}"
             expr_values.update(timing_values)
 
-        _execute_ddb_update(object_key, update_expr, expr_values, data, api_response_json)
+        _execute_ddb_update(object_key, update_expr, expr_values)
 
     except Exception as e:
         msg = f"Failed to update DDB status: {e}"
@@ -330,7 +340,7 @@ def insert_ddb(
     object_key: str,
     user_provided_document_category: str | None = None,
     process_status: str | None = None,
-    api_response_json: V1ApiResponse | None = None,
+    internal_api_response: InternalApiResponse | None = None,
     file_size_bytes: int = None,
     content_type: str = None,
     pages_detected: int = None,
@@ -362,9 +372,9 @@ def insert_ddb(
         if pages_detected is not None:
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
-        if api_response_json:
+        if internal_api_response:
             item[DocumentMetadata.RESPONSE_JSON] = json.dumps(
-                api_response_json.__dict__
+                internal_api_response.__dict__
             )
 
         if job_id:
@@ -397,63 +407,6 @@ def insert_ddb(
         raise
 
 
-def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
-    """Mark file processing as started with BDA job ARN"""
-    update_ddb(
-        object_key=object_key,
-        status=ProcessStatus.STARTED,
-        api_response_json=None,
-        bda_invocation_arn=bda_invocation_arn,
-    )
-
-def set_bda_processing_status_not_started(object_key: str):
-    update_ddb(
-        object_key=object_key,
-        status=ProcessStatus.NOT_STARTED,
-        api_response_json=None,
-    )
-
-
-def classify_as_failed(object_key: str, error_message: str, data: ClassificationData):
-    """Mark file processing as failed with error message"""
-    api_response_json: V1ApiResponse = get_v1_api_response(
-        object_key=object_key,
-        user_provided_document_category=get_user_provided_document_category(object_key),
-        response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR,
-        document_type=None,
-    )
-
-    update_ddb(
-        object_key=object_key,
-        status=ProcessStatus.FAILED,
-        api_response_json=api_response_json,
-        error_message=error_message,
-        data=data,
-    )
-
-    # convert dataclass to dict for JSON serialization
-    return api_response_json.__dict__
-
-
-def classify_as_not_implemented(object_key: str, data: ClassificationData):
-    """Mark file processing as not implemented"""
-    api_response_json: V1ApiResponse = get_v1_api_response(
-        object_key=object_key,
-        user_provided_document_category=get_user_provided_document_category(object_key),
-        response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
-        document_type=None,
-    )
-
-    update_ddb(
-        object_key=object_key,
-        status=ProcessStatus.SUCCESS,
-        api_response_json=api_response_json,
-        data=data,
-    )
-
-    # convert dataclass to dict for JSON serialization
-    return api_response_json.__dict__
-
 def insert_initial_ddb_record(
     source_bucket_name: str, 
     source_object_key: str, 
@@ -484,7 +437,7 @@ def insert_initial_ddb_record(
     bda_percentage = 1.0 # TODO: fetch from SSM
     is_multipage_detection_enabled = False # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
-    api_response_json = None
+    internal_api_response = None
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
@@ -547,18 +500,17 @@ def insert_initial_ddb_record(
     # initial status does not qualify for bda processing
     # create the json response signaling the process is complete
     if process_status not in PROCESSING_STATUS_PENDING_EXTRACTION:
-        api_response_json: V1ApiResponse = get_v1_api_response(
+        internal_api_response: InternalApiResponse = get_internal_api_response(
             object_key=source_object_key,
             response_code=response_code,
             document_type=None,
-            user_provided_document_category=user_provided_document_category,
         )
 
     insert_ddb(
         object_key=source_object_key,
         user_provided_document_category=user_provided_document_category,
         process_status=process_status,
-        api_response_json=api_response_json,
+        internal_api_response=internal_api_response,
         file_size_bytes=file_size_bytes,
         content_type=content_type,
         pages_detected=pages_detected,
@@ -573,3 +525,114 @@ def insert_initial_ddb_record(
 
     # explicity remove file reference to free memory for the lambda
     del file_bytes
+
+def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
+    """Mark file processing as started with BDA job ARN"""
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.STARTED,
+        internal_api_response=None,
+        bda_invocation_arn=bda_invocation_arn,
+    )
+
+def set_bda_processing_status_not_started(object_key: str):
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.NOT_STARTED,
+        internal_api_response=None,
+    )
+
+def classify_as_success(object_key: str, response_code: str, data: ClassificationData):
+    """Mark file processing as completed"""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=response_code,
+        document_type=data.document_type,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.SUCCESS,
+        internal_api_response=internal_api_response,
+        data=data,
+    )
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+def classify_as_failed(object_key: str, error_message: str, data: ClassificationData):
+    """Mark file processing as failed with error message"""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR,
+        document_type=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.FAILED,
+        internal_api_response=internal_api_response,
+        error_message=error_message,
+        data=data,
+    )
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+
+def classify_as_not_implemented(object_key: str, data: ClassificationData):
+    """Mark file processing as not implemented"""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
+        document_type=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.SUCCESS,
+        internal_api_response=internal_api_response,
+        data=data,
+    )
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+def classify_as_no_document_detected(object_key: str, data: ClassificationData):
+    """Mark file processing as no document detected"""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.NO_DOCUMENT_DETECTED,
+        document_type=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.NO_DOCUMENT_DETECTED,
+        internal_api_response=internal_api_response,
+        data=data,
+    )
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+def classify_as_no_custom_blueprint_matched(object_key: str, data: ClassificationData):
+    """Mark file processing as not implemented"""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
+        document_type=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED,
+        internal_api_response=internal_api_response,
+        data=data,
+    )
+
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+

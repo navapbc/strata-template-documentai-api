@@ -27,21 +27,15 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
 
             # try to update DDB status to failed
             try:
-                from config.settings import (
-                    UPLOAD_METADATA_KEYS,
-                    DocumentCategory
-                )
+                from config.constants import BDA_PROCESSED_FILE_PREFIX
                 from utils.ddb import ClassificationData, classify_as_failed
                 from utils.s3 import extract_s3_info_from_event
 
-                object_key, _, metadata = extract_s3_info_from_event(event, include_metadata=True)
+                object_key, _ = extract_s3_info_from_event(event)
 
-                user_provided_document_category = metadata[
-                    UPLOAD_METADATA_KEYS["user_provided_document_category"]
-                ]
 
                 # for BDA output processor, extract the actual uploaded filename
-                if "processed/" in object_key:
+                if object_key.startswith(f"{BDA_PROCESSED_FILE_PREFIX}/"):
                     # object_key: processed/w2-abc123.pdf/job-id/0/custom_output/0/result.json
                     # extract w2-abc123.pdf
                     path_parts = object_key.split("/")

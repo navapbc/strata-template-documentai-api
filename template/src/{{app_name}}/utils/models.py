@@ -1,11 +1,11 @@
 """Data models for document classification and field metrics"""
 from dataclasses import dataclass
-from config.settings import DocumentCategory
+from config.constants import DocumentCategory
 from typing import Any
 
 
 @dataclass
-class V1ApiResponse:
+class InternalApiResponse:
     """Shared API response model"""
 
     validation_passed: bool

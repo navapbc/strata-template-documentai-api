@@ -53,13 +53,8 @@ class AWSClientFactory:
         return cls.get_session().client("ssm", region_name=cls._get_region())
 
     @classmethod
-    def get_ddb_metadata_table(cls):
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
-
-        if not table_name:
-            raise ValueError("DDE_DOCUMENT_METADATA_TABLE_NAME environment variable not set")
-
+    def get_ddb_table(cls, table_name: str):
+        """Get DynamoDB table resource by name"""
         return cls._get_dynamodb_table(table_name)
-
 
 __all__ = ["AWSClientFactory"]

@@ -3,6 +3,7 @@ class ResponseCodes:
     BITMAP_RECEIVED = "001"
     DOCUMENT_TYPE_NOT_IMPLEMENTED = "002"
     MISSING_FIELDS = "101"
+    NO_DOCUMENT_DETECTED = "103"
     BLURRY_DOCUMENT_DETECTED = "104"
     MULTIPAGE_DOCUMENT = "400"
     INTERNAL_PROCESSING_ERROR = "999"
@@ -15,6 +16,7 @@ class ResponseCodes:
             cls.BITMAP_RECEIVED: "Bitmap received", 
             cls.DOCUMENT_TYPE_NOT_IMPLEMENTED: "Document type not implemented",
             cls.MISSING_FIELDS: "Missing fields",
+            cls.NO_DOCUMENT_DETECTED: "No document detected",
             cls.BLURRY_DOCUMENT_DETECTED: "Document is blurry",
             cls.MULTIPAGE_DOCUMENT: "Multi-page document",
             cls.INTERNAL_PROCESSING_ERROR: "Internal processing error",

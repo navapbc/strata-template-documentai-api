@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import os
-from config.settings import (
+from config.constants import (
     UPLOAD_METADATA_KEYS,
     DocumentCategory
 )
