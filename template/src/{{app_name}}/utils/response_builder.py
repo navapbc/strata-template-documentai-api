@@ -67,6 +67,7 @@ def get_internal_api_response(
     )
 
 def build_v1_api_response(
+    object_key: str,
     status: str, 
     data: ClassificationData | None = None, 
     error_message: str  | None = None,
@@ -87,10 +88,24 @@ def build_v1_api_response(
     print(f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}")
     print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
 
+    from utils.ddb import get_ddb_record
+    ddb_record = get_ddb_record(object_key)
+    job_id = ddb_record.get(DocumentMetadata.JOB_ID)
+    total_time = ddb_record.get(DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS)
+    created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
+    completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
+
     base_response = {
+        "job_id": job_id,
         "status": status,
-        "processedAt": datetime.now(timezone.utc).isoformat()
+        "createdAt": created_at
     }
+    
+    if completed_at:
+        base_response["completedAt"] = completed_at
+
+    if total_time:
+        base_response["totalProcessingTimeSeconds"] = float(total_time)
 
     # success response with full results
     if status in PROCESSING_STATUSES_SUCCESSFUL:
@@ -134,7 +149,7 @@ def build_v1_api_response(
             "status": "processing",
             "message": "Document processing in progress"
         })
-    
+
     # Remove None values for cleaner response
     return {k: v for k, v in base_response.items() if v is not None}
 

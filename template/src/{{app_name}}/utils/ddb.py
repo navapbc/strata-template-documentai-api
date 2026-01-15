@@ -310,7 +310,10 @@ def update_ddb(
 ):
     """Update DynamoDB processing status for a file"""
     try:
-        v1_response = build_v1_api_response(status, data, error_message=error_message)
+        # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
+        # and store v1 api response. completedAt, totalProcessingTime not yet
+        # calculated and won't be in the stored v1ApiResponseJson. 
+        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
 
         # build base update expression
         update_expr, expr_values = _build_update_expression(

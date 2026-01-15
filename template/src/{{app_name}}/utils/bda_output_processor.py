@@ -96,21 +96,36 @@ def _extract_field_data(bda_result_json: dict) -> BdaFieldProcessingData:
     
     for item in explainability_info:
         if isinstance(item, dict):
-            for field_name, field_data in item.items():
-                if isinstance(field_data, dict):
-                    field_result = _process_single_field(field_name, field_data)
-                    field_confidence_score_list.append({field_name: field_result.confidence})
-
-                    if field_result.is_empty:
-                        empty_fields.append(field_name)
-                    else:
-                        confidence_scores.append(field_result.confidence)
+            _process_fields_recursive(item, "", confidence_scores, empty_fields, field_confidence_score_list)
     
     return BdaFieldProcessingData(
         confidence_scores=confidence_scores,
         empty_fields=empty_fields,
         field_confidence_score_list=field_confidence_score_list
     )
+
+
+def _process_fields_recursive(data: dict, parent_key: str, confidence_scores: list, empty_fields: list, field_confidence_score_list: list):
+    """Recursively process fields, handling both flat and nested structures."""
+    for field_name, field_data in data.items():
+        if not isinstance(field_data, dict):
+            continue
+            
+        full_field_name = f"{parent_key}.{field_name}" if parent_key else field_name
+        
+        # check field is an actual extracted value (e.g. confidence score or value) or a nested structure
+        if BdaResponseFields.FIELD_CONFIDENCE in field_data or BdaResponseFields.FIELD_VALUE in field_data:
+            # extracted field - process it
+            field_result = _process_single_field(full_field_name, field_data)
+            field_confidence_score_list.append({full_field_name: field_result.confidence})
+            
+            if field_result.is_empty:
+                empty_fields.append(full_field_name)
+            else:
+                confidence_scores.append(field_result.confidence)
+        else:
+            # nested structure - recursion required
+            _process_fields_recursive(field_data, full_field_name, confidence_scores, empty_fields, field_confidence_score_list)
 
 
 def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessingResult:

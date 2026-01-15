@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 import json
 import os
 import logging
@@ -65,6 +66,35 @@ def get_config(request: Request):
     }
 
 
+@dataclass
+class JobStatus:
+    """Job status data from DDB"""
+    ddb_record: dict | None
+    object_key: str | None
+    process_status: str | None
+    v1_response_json: str | None
+
+def _get_job_status(job_id: str) -> JobStatus:
+    """
+    Get job status from DDB.
+    
+    Returns:
+        JobStatus: Job status data with all fields None if job not found
+        
+    Raises:
+        Exception: If DDB query fails (network, permissions, etc.)
+    """
+    ddb_record = get_ddb_by_job_id(job_id)
+        
+    if not ddb_record:
+            return JobStatus(None, None, None, None)
+    
+    object_key = ddb_record.get(DocumentMetadata.FILE_NAME)
+    process_status = ddb_record.get(DocumentMetadata.PROCESS_STATUS)
+    v1_response = ddb_record.get(DocumentMetadata.V1_API_RESPONSE_JSON)
+    
+    return JobStatus(ddb_record, object_key, process_status, v1_response)
+
 async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
@@ -117,33 +147,32 @@ async def upload_document_for_processing(
             detail="Document upload failed",
         )
 
-async def get_v1_document_processing_results(job_id: str, timeout: int) -> str:
-    """Stub function to get document processing status by job ID"""
+async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
+    """Poll for document processing completion with timeout"""
     elapsed_time = 0
     object_key = None
     polling_interval = 5
 
     while elapsed_time < timeout:
         try:
-            ddb_record = get_ddb_by_job_id(job_id)
+            job_status = _get_job_status(job_id)
 
-            if not ddb_record:
-                raise ValueError(f"No DDB record found for job ID {job_id}")
+            if job_status.object_key:
+                object_key = job_status.object_key
             
-            object_key = object_key or ddb_record.get(DocumentMetadata.FILE_NAME)
-            process_status = ddb_record.get(DocumentMetadata.PROCESS_STATUS)
+            # processing complete, return results
+            if job_status.process_status in PROCESSING_STATUS_COMPLETED and job_status.v1_response_json:
+                return json.loads(job_status.v1_response_json)
                 
-            if process_status in PROCESSING_STATUS_COMPLETED:
-                v1_response = ddb_record.get(DocumentMetadata.V1_API_RESPONSE_JSON)
-                
-                if v1_response:
-                    return json.loads(v1_response)
-            
+            # still processing, wait and poll again
             await asyncio.sleep(polling_interval)
             elapsed_time += polling_interval
 
         except Exception as e:
-            logging.error(f"Error polling DynamoDB: {e}")
+            msg = f"Error polling DynamoDB for job {job_id}: {e}"
+            logging.error(msg)
+            print(msg)
+
             await asyncio.sleep(polling_interval)
             elapsed_time += polling_interval
 
@@ -223,7 +252,6 @@ async def create_document(
         }
     else:
         results = await get_v1_document_processing_results(job_id, timeout)
-        results["jobId"] = job_id
         return results
 
 
@@ -231,25 +259,25 @@ async def create_document(
 async def get_document_results(job_id: str, include_pii: bool = False):
     """Get processing results by job ID"""
     try:
-        ddb_record = get_ddb_by_job_id(job_id)
+        job_status = _get_job_status(job_id)
         
-        if not ddb_record:
+        if not job_status.ddb_record:
             raise HTTPException(status_code=404, detail=f"Job ID {job_id} not found")
         
-        v1_response = ddb_record.get(DocumentMetadata.V1_API_RESPONSE_JSON)
-        
-        if not v1_response:
+        if not job_status.v1_response_json:
             return {
                 "jobId": job_id,
-                "status": ddb_record.get(DocumentMetadata.PROCESS_STATUS),
+                "status": job_status.process_status,
                 "message": "Processing in progress"
             }
         
-        # Processing complete, return results
-        return json.loads(v1_response)
+        # processing complete, return results
+        return json.loads(job_status.v1_response_json)
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error retrieving results for job {job_id}: {e}")
+        msg = f"Error retrieving results for job {job_id}: {e}"
+        logging.error(msg)
+        print(msg)
         raise HTTPException(status_code=500, detail="Failed to retrieve results")
