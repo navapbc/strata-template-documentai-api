@@ -10,3 +10,6 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - AWS_PROFILE

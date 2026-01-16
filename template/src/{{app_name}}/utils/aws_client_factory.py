@@ -24,7 +24,7 @@ class AWSClientFactory:
 
     @classmethod
     def _get_dde_region(cls) -> str:
-        return os.getenv("DDD_REGION", "us-east-1")
+        return os.getenv("DDE_REGION", "us-east-1")
 
     @classmethod
     def _get_dynamodb_table(cls, table_name: str):
@@ -42,7 +42,16 @@ class AWSClientFactory:
 
     @classmethod
     @lru_cache(maxsize=1)
+    def get_bda_client(cls):
+        """Get Bedrock Data Automation client for project/blueprint management"""
+        return cls.get_session().client(
+            'bedrock-data-automation', region_name=cls._get_dde_region()
+        )
+
+    @classmethod
+    @lru_cache(maxsize=1)
     def get_bda_runtime_client(cls):
+        """Get Bedrock Data Automation Runtime client for job execution (invoke, get status)"""
         return cls.get_session().client(
             "bedrock-data-automation-runtime", region_name=cls._get_dde_region()
         )

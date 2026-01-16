@@ -51,6 +51,12 @@
     "ddb_emit_custom_cloudwatch_metrics": false,
     "empty_field_percentage_threshold": 50
   },
+  "cache": {
+    "blueprint_schemas": {
+      "key": "blueprint_schemas",
+      "ttl_minutes": 5
+    }
+  },
   "document_categories": [
     "income",
     "expenses",

@@ -12,6 +12,7 @@ from services import bda as bda_service
 from schemas.document_metadata import DocumentMetadata
 from utils.bda import is_bda_job_completed, is_bda_job_failed, is_bda_job_running
 from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from utils.schemas import get_all_schemas, get_document_schema
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -22,8 +23,13 @@ from config.constants import (
     ProcessStatus,
 )
 
-DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
+DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
 
 app = FastAPI(
     title="{{app_name | title}} Document Processing API",
@@ -62,6 +68,8 @@ def get_config(request: Request):
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
             "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
+            "schemas": "/v1/schemas",
+            "schemaDetail": "/v1/schemas/{document_type}",
             "health": "/health",
         },
         "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
@@ -293,3 +301,25 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         logging.error(msg)
         print(msg)
         raise HTTPException(status_code=500, detail="Failed to retrieve results")
+
+
+@app.get("/v1/schemas")
+async def list_schemas():
+    """List all supported document types"""
+    schemas = get_all_schemas()
+    return {
+        "schemas": list(schemas.keys())
+    }
+
+@app.get("/v1/schemas/{document_type}")
+async def get_schema(document_type: str):
+    """Get field schema for a specific document type"""
+    schema = get_document_schema(document_type)
+    
+    if not schema:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Schema not found for document type: {document_type}"
+        )
+    
+    return schema

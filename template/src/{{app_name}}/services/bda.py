@@ -3,6 +3,16 @@ import json
 from config.constants import BdaJobStatus, BDA_JOB_STATUS_RUNNING, BDA_JOB_STATUS_FAILED, BDA_JOB_STATUS_COMPLETED
 from utils.aws_client_factory import AWSClientFactory
 
+def get_data_automation_project(project_arn: str) -> dict:
+    """Get BDA project details including blueprints"""
+    bedrock_client = AWSClientFactory.get_bda_client()
+    return bedrock_client.get_data_automation_project(projectArn=project_arn)
+
+def get_blueprint(blueprint_arn: str) -> dict:
+    """Get blueprint schema details"""
+    bedrock_client = AWSClientFactory.get_bda_client()
+    return bedrock_client.get_blueprint(blueprintArn=blueprint_arn)
+
 def invoke_data_automation_async(project_arn: str, input_config: dict, output_config: dict) -> dict:
     """Invoke BDA job asynchronously"""
     bedrock_client = AWSClientFactory.get_bedrock_data_automation_runtime_client()
