@@ -1,9 +1,7 @@
-import json
 import logging
-import os
 from dataclasses import dataclass, field
 
-from config.constants import BdaResponseFields, ConfigDefaults, DocumentCategory
+from config.constants import BdaResponseFields, ConfigDefaults
 from utils.response_codes import ResponseCodes
 from utils.bda import BdaFieldProcessingData, get_text_from_standard_blueprint, extract_field_metadata_from_bda_results
 from utils.ddb import (

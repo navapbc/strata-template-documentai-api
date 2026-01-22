@@ -1,6 +1,5 @@
 """Bedrock Data Automation service methods"""
 import json
-from config.constants import BdaJobStatus, BDA_JOB_STATUS_RUNNING, BDA_JOB_STATUS_FAILED, BDA_JOB_STATUS_COMPLETED
 from utils.aws_client_factory import AWSClientFactory
 
 def get_data_automation_project(project_arn: str) -> dict:

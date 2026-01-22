@@ -3,11 +3,16 @@
 #
 app_name:
   type: str
-  help: The name of the app (must be valid Python module name - use underscores, not hyphens)
+  help: The name of the app
   validator: >-
-    {% if not (app_name | regex_search('^[a-z0-9_]+$')) %}
-    The app name must be a valid Python module name: only lowercase letters, digits, and underscores allowed.
+    {% if not (app_name | regex_search('^[a-z0-9\-_]+$')) %}
+    The app name can not be empty and should only contain lower case letters, digits, dashes, and underscores.
     {% endif %}
+
+app_name_python:
+  type: str
+  when: false
+  default: "{{ app_name | replace('-', '_') }}"
 
 app_local_port:
   type: int

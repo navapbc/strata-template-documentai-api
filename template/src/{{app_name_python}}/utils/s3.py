@@ -1,12 +1,3 @@
-
-import asyncio
-import logging
-import os
-from config.constants import (
-    UPLOAD_METADATA_KEYS,
-    DocumentCategory
-)
-
 from functools import wraps
 from services import s3 as s3_service
 from typing import Any, Callable, Dict

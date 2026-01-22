@@ -4,7 +4,6 @@ import os
 import random
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
 from schemas.document_metadata import DocumentMetadata
 from services import ddb as ddb_service
 from services import s3 as s3_service

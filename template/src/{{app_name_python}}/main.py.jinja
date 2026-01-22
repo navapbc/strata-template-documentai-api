@@ -1,32 +1,30 @@
 import asyncio
-from dataclasses import dataclass
 import json
-import os
 import logging
-import magic
+import os
 import uuid
+from dataclasses import dataclass
 
-from config.constants import PROCESSING_STATUS_COMPLETED, UPLOAD_METADATA_KEYS
-from services import s3 as s3_service
-from services import bda as bda_service
-from schemas.document_metadata import DocumentMetadata
-from utils.bda import is_bda_job_completed, is_bda_job_failed, is_bda_job_running
-from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
-from utils.schemas import get_all_schemas, get_document_schema
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-
+import magic
 from config.constants import (
     API_VERSION,
+    PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
+    UPLOAD_METADATA_KEYS,
     DocumentCategory,
     ProcessStatus,
 )
+from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from schemas.document_metadata import DocumentMetadata
+from services import s3 as s3_service
+from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from utils.schemas import get_all_schemas, get_document_schema
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
@@ -79,31 +77,34 @@ def get_config(request: Request):
 @dataclass
 class JobStatus:
     """Job status data from DDB"""
+
     ddb_record: dict | None
     object_key: str | None
     process_status: str | None
     v1_response_json: str | None
 
+
 def _get_job_status(job_id: str) -> JobStatus:
     """
     Get job status from DDB.
-    
+
     Returns:
         JobStatus: Job status data with all fields None if job not found
-        
+
     Raises:
         Exception: If DDB query fails (network, permissions, etc.)
     """
     ddb_record = get_ddb_by_job_id(job_id)
-        
+
     if not ddb_record:
         return JobStatus(None, None, None, None)
-    
+
     object_key = ddb_record.get(DocumentMetadata.FILE_NAME)
     process_status = ddb_record.get(DocumentMetadata.PROCESS_STATUS)
     v1_response = ddb_record.get(DocumentMetadata.V1_API_RESPONSE_JSON)
-    
+
     return JobStatus(ddb_record, object_key, process_status, v1_response)
+
 
 async def upload_document_for_processing(
     file: UploadFile,
@@ -111,7 +112,7 @@ async def upload_document_for_processing(
     content_type: str,
     user_provided_document_category: DocumentCategory = None,
     job_id: str = None,
-    trace_id: str = None
+    trace_id: str = None,
 ):
     print("=== S3 UPLOAD STARTED ===")
     print(f"DEBUG S3: user_provided_document_category = {repr(user_provided_document_category)}")
@@ -157,6 +158,7 @@ async def upload_document_for_processing(
             detail="Document upload failed",
         )
 
+
 async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
     """Poll for document processing completion with timeout"""
     elapsed_time = 0
@@ -171,9 +173,12 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
                 object_key = job_status.object_key
             
             # processing complete, return results
-            if job_status.process_status in PROCESSING_STATUS_COMPLETED and job_status.v1_response_json:
+            if (
+                job_status.process_status in PROCESSING_STATUS_COMPLETED
+                and job_status.v1_response_json
+            ):
                 return json.loads(job_status.v1_response_json)
-                
+
             # still processing, wait and poll again
             await asyncio.sleep(polling_interval)
             elapsed_time += polling_interval
@@ -200,7 +205,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
         return {
             "status": "failed",
             "message": f"Processing timeout after {timeout} seconds",
-            "processedAt": None
+            "processedAt": None,
         }
 
 @app.post("/v1/documents")
@@ -214,7 +219,7 @@ async def create_document(
     timeout: int = 120   # optional timeout for synchronous processing, only used when wait=true
 ):
     """Upload a document for processing.
-    
+
     Args:
         wait: If true, waits for processing to complete before returning results.
               If false (default), returns immediately with job_id for async polling.
@@ -235,9 +240,11 @@ async def create_document(
             ),
         )
 
-    print(f"Processing {file.filename}; "
-          f"category: {category}; "
-          f"content-type: {actual_content_type}")
+    print(
+        f"Processing {file.filename}; "
+        f"category: {category}; "
+        f"content-type: {actual_content_type}"
+    )
 
     file.file.seek(0)
     file_extension = file.filename.split(".")[-1]
@@ -246,19 +253,20 @@ async def create_document(
     job_id = str(uuid.uuid4())
 
     await upload_document_for_processing(
-        file=file, 
-        unique_file_name=unique_file_name, 
-        content_type=actual_content_type, 
+        file=file,
+        unique_file_name=unique_file_name,
+        content_type=actual_content_type,
         user_provided_document_category=category,
         job_id=job_id,
-        trace_id=trace_id)
+        trace_id=trace_id,
+    )
     
     response.headers["X-Trace-ID"] = trace_id
     if not wait:
         return {
             "jobId": job_id,
             "status": ProcessStatus.NOT_STARTED.value,
-            "message": "Document uploaded successfully"
+            "message": "Document uploaded successfully",
         }
     else:
         results = await get_v1_document_processing_results(job_id, timeout)
@@ -270,30 +278,31 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
     """Get processing results by job ID"""
     try:
         job_status = _get_job_status(job_id)
-        
+
         if not job_status.ddb_record:
             raise HTTPException(status_code=404, detail=f"Job ID {job_id} not found")
-        
+
         if not job_status.v1_response_json:
             return {
                 "jobId": job_id,
                 "status": job_status.process_status,
-                "message": "Processing in progress"
+                "message": "Processing in progress",
             }
         
         # processing complete
         if include_extracted_data:
             # rebuild response with extracted data
             from utils.response_builder import build_v1_api_response
+
             return build_v1_api_response(
                 object_key=job_status.object_key,
                 status=job_status.process_status,
-                include_extracted_data=True
+                include_extracted_data=True,
             )
         else:
             # return cached response without extracted data
             return json.loads(job_status.v1_response_json)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -307,9 +316,8 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
 async def list_schemas():
     """List all supported document types"""
     schemas = get_all_schemas()
-    return {
-        "schemas": list(schemas.keys())
-    }
+    return {"schemas": list(schemas.keys())}
+
 
 @app.get("/v1/schemas/{document_type}")
 async def get_schema(document_type: str):
@@ -318,8 +326,7 @@ async def get_schema(document_type: str):
     
     if not schema:
         raise HTTPException(
-            status_code=404,
-            detail=f"Schema not found for document type: {document_type}"
+            status_code=404, detail=f"Schema not found for document type: {document_type}"
         )
     
     return schema

@@ -1,5 +1,4 @@
 import os
-import sys
 
 from utils.aws_client_factory import AWSClientFactory
 
@@ -50,7 +49,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
                 body=truncated_bytes
             )
 
-        print(f"BDA API call parameters:")
+        print("BDA API call parameters:")
         print(f"  dataAutomationProfileArn: {dde_profile_arn}")
         print(f"  dataAutomationProjectArn: {dde_project_arn}")
         print(f"  inputConfiguration: s3://{source_bucket_name}/{source_object_name}")

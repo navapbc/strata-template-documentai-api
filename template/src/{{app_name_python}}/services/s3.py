@@ -51,8 +51,10 @@ def get_file_bytes(bucket: str, key: str) -> bytes:
 
 def is_password_protected(bucket: str, key: str) -> bool:
     """Check if PDF is password protected"""
-    file_info = get_file_info(bucket, key)
-    if file_info['content_type'] in ["application/pdf", "binary/octet-stream"]:
+    content_type = get_content_type(bucket, key)
+
+    if content_type in ["application/pdf", "binary/octet-stream"]:
         file_bytes = get_file_bytes(bucket, key)
         return b"/Encrypt" in file_bytes[:2048]
+
     return False

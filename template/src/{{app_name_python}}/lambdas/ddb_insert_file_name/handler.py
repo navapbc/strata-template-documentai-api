@@ -1,6 +1,3 @@
-import os
-import sys
-
 from config.constants import ConfigDefaults, ProcessStatus, UPLOAD_METADATA_KEYS
 from schemas.document_metadata import DocumentMetadata
 from utils.ddb import (

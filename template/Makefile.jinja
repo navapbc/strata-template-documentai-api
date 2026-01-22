@@ -1,32 +1,109 @@
-DOCKER_RUN = docker-compose run --rm {{app_name}}
+.PHONY: \
+	build \
+	clean \
+	format \
+	help \
+	lint \
+	lint-ci \
+	release-build \
+	start \
+	stop \
+	test
 
-.PHONY: install test lint format clean run
+.DEFAULT_GOAL := help
 
-# install dependencies
-install:
-	$(DOCKER_RUN) uv pip install --system ".[dev]"
+# check dependencies helper
+CHECK_VENV = @test -d .venv || (echo "Error: Dependencies not installed. Run 'make init' first." && exit 1)
 
-# run tests
-test:
-	$(DOCKER_RUN) python -m pytest
+# Check that given variables are set and all have non-empty values,
+# die with an error otherwise.
+#
+# Params:
+#   1. Variable name(s) to test.
+#   2. (optional) Error message to print.
+# Based off of https://stackoverflow.com/questions/10858261/how-to-abort-makefile-if-variable-not-set
+check_defined = \
+	$(strip $(foreach 1,$1, \
+        $(call __check_defined,$1,$(strip $(value 2)))))
+__check_defined = \
+	$(if $(value $1),, \
+		$(error Undefined $1$(if $2, ($2))$(if $(value @), \
+			required by target '$@')))
 
-# lint code
-lint:
-	$(DOCKER_RUN) python -m ruff check .
 
-# format code
-# format code
-format:
-	$(DOCKER_RUN) sh -c "python -m black . && python -m isort . && python -m ruff check --fix ."
+##################################################
+# Constants
+##################################################
 
-# start the development server
-start:
-	docker-compose up
+APP_NAME := {{app_name}}
 
-# stop the development server
-stop:
-	docker-compose down
+##################################################
+# Setup
+##################################################
 
-# clean up
-clean:
-	$(DOCKER_RUN) rm -rf .pytest_cache htmlcov .coverage
+init: ## Install dependencies
+	uv sync --all-extras
+
+##################################################
+# Build / Release
+##################################################
+build: ## Build development Docker image
+	docker compose build
+
+release-build: ## Build production Docker image
+	docker buildx build \
+		--platform=linux/amd64 \
+		$(OPTS) \
+		.
+
+##################################################
+# Development
+##################################################
+
+start: ## Start development server
+	docker compose up
+
+stop: ## Stop development server
+	docker compose down
+
+
+##################################################
+# Testing
+##################################################
+
+test: ## Run test suite
+	uv run pytest
+
+##################################################
+# Lint / Format
+##################################################
+
+format: ## Format code
+	$(CHECK_VENV)
+	uv run black . && \
+	uv run isort . && \
+	uv run ruff check --fix .
+
+lint: ## Lint code
+	$(CHECK_VENV)
+	uv run ruff check .
+
+lint-ci: ## Lint code (CI mode, no fixes)
+	$(CHECK_VENV)
+	uv run ruff check --no-fix .
+
+
+##################################################
+# Utilities
+##################################################
+
+clean: ## Clean build artifacts
+	rm -rf .pytest_cache htmlcov .coverage __pycache__
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+help: ## Show help
+	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "APP_NAME=$(APP_NAME)"
+
+

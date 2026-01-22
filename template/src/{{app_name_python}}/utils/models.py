@@ -1,8 +1,6 @@
 """Data models for document classification and field metrics"""
 from dataclasses import dataclass
 from config.constants import DocumentCategory
-from typing import Any
-
 
 @dataclass
 class InternalApiResponse:

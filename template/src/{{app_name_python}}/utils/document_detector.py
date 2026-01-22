@@ -5,7 +5,6 @@ import math
 import cv2
 import numpy as np
 from pdf2image import convert_from_bytes
-from pdf2image.exceptions import PDFInfoNotInstalledError, PDFPageCountError, PDFSyntaxError
 from PIL import Image
 from dataclasses import dataclass, asdict
 
@@ -245,7 +244,6 @@ class DocumentDetector:
         """Extract first N pages from PDF and return as new PDF bytes."""
         import io
         from pdf2image import convert_from_bytes
-        from PIL import Image
         
         # Convert PDF to images (first N pages only)
         poppler_path = "/opt/bin" if os.path.exists("/opt/bin") else None

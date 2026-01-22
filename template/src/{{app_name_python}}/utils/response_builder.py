@@ -1,6 +1,5 @@
 """Utility to build standardized API responses for document processing results."""
 import json
-from datetime import datetime, timezone
 from typing import Any
 from services.bda import get_bda_result_json
 from utils.bda import extract_field_values_from_bda_results
@@ -9,7 +8,6 @@ from schemas.document_metadata import DocumentMetadata
 from config.constants import (
     ProcessStatus,
     PROCESSING_STATUS_NOT_SUPPORTED,
-    PROCESSING_STATUS_PENDING_EXTRACTION,
     PROCESSING_STATUSES_SUCCESSFUL
 )
 from utils.response_codes import ResponseCodes
