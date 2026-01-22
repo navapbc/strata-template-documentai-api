@@ -4,20 +4,22 @@ import os
 import random
 from datetime import datetime, timezone
 from decimal import Decimal
+
+from config.constants import (
+    PROCESSING_STATUS_COMPLETED,
+    PROCESSING_STATUS_PENDING_EXTRACTION,
+    ConfigDefaults,
+    ProcessStatus,
+)
 from schemas.document_metadata import DocumentMetadata
 from services import ddb as ddb_service
 from services import s3 as s3_service
-from utils.response_builder import get_internal_api_response, build_v1_api_response
-from config.constants import (
-    ConfigDefaults,
-    ProcessStatus,
-    PROCESSING_STATUS_COMPLETED,
-    PROCESSING_STATUS_PENDING_EXTRACTION,
-)
-from utils.models import FieldMetrics, InternalApiResponse, ClassificationData, ProcessingTimes
+from utils.models import ClassificationData, FieldMetrics, InternalApiResponse, ProcessingTimes
+from utils.response_builder import build_v1_api_response, get_internal_api_response
 from utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
+
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
     """Extract AWS region from BDA invocation ARN"""
@@ -32,10 +34,12 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
         print(msg)
         logger.error(msg)
         return None
-    
+
+
 def get_elapsed_time_seconds(start_time: datetime, end_time: datetime) -> Decimal:
     """Calculate elapsed time in seconds with 2 decimal precision"""
     return Decimal(str(round((end_time - start_time).total_seconds(), 2)))
+
 
 def calculate_bda_processing_times(object_key: str, completion_time: datetime) -> ProcessingTimes:
     """
@@ -74,6 +78,7 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
         logger.error(msg)
         return ProcessingTimes()
 
+
 def _calculate_wait_time(object_key: str) -> Decimal:
     """Calculate BDA wait time from file creation to BDA start"""
     ddb_record = get_ddb_record(object_key)
@@ -82,28 +87,29 @@ def _calculate_wait_time(object_key: str) -> Decimal:
     current_time = datetime.now(timezone.utc)
     return get_elapsed_time_seconds(created_at, current_time)
 
+
 def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
     """Calculate field count metrics from classification data"""
     if not data.field_confidence_scores:
         return FieldMetrics(0, 0, None)
-    
+
     field_count = len(data.field_confidence_scores)
     empty_fields = set(data.field_empty_list or [])
-    
+
     # Count non-empty fields and sum their confidence scores
     non_empty_count = 0
     confidence_sum = 0
-    
+
     for field_data in data.field_confidence_scores:
         field_name = list(field_data.keys())[0]
         confidence = list(field_data.values())[0]
-        
+
         if field_name not in empty_fields:
             non_empty_count += 1
             confidence_sum += confidence
-    
+
     avg_confidence = confidence_sum / non_empty_count if non_empty_count > 0 else None
-    
+
     return FieldMetrics(field_count, non_empty_count, avg_confidence)
 
 
@@ -127,8 +133,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
             if timing_data.total_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = "
-                    ":totalProcessingTime"
+                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = " ":totalProcessingTime"
                 )
                 values[":totalProcessingTime"] = timing_data.total_processing_time_seconds
 
@@ -157,9 +162,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
 
         try:
             wait_time = _calculate_wait_time(object_key)
-            updates.append(
-                f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds"
-            )
+            updates.append(f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds")
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
             msg = f"Failed to calculate bda wait time for {object_key}: {e}"
@@ -204,9 +207,9 @@ def _build_update_expression(
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_BELOW_THRESHOLD_LIST: data.field_below_threshold_list,
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_COUNT: metrics.field_count,
             DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_COUNT_NOT_EMPTY: metrics.field_count_not_empty,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_NOT_EMPTY_AVG_CONFIDENCE: metrics.field_not_empty_avg_confidence
+            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_NOT_EMPTY_AVG_CONFIDENCE: metrics.field_not_empty_avg_confidence,
         }
-    
+
         for ddb_field, value in field_mappings.items():
             if value is not None:
                 param_key = f":{ddb_field.lower().replace('_', '')}"
@@ -252,8 +255,9 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
     """Execute the DynamoDB update"""
     table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
     key = {"fileName": object_key}
-    
+
     ddb_service.update_item(table_name, key, update_expression, expression_values)
+
 
 def get_user_provided_document_category(object_key: str) -> str:
     """
@@ -272,16 +276,17 @@ def get_user_provided_document_category(object_key: str) -> str:
 
     return user_provided_document_category
 
+
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
         table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
-        
+
         if not item:
             raise ValueError(f"DDB record not found for file: {object_key}")
-        
+
         return item
     except Exception as e:
         msg = f"Failed to get DDB record for {object_key}: {e}"
@@ -289,16 +294,18 @@ def get_ddb_record(object_key: str) -> dict:
         logger.error(msg)
         raise
 
+
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID"""
     table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
     index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
-    
+
     if not index_name:
         raise ValueError("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME environment variable not set")
-    
+
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None
+
 
 def update_ddb(
     object_key: str,
@@ -312,7 +319,7 @@ def update_ddb(
     try:
         # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
         # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
-        # stored in ddb and won't be in the stored v1ApiResponseJson. 
+        # stored in ddb and won't be in the stored v1ApiResponseJson.
         v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
 
         # build base update expression
@@ -339,6 +346,7 @@ def update_ddb(
         logger.error(msg)
         raise
 
+
 def insert_ddb(
     object_key: str,
     user_provided_document_category: str | None = None,
@@ -353,7 +361,7 @@ def insert_ddb(
     is_document_blurry: bool = False,
     document_profile_raw_metrics=None,
     document_profile_normalized_metrics=None,
-    overall_blur_score=None
+    overall_blur_score=None,
 ):
     try:
         table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
@@ -376,16 +384,14 @@ def insert_ddb(
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
         if internal_api_response:
-            item[DocumentMetadata.RESPONSE_JSON] = json.dumps(
-                internal_api_response.__dict__
-            )
+            item[DocumentMetadata.RESPONSE_JSON] = json.dumps(internal_api_response.__dict__)
 
         if job_id:
             item[DocumentMetadata.JOB_ID] = job_id
 
         if trace_id:
             item[DocumentMetadata.TRACE_ID] = trace_id
-            
+
         if is_password_protected is not None:
             item[DocumentMetadata.IS_PASSWORD_PROTECTED] = bool(is_password_protected)
 
@@ -393,10 +399,14 @@ def insert_ddb(
             item[DocumentMetadata.IS_DOCUMENT_BLURRY] = bool(is_document_blurry)
 
         if document_profile_raw_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_RAW] = json.dumps(document_profile_raw_metrics.to_json_dict())
+            item[DocumentMetadata.DOCUMENT_METRICS_RAW] = json.dumps(
+                document_profile_raw_metrics.to_json_dict()
+            )
 
         if document_profile_normalized_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_NORMALIZED] = json.dumps(document_profile_normalized_metrics.to_json_dict())
+            item[DocumentMetadata.DOCUMENT_METRICS_NORMALIZED] = json.dumps(
+                document_profile_normalized_metrics.to_json_dict()
+            )
 
         if overall_blur_score is not None:
             item[DocumentMetadata.OVERALL_BLUR_SCORE] = Decimal(str(overall_blur_score))
@@ -411,22 +421,27 @@ def insert_ddb(
 
 
 def insert_initial_ddb_record(
-    source_bucket_name: str, 
-    source_object_key: str, 
+    source_bucket_name: str,
+    source_object_key: str,
     user_provided_document_category: str,
     job_id: str = None,
-    trace_id: str = None
+    trace_id: str = None,
 ):
     """Insert initial DDB record"""
-    # import document_detector in insert_initial_ddb_record to avoid cv2 dependency 
-    # in other lambdas. only ddb_insert_file_name Lambda 
-    # has OpenCV/Poppler layers attached. including this import at the top of the 
-    # file will cause the  container deployment to fail with a ModuleNotFoundError: 
+    # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
+    # in other lambdas. only ddb_insert_file_name Lambda
+    # has OpenCV/Poppler layers attached. including this import at the top of the
+    # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from utils.document_detector import DocumentDetector, QualityMetricsNormalized, QualityMetricsRaw  # noqa: E402
+    from utils.document_detector import (  # noqa: E402
+        DocumentDetector,
+        QualityMetricsNormalized,
+        QualityMetricsRaw,
+    )
 
-    
-    print(f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}")
+    print(
+        f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}"
+    )
 
     if not user_provided_document_category:
         print(f"Warning: user_provided_document_category is None/empty for {source_object_key}")
@@ -436,9 +451,9 @@ def insert_initial_ddb_record(
     content_type = s3_service.get_content_type(source_bucket_name, source_object_key)
     file_size_bytes = s3_service.get_file_size_bytes(source_bucket_name, source_object_key)
     file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_key)
-    
-    bda_percentage = 1.0 # TODO: fetch from SSM
-    is_multipage_detection_enabled = False # TODO: add SSM configuration
+
+    bda_percentage = 1.0  # TODO: fetch from SSM
+    is_multipage_detection_enabled = False  # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
     internal_api_response = None
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
@@ -450,7 +465,7 @@ def insert_initial_ddb_record(
     is_password_protected = profile.is_password_protected
     is_document_blurry = profile.is_blurry
     document_profile_raw_metrics: QualityMetricsRaw = profile.raw_metrics
-    document_profile_normalized_metrics:QualityMetricsNormalized = profile.normalized_metrics
+    document_profile_normalized_metrics: QualityMetricsNormalized = profile.normalized_metrics
     overall_blur_score = profile.overall_blur_score
 
     if content_type == "image/bmp":
@@ -523,11 +538,12 @@ def insert_initial_ddb_record(
         is_password_protected=is_password_protected,
         document_profile_raw_metrics=document_profile_raw_metrics,
         document_profile_normalized_metrics=document_profile_normalized_metrics,
-        overall_blur_score=overall_blur_score
+        overall_blur_score=overall_blur_score,
     )
 
     # explicity remove file reference to free memory for the lambda
     del file_bytes
+
 
 def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
     """Mark file processing as started with BDA job ARN"""
@@ -538,12 +554,14 @@ def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
         bda_invocation_arn=bda_invocation_arn,
     )
 
+
 def set_bda_processing_status_not_started(object_key: str):
     update_ddb(
         object_key=object_key,
         status=ProcessStatus.NOT_STARTED,
         internal_api_response=None,
     )
+
 
 def classify_as_success(object_key: str, response_code: str, data: ClassificationData):
     """Mark file processing as completed"""
@@ -562,6 +580,7 @@ def classify_as_success(object_key: str, response_code: str, data: Classificatio
 
     # convert dataclass to dict for JSON serialization
     return internal_api_response.__dict__
+
 
 def classify_as_failed(object_key: str, error_message: str, data: ClassificationData):
     """Mark file processing as failed with error message"""
@@ -601,6 +620,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
     # convert dataclass to dict for JSON serialization
     return internal_api_response.__dict__
 
+
 def classify_as_no_document_detected(object_key: str, data: ClassificationData):
     """Mark file processing as no document detected"""
     internal_api_response: InternalApiResponse = get_internal_api_response(
@@ -619,6 +639,7 @@ def classify_as_no_document_detected(object_key: str, data: ClassificationData):
     # convert dataclass to dict for JSON serialization
     return internal_api_response.__dict__
 
+
 def classify_as_no_custom_blueprint_matched(object_key: str, data: ClassificationData):
     """Mark file processing as not implemented"""
     internal_api_response: InternalApiResponse = get_internal_api_response(
@@ -634,8 +655,5 @@ def classify_as_no_custom_blueprint_matched(object_key: str, data: Classificatio
         data=data,
     )
 
-
     # convert dataclass to dict for JSON serialization
     return internal_api_response.__dict__
-
-

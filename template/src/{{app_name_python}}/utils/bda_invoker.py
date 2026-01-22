@@ -1,12 +1,12 @@
 import os
 
 from utils.aws_client_factory import AWSClientFactory
-
 from utils.env import (
     DDE_OUTPUT_LOCATION,
     DDE_PROFILE_ARN,
     DDE_PROJECT_ARN,
 )
+
 
 def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
     """Invoke BDA and return job ARN"""
@@ -25,17 +25,24 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
         raise
 
     try:
-        from utils.document_detector import DocumentDetector, MULTIPAGE_DETECTION_MAX_PAGES  # noqa: E402
         from services import s3 as s3_service
+        from utils.document_detector import (  # noqa: E402
+            MULTIPAGE_DETECTION_MAX_PAGES,
+            DocumentDetector,
+        )
 
         file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_name)
         document_detector = DocumentDetector()
         page_count = document_detector.get_page_count(file_bytes)
 
         if page_count and page_count > MULTIPAGE_DETECTION_MAX_PAGES:
-            print(f"{source_object_name} has {page_count} pages, truncating to {MULTIPAGE_DETECTION_MAX_PAGES}")
-            
-            truncated_bytes = document_detector.truncate_to_pages(file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES)
+            print(
+                f"{source_object_name} has {page_count} pages, truncating to {MULTIPAGE_DETECTION_MAX_PAGES}"
+            )
+
+            truncated_bytes = document_detector.truncate_to_pages(
+                file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES
+            )
 
             # create new truncated file name
             base_name, extension = os.path.splitext(source_object_name)
@@ -44,9 +51,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
 
             # upload truncated version to S3
             s3_service.put_object(
-                bucket=source_bucket_name,
-                key=source_object_name,
-                body=truncated_bytes
+                bucket=source_bucket_name, key=source_object_name, body=truncated_bytes
             )
 
         print("BDA API call parameters:")

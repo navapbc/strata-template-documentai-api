@@ -1,7 +1,7 @@
 from functools import wraps
-from services import s3 as s3_service
 from typing import Any, Callable, Dict
 
+from services import s3 as s3_service
 
 
 def validate_s3_event(handler_func: Callable) -> Callable:

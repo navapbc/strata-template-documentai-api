@@ -1,30 +1,33 @@
 """Utility to build standardized API responses for document processing results."""
+
 import json
 from typing import Any
+
+from config.constants import (
+    PROCESSING_STATUS_NOT_SUPPORTED,
+    PROCESSING_STATUSES_SUCCESSFUL,
+    ProcessStatus,
+)
+from schemas.document_metadata import DocumentMetadata
 from services.bda import get_bda_result_json
 from utils.bda import extract_field_values_from_bda_results
 from utils.models import ClassificationData, InternalApiResponse
-from schemas.document_metadata import DocumentMetadata
-from config.constants import (
-    ProcessStatus,
-    PROCESSING_STATUS_NOT_SUPPORTED,
-    PROCESSING_STATUSES_SUCCESSFUL
-)
 from utils.response_codes import ResponseCodes
+
 
 def _to_camel_case(snake_str: str) -> str:
     """Convert snake_case to camelCase"""
-    components = snake_str.split('_')
-    return components[0].lower() + ''.join(word.capitalize() for word in components[1:])
+    components = snake_str.split("_")
+    return components[0].lower() + "".join(word.capitalize() for word in components[1:])
+
 
 def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
-    """Extract field data for API response """
+    """Extract field data for API response"""
     if not ddb_record:
         return {}
-    
 
     bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-    metadata, field_values = extract_field_values_from_bda_results(bda_results) 
+    metadata, field_values = extract_field_values_from_bda_results(bda_results)
 
     # get confidence scores and extracted values if requested
     if include_extracted_data:
@@ -32,9 +35,11 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
         metadata, field_values = extract_field_values_from_bda_results(bda_results)
         field_confidence_map_list = metadata.field_confidence_map_list
     else:
-        field_confidence_map_list = json.loads(ddb_record.get(DocumentMetadata.FIELD_CONFIDENCE_SCORES, "[]"))
+        field_confidence_map_list = json.loads(
+            ddb_record.get(DocumentMetadata.FIELD_CONFIDENCE_SCORES, "[]")
+        )
         field_values = {}
-    
+
     # build response
     fields = {}
     for field_item in field_confidence_map_list:
@@ -42,9 +47,9 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
             camel_field = _to_camel_case(field_name)
             fields[camel_field] = {
                 "confidence": round(confidence, 2),
-                "value": field_values.get(field_name) if include_extracted_data else "<redacted>"
+                "value": field_values.get(field_name) if include_extracted_data else "<redacted>",
             }
-    
+
     return fields
 
 
@@ -55,7 +60,7 @@ def get_internal_api_response(
 ) -> InternalApiResponse:
     """
     Get API response object for internal use
-    
+
     Args:
         object_key: S3 file key
         response_code: Processing result code
@@ -66,6 +71,7 @@ def get_internal_api_response(
     """
     # import here to avoid circular dependency
     from utils.ddb import get_user_provided_document_category
+
     user_provided_document_category = get_user_provided_document_category(object_key)
 
     return InternalApiResponse(
@@ -76,30 +82,34 @@ def get_internal_api_response(
         response_message=ResponseCodes.get_message(response_code),
     )
 
+
 def build_v1_api_response(
     object_key: str,
-    status: str, 
-    data: ClassificationData | None = None, 
-    error_message: str  | None = None,
-    include_extracted_data: bool = False
+    status: str,
+    data: ClassificationData | None = None,
+    error_message: str | None = None,
+    include_extracted_data: bool = False,
 ) -> dict[str, Any]:
     """
     Build API response dict for DDB storage.
-    
+
     Args:
         status: Processing status
         data: Classification data with field results
         error_message: Error details if failed
-        
+
     Returns:
         dict: Response data for DDB JSON storage
     """
-    
+
     status = status.value if isinstance(status, ProcessStatus) else status
-    print(f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}")
+    print(
+        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
+    )
     print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
 
     from utils.ddb import get_ddb_record
+
     ddb_record = get_ddb_record(object_key)
     job_id = ddb_record.get(DocumentMetadata.JOB_ID)
     matched_document_class = ddb_record.get(DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS)
@@ -107,12 +117,8 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {
-        "job_id": job_id,
-        "status": status,
-        "createdAt": created_at
-    }
-    
+    base_response = {"job_id": job_id, "status": status, "createdAt": created_at}
+
     if completed_at:
         base_response["completedAt"] = completed_at
 
@@ -125,46 +131,47 @@ def build_v1_api_response(
     # success response with full results
     if status in PROCESSING_STATUSES_SUCCESSFUL:
         base_response["status"] = "completed"
-    
+
         if status == ProcessStatus.SUCCESS.value:
             base_response["message"] = "Document processed successfully"
         elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
             base_response["message"] = "Document processed but no matching template found"
 
-        base_response.update({
-            "fields": _extract_field_values(ddb_record, include_extracted_data)
-        })
-    
+        base_response.update({"fields": _extract_field_values(ddb_record, include_extracted_data)})
+
     # error responses
     elif status == ProcessStatus.FAILED.value:
-        base_response.update({
-            "status": "failed",
-            "error": error_message or "Processing failed",
-            "additionalInfo": data.additional_info if data else None
-        })
+        base_response.update(
+            {
+                "status": "failed",
+                "error": error_message or "Processing failed",
+                "additionalInfo": data.additional_info if data else None,
+            }
+        )
 
     elif status == ProcessStatus.NO_DOCUMENT_DETECTED.value:
-        base_response.update({
-            "status": "not_supported",
-            "message": "Unable to extract meaningful document content",
-            "additionalInfo": data.additional_info if data else None
-        })
+        base_response.update(
+            {
+                "status": "not_supported",
+                "message": "Unable to extract meaningful document content",
+                "additionalInfo": data.additional_info if data else None,
+            }
+        )
 
     elif status in PROCESSING_STATUS_NOT_SUPPORTED:
-        base_response.update({
-            "status": "not_supported",
-            "message": "Document type not supported",
-            "additionalInfo": data.additional_info if data else None
-        })
-    
-    else:
-        base_response.update({
-            "status": "processing",
-            "message": "Document processing in progress"
-        })
+        base_response.update(
+            {
+                "status": "not_supported",
+                "message": "Document type not supported",
+                "additionalInfo": data.additional_info if data else None,
+            }
+        )
 
+    else:
+        base_response.update({"status": "processing", "message": "Document processing in progress"})
 
     # Remove None values for cleaner response
     return {k: v for k, v in base_response.items() if v is not None}
+
 
 __all__ = ["get_internal_api_response", "build_v1_api_response"]

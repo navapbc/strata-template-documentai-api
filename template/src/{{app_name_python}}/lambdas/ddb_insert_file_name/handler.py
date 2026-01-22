@@ -1,16 +1,15 @@
-from config.constants import ConfigDefaults, ProcessStatus, UPLOAD_METADATA_KEYS
+from config.constants import UPLOAD_METADATA_KEYS, ConfigDefaults, ProcessStatus
 from schemas.document_metadata import DocumentMetadata
+from services import s3 as s3_service
 from utils.ddb import (
     classify_as_not_implemented,
     get_ddb_record,
     insert_initial_ddb_record,
     set_bda_processing_status_not_started,
 )
-
-from utils.models import ClassificationData
-from services import s3 as s3_service
 from utils.error_handling import handle_lambda_errors
-from utils.s3 import validate_s3_event, extract_s3_info_from_event
+from utils.models import ClassificationData
+from utils.s3 import extract_s3_info_from_event, validate_s3_event
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
@@ -80,9 +79,7 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
         grayscale_bytes, content_type = convert_to_grayscale(object_key, file_bytes, content_type)
 
         # upload back (overwrite)
-        s3_service.put_object(
-            bucket_name, object_key, grayscale_bytes, content_type
-        )
+        s3_service.put_object(bucket_name, object_key, grayscale_bytes, content_type)
 
         print(f"Converted {object_key} to grayscale")
     except Exception as e:
@@ -98,9 +95,11 @@ def handler(event, context):
         event, include_metadata=True
     )
 
-    user_provided_document_category = metadata.get(UPLOAD_METADATA_KEYS["user_provided_document_category"])
+    user_provided_document_category = metadata.get(
+        UPLOAD_METADATA_KEYS["user_provided_document_category"]
+    )
     job_id = metadata.get(UPLOAD_METADATA_KEYS["job_id"])
-    trace_id = metadata.get(UPLOAD_METADATA_KEYS["trace_id"]) 
+    trace_id = metadata.get(UPLOAD_METADATA_KEYS["trace_id"])
 
     # Check if DDB record exists
     try:
@@ -109,13 +108,11 @@ def handler(event, context):
 
         if status == ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
             response = s3_service.head_object(upload_bucket_name, upload_object_key)
-            file_size_bytes = response['ContentLength']
-            content_type = response.get('ContentType', 'application/octet-stream')
+            file_size_bytes = response["ContentLength"]
+            content_type = response.get("ContentType", "application/octet-stream")
 
             # second event - process the grayscale file normally
-            user_category = existing_record.get(
-                DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY
-            )
+            user_category = existing_record.get(DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY)
             print(f"Processing grayscale file {upload_object_key} with category {user_category}")
 
             if is_file_too_large_for_bda(content_type, file_size_bytes):

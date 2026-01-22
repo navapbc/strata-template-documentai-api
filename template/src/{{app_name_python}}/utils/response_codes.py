@@ -13,7 +13,7 @@ class ResponseCodes:
         """Get message for response code"""
         messages = {
             cls.SUCCESS: "Document validation passed",
-            cls.BITMAP_RECEIVED: "Bitmap received", 
+            cls.BITMAP_RECEIVED: "Bitmap received",
             cls.DOCUMENT_TYPE_NOT_IMPLEMENTED: "Document type not implemented",
             cls.MISSING_FIELDS: "Missing fields",
             cls.NO_DOCUMENT_DETECTED: "No document detected",

@@ -1,7 +1,9 @@
 import os
 from functools import lru_cache
 from typing import Optional
+
 import boto3
+
 
 class AWSClientFactory:
     _session: Optional[boto3.Session] = None
@@ -9,7 +11,9 @@ class AWSClientFactory:
     @classmethod
     def get_session(cls) -> boto3.Session:
         if cls._session is None:
-            profile_name = os.getenv("AWS_PROFILE") if not os.getenv("AWS_LAMBDA_FUNCTION_NAME") else None
+            profile_name = (
+                os.getenv("AWS_PROFILE") if not os.getenv("AWS_LAMBDA_FUNCTION_NAME") else None
+            )
             print(f"Using profile: {profile_name}")
 
             cls._session = (
@@ -45,7 +49,7 @@ class AWSClientFactory:
     def get_bda_client(cls):
         """Get Bedrock Data Automation client for project/blueprint management"""
         return cls.get_session().client(
-            'bedrock-data-automation', region_name=cls._get_dde_region()
+            "bedrock-data-automation", region_name=cls._get_dde_region()
         )
 
     @classmethod
@@ -65,5 +69,6 @@ class AWSClientFactory:
     def get_ddb_table(cls, table_name: str):
         """Get DynamoDB table resource by name"""
         return cls._get_dynamodb_table(table_name)
+
 
 __all__ = ["AWSClientFactory"]

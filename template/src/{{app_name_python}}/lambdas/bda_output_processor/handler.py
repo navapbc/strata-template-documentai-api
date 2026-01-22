@@ -11,13 +11,13 @@ def extract_uploaded_filename(object_key):
         filename = path_parts[1]
 
         # map truncated filename back to original
-        # TODO: Make truncated filename mapping more robust 
+        # TODO: Make truncated filename mapping more robust
         # (handle edge cases like files already containing "_truncated")
         if "_truncated." in filename:
             filename = filename.replace("_truncated.", ".")
-            
+
         return filename
-    
+
     else:
         raise ValueError(f"Invalid BDA output path: {object_key}")
 

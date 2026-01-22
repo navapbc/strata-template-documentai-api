@@ -1,4 +1,5 @@
 import os
+
 from config.constants import ProcessStatus
 from schemas.document_metadata import DocumentMetadata
 from utils.bda_invoker import invoke_bedrock_data_automation
@@ -8,7 +9,7 @@ from utils.ddb import (
     set_bda_processing_status_started,
 )
 from utils.env import DDE_INPUT_LOCATION
-from utils.error_handling import handle_lambda_errors 
+from utils.error_handling import handle_lambda_errors
 
 
 @handle_lambda_errors
@@ -19,9 +20,7 @@ def handler(event, context):
         # extract key fields from name from ddb stream record
         file_name = record["dynamodb"]["NewImage"]["fileName"]["S"]
         process_status = (
-            record["dynamodb"]["NewImage"]
-            .get(DocumentMetadata.PROCESS_STATUS, {})
-            .get("S")
+            record["dynamodb"]["NewImage"].get(DocumentMetadata.PROCESS_STATUS, {}).get("S")
         )
 
         if process_status != ProcessStatus.NOT_STARTED.value:

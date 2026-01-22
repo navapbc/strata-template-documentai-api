@@ -2,8 +2,12 @@ import logging
 from dataclasses import dataclass, field
 
 from config.constants import BdaResponseFields, ConfigDefaults
-from utils.response_codes import ResponseCodes
-from utils.bda import BdaFieldProcessingData, get_text_from_standard_blueprint, extract_field_metadata_from_bda_results
+from services.bda import extract_bda_output_s3_uri, get_bda_result_json
+from utils.bda import (
+    BdaFieldProcessingData,
+    extract_field_metadata_from_bda_results,
+    get_text_from_standard_blueprint,
+)
 from utils.ddb import (
     ClassificationData,
     classify_as_no_custom_blueprint_matched,
@@ -12,9 +16,7 @@ from utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
-
-
-from services.bda import extract_bda_output_s3_uri, get_bda_result_json
+from utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +38,18 @@ class BdaProcessingResults:
     response_code: str | None = None
 
 
-
 def get_bda_processing_results(bda_result_json: dict) -> BdaProcessingResults:
     """Extract field processing results from BDA output."""
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
         return BdaProcessingResults(response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR)
-    
+
     field_data = extract_field_metadata_from_bda_results(bda_result_json)
     response_code = _determine_response_code(field_data)
-    
+
     return BdaProcessingResults(
         field_confidence_map_list=field_data.field_confidence_map_list,
         empty_field_list=field_data.empty_fields,
-        response_code=response_code
+        response_code=response_code,
     )
 
 
@@ -96,7 +97,7 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         bda_output_s3_uri=bda_output_s3_uri,
         matched_document_class=document_class,
         matched_blueprint_name=matched_blueprint.name,
-        matched_blueprint_confidence=matched_blueprint.confidence,        
+        matched_blueprint_confidence=matched_blueprint.confidence,
     )
 
     print(f"Matched blueprint: {matched_blueprint.name}")
@@ -105,9 +106,8 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         msg = "No matching custom blueprint found. "
         text = get_text_from_standard_blueprint(bda_result_json)
 
-        if (
-            text
-            and len([c for c in text if c.isalnum()]) > int(ConfigDefaults.BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH.value)
+        if text and len([c for c in text if c.isalnum()]) > int(
+            ConfigDefaults.BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH.value
         ):
             msg += "Document detected, but not implemented."
             print(msg)

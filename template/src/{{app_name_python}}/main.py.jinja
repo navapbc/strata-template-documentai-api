@@ -171,7 +171,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
 
             if job_status.object_key:
                 object_key = job_status.object_key
-            
+
             # processing complete, return results
             if (
                 job_status.process_status in PROCESSING_STATUS_COMPLETED
@@ -208,6 +208,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
             "processedAt": None,
         }
 
+
 @app.post("/v1/documents")
 async def create_document(
     request: Request,
@@ -216,7 +217,7 @@ async def create_document(
     category: DocumentCategory | None = Form(None, description="Type of document being uploaded"),
     trace_id: str = Header(None, alias="X-Trace-ID"),
     wait: bool = False,  # async by default
-    timeout: int = 120   # optional timeout for synchronous processing, only used when wait=true
+    timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
 ):
     """Upload a document for processing.
 
@@ -260,7 +261,7 @@ async def create_document(
         job_id=job_id,
         trace_id=trace_id,
     )
-    
+
     response.headers["X-Trace-ID"] = trace_id
     if not wait:
         return {
@@ -288,7 +289,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
                 "status": job_status.process_status,
                 "message": "Processing in progress",
             }
-        
+
         # processing complete
         if include_extracted_data:
             # rebuild response with extracted data
@@ -323,10 +324,10 @@ async def list_schemas():
 async def get_schema(document_type: str):
     """Get field schema for a specific document type"""
     schema = get_document_schema(document_type)
-    
+
     if not schema:
         raise HTTPException(
             status_code=404, detail=f"Schema not found for document type: {document_type}"
         )
-    
+
     return schema

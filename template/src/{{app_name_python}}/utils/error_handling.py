@@ -33,7 +33,6 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
 
                 object_key, _ = extract_s3_info_from_event(event)
 
-
                 # for BDA output processor, extract the actual uploaded filename
                 if object_key.startswith(f"{BDA_PROCESSED_FILE_PREFIX}/"):
                     # object_key: processed/w2-abc123.pdf/job-id/0/custom_output/0/result.json
