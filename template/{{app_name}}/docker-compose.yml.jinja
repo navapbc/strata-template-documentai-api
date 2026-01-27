@@ -8,8 +8,4 @@ services:
       - {{ app_local_port }}:8000
     env_file: .env
     volumes:
-      - ./src:/app/src
-      - ./tests:/app/tests
-      - ~/.aws:/root/.aws:ro
-    environment:
-      - AWS_PROFILE
+      - .:/app
