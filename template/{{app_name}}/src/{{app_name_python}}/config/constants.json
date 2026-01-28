@@ -1,7 +1,9 @@
 {
   "api": {
     "version": "v1",
-    "default_timeout": 30
+    "default_timeout": 30,
+    "title": "Document AI API",
+    "description": "API for document processing"
   },
   "bda_job_statuses": {
     "all": {

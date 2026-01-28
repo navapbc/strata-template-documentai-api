@@ -34,3 +34,13 @@ target-version = ['py311']
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

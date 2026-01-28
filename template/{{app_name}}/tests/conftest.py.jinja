@@ -1,0 +1,6 @@
+import sys
+from pathlib import Path
+
+# add src directory to python path for tests
+package_path = Path(__file__).parent.parent / "src" / "{{app_name_python}}"
+sys.path.insert(0, str(package_path))

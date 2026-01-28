@@ -43,6 +43,7 @@ APP_NAME := {{app_name}}
 
 init: ## Install dependencies
 	uv sync --all-extras
+	uv pip install -e .
 
 ##################################################
 # Build / Release

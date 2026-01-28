@@ -11,6 +11,8 @@ def load_settings():
 
 SETTINGS = load_settings()
 API_VERSION = SETTINGS["api"]["version"]
+API_TITLE = SETTINGS["api"]["title"]
+API_DESCRIPTION = SETTINGS["api"]["description"]
 DEFAULT_TIMEOUT = SETTINGS["api"]["default_timeout"]
 SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]

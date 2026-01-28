@@ -1,6 +1,6 @@
 # Accessing Real AWS Resources from Docker
 
-If you need to access real AWS resources during local development (instead of using LocalStack or mocks), you can mount your AWS credentials into the Docker container.
+To access real AWS resources during local development, mount your AWS credentials into the Docker container.
 
 ## Setup
 

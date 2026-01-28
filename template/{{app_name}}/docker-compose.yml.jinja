@@ -2,8 +2,6 @@ services:
   {{app_name}}:
     build:
       context: .
-      platforms:
-        - linux/amd64
     ports:
       - {{ app_local_port }}:8000
     env_file: .env

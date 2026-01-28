@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import magic
 from config.constants import (
     API_VERSION,
+    API_TITLE,
+    API_DESCRIPTION,
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
@@ -30,8 +32,8 @@ logging.basicConfig(
 DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
 
 app = FastAPI(
-    title="{{app_name | title}} Document Processing API",
-    description="API for {{app_name}} document processing",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
     version=API_VERSION,
 )
 
@@ -46,7 +48,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "{{app_name | title}} Document Processing API", "status": "healthy"}
+    return {"message": API_TITLE, "status": "healthy"}
 
 
 @app.get("/health")
