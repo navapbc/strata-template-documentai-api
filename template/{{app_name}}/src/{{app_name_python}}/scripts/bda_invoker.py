@@ -20,20 +20,21 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool = False) -> dict:
     """Invoke BDA for a file.
-    
+
     Args:
         file_name: Name of file to process
         bucket_name: Optional S3 bucket name (defaults to DDE_INPUT_LOCATION env var)
         bypass_ddb_status_check: Skip checking DDB record status (default: False)
-        
+
     Returns:
         Status dictionary
     """
     if bucket_name is None:
         bucket_name = os.getenv(DDE_INPUT_LOCATION).replace("s3://", "")
-    
+
     logger.info(f"Invoking BDA for file: {file_name} in bucket: {bucket_name}")
 
     # check ddb record status unless explicitly skipped
@@ -41,7 +42,7 @@ def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool 
         try:
             record = get_ddb_record(file_name)
             process_status = record.get(DocumentMetadata.PROCESS_STATUS)
-            
+
             if process_status != ProcessStatus.NOT_STARTED.value:
                 logger.info(f"Skipping {file_name} - status: {process_status}")
                 return {"statusCode": 200, "skipped": True, "reason": f"Status is {process_status}"}
@@ -69,15 +70,19 @@ def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool 
         )
         raise
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Invoke BDA for document processing")
     parser.add_argument("--file", required=True, help="File name to process")
     parser.add_argument("--bucket", help="S3 bucket name (defaults to DDE_INPUT_LOCATION)")
-    parser.add_argument("--bypass-ddb-status-check", action="store_true",
-                    help="Skip checking DDB record status before invoking BDA")
+    parser.add_argument(
+        "--bypass-ddb-status-check",
+        action="store_true",
+        help="Skip checking DDB record status before invoking BDA",
+    )
 
     args = parser.parse_args()
-    
+
     try:
         result = main(args.file, args.bucket, args.bypass_ddb_status_check)
         print(json.dumps(result))

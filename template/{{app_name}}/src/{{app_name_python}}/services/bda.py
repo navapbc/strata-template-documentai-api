@@ -7,6 +7,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 def get_data_automation_project(project_arn: str) -> dict:
     """Get BDA project details including blueprints"""
     bedrock_client = AWSClientFactory.get_bda_client()

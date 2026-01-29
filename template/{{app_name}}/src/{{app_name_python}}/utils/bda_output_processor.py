@@ -15,8 +15,8 @@ from utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
-from utils.response_codes import ResponseCodes
 from utils.logger import get_logger
+from utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)
 

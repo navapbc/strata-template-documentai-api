@@ -6,10 +6,10 @@ from config.constants import (
     BDA_JOB_STATUS_RUNNING,
     BdaResponseFields,
 )
-
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
 
 @dataclass
 class BdaFieldProcessingData:

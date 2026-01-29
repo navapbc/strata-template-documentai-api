@@ -13,14 +13,12 @@ from config.constants import (
 from schemas.document_metadata import DocumentMetadata
 from services import ddb as ddb_service
 from services import s3 as s3_service
+from utils.logger import get_logger
 from utils.models import ClassificationData, FieldMetrics, InternalApiResponse, ProcessingTimes
 from utils.response_builder import build_v1_api_response, get_internal_api_response
 from utils.response_codes import ResponseCodes
 
-from utils.logger import get_logger
-
 logger = get_logger(__name__)
-
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -340,7 +338,6 @@ def update_ddb(
         raise
 
 
-
 def insert_ddb(
     object_key: str,
     user_provided_document_category: str | None = None,
@@ -432,7 +429,9 @@ def insert_initial_ddb_record(
     )
 
     if not user_provided_document_category:
-        logger.warning(f"Warning: user_provided_document_category is None/empty for {source_object_key}")
+        logger.warning(
+            f"Warning: user_provided_document_category is None/empty for {source_object_key}"
+        )
         user_provided_document_category = "unknown"
 
     document_detector = DocumentDetector()

@@ -2,6 +2,7 @@
 """
 Process uploaded files to S3 - insert DDB records and convert images to grayscale if needed.
 """
+
 import argparse
 import sys
 
@@ -14,11 +15,11 @@ from utils.ddb import (
     insert_initial_ddb_record,
     set_bda_processing_status_not_started,
 )
-
-from utils.models import ClassificationData
 from utils.logger import get_logger
+from utils.models import ClassificationData
 
 logger = get_logger(__name__)
+
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
     """Check if file exceeds BDA size limits based on content type"""
@@ -102,14 +103,14 @@ def main(
     trace_id: str = None,
 ) -> dict:
     """Process uploaded file.
-    
+
     Args:
         bucket_name: S3 bucket name
         object_key: S3 object key
         user_provided_document_category: Optional document category
         job_id: Optional job ID
         trace_id: Optional trace ID
-        
+
     Returns:
         Status dictionary
     """
@@ -166,6 +167,7 @@ def main(
             logger.info(f"Converted {object_key} to grayscale for BDA processing")
 
         return {"statusCode": 200}
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process uploaded file")

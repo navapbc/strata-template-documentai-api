@@ -11,9 +11,9 @@ from config.constants import (
 from schemas.document_metadata import DocumentMetadata
 from services.bda import get_bda_result_json
 from utils.bda import extract_field_values_from_bda_results
+from utils.logger import get_logger
 from utils.models import ClassificationData, InternalApiResponse
 from utils.response_codes import ResponseCodes
-from utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,6 +10,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
     """Invoke BDA and return job ARN"""
     dde_project_arn = os.getenv(DDE_PROJECT_ARN)

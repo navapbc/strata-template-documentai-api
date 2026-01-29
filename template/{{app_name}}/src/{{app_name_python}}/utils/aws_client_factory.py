@@ -7,6 +7,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 class AWSClientFactory:
     _session: Optional[boto3.Session] = None
 

@@ -1,4 +1,5 @@
 """Lambda handler for processing file uploads from S3 events."""
+
 from config.constants import UPLOAD_METADATA_KEYS
 from scripts.ddb_insert_file_name import main as process_upload_main
 from utils.error_handling import handle_lambda_errors

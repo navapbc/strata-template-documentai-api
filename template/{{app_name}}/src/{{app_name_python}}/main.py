@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 import magic
 from config.constants import (
-    API_VERSION,
-    API_TITLE,
     API_DESCRIPTION,
+    API_TITLE,
+    API_VERSION,
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
@@ -20,8 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from schemas.document_metadata import DocumentMetadata
 from services import s3 as s3_service
 from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
-from utils.schemas import get_all_schemas, get_document_schema
 from utils.logger import get_logger
+from utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
 

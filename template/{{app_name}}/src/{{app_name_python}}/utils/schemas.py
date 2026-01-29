@@ -7,11 +7,9 @@ from typing import Optional
 from config.constants import CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES, CACHE_KEY_BLUEPRINT_SCHEMAS
 from services.bda import get_blueprint, get_data_automation_project
 from utils.cache import get_cache
-
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
 
 
 def _fetch_schemas_from_bda() -> dict:

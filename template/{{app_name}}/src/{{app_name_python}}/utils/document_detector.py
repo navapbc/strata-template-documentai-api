@@ -442,7 +442,9 @@ class DocumentDetector:
                 if edge_ratio > 0.01:  # At least 0.1% edges
                     rois.append(roi)
 
-        logger.info(f"{file_name}: found {len(rois)} content ROIs out of {grid_size*grid_size} total")
+        logger.info(
+            f"{file_name}: found {len(rois)} content ROIs out of {grid_size*grid_size} total"
+        )
         return rois
 
     def _calculate_edge_score(self, document_roi, file_name):

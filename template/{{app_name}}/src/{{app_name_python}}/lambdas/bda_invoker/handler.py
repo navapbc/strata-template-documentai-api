@@ -1,4 +1,5 @@
 """Lambda handler for invoking BDA on DDB stream events."""
+
 import os
 
 from config.constants import ProcessStatus
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 def handler(event, _context):
     """Lambda handler for DDB stream events to invoke BDA."""
     bucket_name = os.getenv(DDE_INPUT_LOCATION).replace("s3://", "")
-    
+
     for record in event["Records"]:
         logger.info(f"Processing record: {record['eventName']}")
 
