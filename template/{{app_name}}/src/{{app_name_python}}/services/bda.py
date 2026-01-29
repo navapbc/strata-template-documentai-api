@@ -3,7 +3,9 @@
 import json
 
 from utils.aws_client_factory import AWSClientFactory
+from utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 def get_data_automation_project(project_arn: str) -> dict:
     """Get BDA project details including blueprints"""
@@ -49,7 +51,7 @@ def get_bda_result_json(bda_result_uri: str) -> dict | None:
 
         return bda_result_json
     except Exception as e:
-        print(f"Failed to read result JSON: {e}")
+        logger.warning(f"Failed to read result JSON: {e}")
         return None
 
 
@@ -80,5 +82,5 @@ def extract_bda_output_s3_uri(
                 if "standard_output_path" in segment:
                     return segment["standard_output_path"]
     except (TypeError, AttributeError) as e:
-        print(f"Failed to extract BDA result uri: {e}")
+        logger.warning(f"Failed to extract BDA result uri: {e}")
         return None

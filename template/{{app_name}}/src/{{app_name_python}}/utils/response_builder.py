@@ -13,6 +13,9 @@ from services.bda import get_bda_result_json
 from utils.bda import extract_field_values_from_bda_results
 from utils.models import ClassificationData, InternalApiResponse
 from utils.response_codes import ResponseCodes
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _to_camel_case(snake_str: str) -> str:
@@ -103,11 +106,6 @@ def build_v1_api_response(
     """
 
     status = status.value if isinstance(status, ProcessStatus) else status
-    print(
-        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
-    )
-    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
-
     from utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)

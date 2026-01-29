@@ -1,10 +1,12 @@
 """Generic TTL cache"""
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 
 class CacheItem:
@@ -27,9 +29,7 @@ class Cache:
     def add(self, key: str, value: Any, ttl_minutes: int = 5):
         """Add item to cache with TTL"""
         self._cache[key] = CacheItem(value, ttl_minutes)
-        msg = f"Cache: Added '{key}' with TTL {ttl_minutes}m"
-        print(msg)
-        logger.debug(msg)
+        logger.debug(f"Cache: Added '{key}' with TTL {ttl_minutes}m")
 
     def get(self, key: str) -> Optional[Any]:
         """Get item from cache, None if expired or missing"""
@@ -38,9 +38,7 @@ class Cache:
 
         item = self._cache[key]
         if item.is_expired():
-            msg = f"Cache: '{key}' expired, removing"
-            print(msg)
-            logger.debug(msg)
+            logger.debug(f"Cache: '{key}' expired, removing")
             del self._cache[key]
             return None
 
@@ -50,16 +48,12 @@ class Cache:
         """Remove item from cache"""
         if key in self._cache:
             del self._cache[key]
-            msg = f"Cache: Invalidated '{key}'"
-            print(msg)
-            logger.debug(msg)
+            logger.debug(f"Cache: Invalidated '{key}'")
 
     def clear(self):
         """Clear all cache"""
         self._cache.clear()
-        msg = "Cache: Cleared all items"
-        print(msg)
-        logger.debug(msg)
+        logger.debug("Cache: Cleared all items")
 
 
 # Global cache instance

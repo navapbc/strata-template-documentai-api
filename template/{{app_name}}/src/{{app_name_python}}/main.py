@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -22,12 +21,9 @@ from schemas.document_metadata import DocumentMetadata
 from services import s3 as s3_service
 from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from utils.schemas import get_all_schemas, get_document_schema
+from utils.logger import get_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+logger = get_logger(__name__)
 
 DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
 
@@ -116,9 +112,9 @@ async def upload_document_for_processing(
     job_id: str = None,
     trace_id: str = None,
 ):
-    print("=== S3 UPLOAD STARTED ===")
-    print(f"DEBUG S3: user_provided_document_category = {repr(user_provided_document_category)}")
-    print(f"DEBUG S3: type = {type(user_provided_document_category)}")
+    logger.info("=== S3 UPLOAD STARTED ===")
+    logger.info(f"user_provided_document_category = {repr(user_provided_document_category)}")
+    logger.info(f"type = {type(user_provided_document_category)}")
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
 
@@ -133,7 +129,6 @@ async def upload_document_for_processing(
                     f"Expected DocumentCategory, got {type(user_provided_document_category)}"
                 )
 
-            print(f"DEBUG S3: Converting to string: {str(user_provided_document_category)}")
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
@@ -144,17 +139,13 @@ async def upload_document_for_processing(
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
 
-        print(f"DEBUG S3: About to upload with metadata: {metadata}")
-        print(f"DEBUG S3: file.file = {file.file}")
-        print(f"DEBUG S3: document_upload_bucket_name = {repr(bucket_name)}")
-        print(f"DEBUG S3: unique_file_name = {repr(unique_file_name)}")
+        logger.info(f"unique_file_name = {repr(unique_file_name)}")
 
         s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
-        print("=== S3 UPLOAD SUCCESS ===")
+        logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
-        logging.error(f"Error uploading file to S3: {e}")
-        print(f"=== S3 UPLOAD FAILED: {e} ===")
+        logger.error(f"=== S3 UPLOAD FAILED: {e} ===")
         raise HTTPException(
             status_code=500,
             detail="Document upload failed",
@@ -186,9 +177,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
             elapsed_time += polling_interval
 
         except Exception as e:
-            msg = f"Error polling DynamoDB for job {job_id}: {e}"
-            logging.error(msg)
-            print(msg)
+            logger.error(f"Error polling DynamoDB for job {job_id}: {e}")
 
             await asyncio.sleep(polling_interval)
             elapsed_time += polling_interval
@@ -243,7 +232,7 @@ async def create_document(
             ),
         )
 
-    print(
+    logger.info(
         f"Processing {file.filename}; "
         f"category: {category}; "
         f"content-type: {actual_content_type}"
@@ -309,9 +298,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
     except HTTPException:
         raise
     except Exception as e:
-        msg = f"Error retrieving results for job {job_id}: {e}"
-        logging.error(msg)
-        print(msg)
+        logger.error(f"Error retrieving results for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve results")
 
 

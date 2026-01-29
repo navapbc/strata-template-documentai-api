@@ -1,11 +1,9 @@
-import logging
 import traceback
 from functools import wraps
 from typing import Any, Callable
+from utils.logger import get_logger
 
-# configure logging for lambda
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def handle_lambda_errors(handler_func: Callable) -> Callable:
@@ -19,11 +17,8 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
             error_msg = f"Handler {handler_func.__name__} failed: {e}"
             stack_trace = traceback.format_exc()
 
-            print(f"ERROR: {error_msg}")
-            print(f"STACK TRACE:\n{stack_trace}")
-
-            logging.error(error_msg)
-            logging.error(stack_trace)
+            logger.error(f"ERROR: {error_msg}")
+            logger.error(f"STACK TRACE:\n{stack_trace}")
 
             # try to update DDB status to failed
             try:
@@ -50,9 +45,9 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
                     error_message=error_msg,
                     data=ClassificationData(additional_info=str(e)),
                 )
-                print(f"Updated DDB status to failed for {filename}")
+                logger.warning(f"Updated DDB status to failed for {filename}")
             except Exception as ddb_error:
-                print(f"Failed to update DDB status: {ddb_error}")
+                logger.error(f"Failed to update DDB status: {ddb_error}")
 
             return {"statusCode": 500, "body": str(e)}
 

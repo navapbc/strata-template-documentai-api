@@ -3,7 +3,9 @@ from functools import lru_cache
 from typing import Optional
 
 import boto3
+from utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 class AWSClientFactory:
     _session: Optional[boto3.Session] = None
@@ -14,7 +16,7 @@ class AWSClientFactory:
             profile_name = (
                 os.getenv("AWS_PROFILE") if not os.getenv("AWS_LAMBDA_FUNCTION_NAME") else None
             )
-            print(f"Using profile: {profile_name}")
+            logger.info(f"Using profile: {profile_name}")
 
             cls._session = (
                 boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
