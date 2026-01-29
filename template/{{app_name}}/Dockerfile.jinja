@@ -1,0 +1,36 @@
+# Dockerfile following platform best practices
+# References:
+# - https://github.com/navapbc/platform-cli/blob/main/Dockerfile
+# - https://docs.astral.sh/uv/guides/integration/docker/
+
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:abee452509bff525494b21aea05708bfa026802b12741213594be2be13741a97
+
+# install runtime dependencies
+RUN apt-get update && \
+    apt-get install --no-install-recommends --yes curl libmagic1 && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_SYSTEM_PYTHON=true
+
+WORKDIR /app
+
+RUN touch README.md
+COPY pyproject.toml uv.lock* /app/
+# install project dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
+
+# copy application code
+COPY src/{{app_name_python}}/ /app/src/{{app_name_python}}/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH=/app/src/{{app_name_python}} \
+    PORT=8000
+
+# use PORT environment variable (required by platform)
+# https://github.com/navapbc/template-infra/blob/main/template-only-docs/application-requirements.md
+CMD python -m uvicorn main:app --host 0.0.0.0 --port $PORT
