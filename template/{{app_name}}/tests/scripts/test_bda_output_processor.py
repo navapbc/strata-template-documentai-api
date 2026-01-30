@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from scripts.bda_output_processor import extract_uploaded_filename, main
 
 
@@ -44,7 +43,9 @@ def test_main_success():
         result = main("test-bucket", "processed/test-file.pdf/output.json")
 
     assert result == {"status": "success", "data": {"field1": "value1"}}
-    mock_get_data.assert_called_once_with("test-file.pdf", "test-bucket", "processed/test-file.pdf/output.json")
+    mock_get_data.assert_called_once_with(
+        "test-file.pdf", "test-bucket", "processed/test-file.pdf/output.json"
+    )
 
 
 def test_main_with_truncated_filename():
@@ -53,7 +54,9 @@ def test_main_with_truncated_filename():
         mock_get_data.return_value = {"status": "success"}
         main("test-bucket", "processed/long_truncated.pdf/output.json")
 
-    mock_get_data.assert_called_once_with("long.pdf", "test-bucket", "processed/long_truncated.pdf/output.json")
+    mock_get_data.assert_called_once_with(
+        "long.pdf", "test-bucket", "processed/long_truncated.pdf/output.json"
+    )
 
 
 def test_main_invalid_object_key():

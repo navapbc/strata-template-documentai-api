@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from utils.error_handling import handle_lambda_errors
 
 
@@ -18,11 +17,7 @@ def s3_event():
     """Create S3 event with given key."""
 
     def _event(key="test-file.pdf"):
-        return {
-            "Records": [
-                {"s3": {"bucket": {"name": "test-bucket"}, "object": {"key": key}}}
-            ]
-        }
+        return {"Records": [{"s3": {"bucket": {"name": "test-bucket"}, "object": {"key": key}}}]}
 
     return _event
 
@@ -64,9 +59,7 @@ def test_handle_lambda_errors_success(s3_event, mock_context):
         ),
     ],
 )
-def test_handle_lambda_errors_on_failure(
-    s3_event, s3_key, expected_filename, mock_context
-):
+def test_handle_lambda_errors_on_failure(s3_event, s3_key, expected_filename, mock_context):
     """Test decorator catches exceptions, logs errors, returns 500, and updates DDB."""
     error_message = "Test error"
     handler = create_failing_handler(ValueError(error_message))

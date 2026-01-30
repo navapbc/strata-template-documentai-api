@@ -1,6 +1,8 @@
 """Tests for S3 Service methods"""
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 from services import s3 as s3_service
 
 
@@ -22,10 +24,14 @@ def mock_s3_body(data: bytes):
 def test_upload_file_args(mock_s3_client):
     """Upload file to S3"""
     mock_file = MagicMock()
-    s3_service.upload_file("bucket", "key", mock_file, content_type="text/plain", metadata={"foo": "bar"})
+    s3_service.upload_file(
+        "bucket", "key", mock_file, content_type="text/plain", metadata={"foo": "bar"}
+    )
     mock_s3_client.upload_fileobj.assert_called_once_with(
-        mock_file, "bucket", "key", 
-        ExtraArgs={"ContentType": "text/plain", "Metadata": {"foo": "bar"}}
+        mock_file,
+        "bucket",
+        "key",
+        ExtraArgs={"ContentType": "text/plain", "Metadata": {"foo": "bar"}},
     )
 
 
@@ -33,9 +39,7 @@ def test_upload_file_no_args(mock_s3_client):
     """Upload file without content type or metadata"""
     mock_file = MagicMock()
     s3_service.upload_file("bucket", "key", mock_file)
-    mock_s3_client.upload_fileobj.assert_called_once_with(
-        mock_file, "bucket", "key", ExtraArgs={}
-    )
+    mock_s3_client.upload_fileobj.assert_called_once_with(mock_file, "bucket", "key", ExtraArgs={})
 
 
 def test_get_object(mock_s3_client):
@@ -52,7 +56,7 @@ def test_head_object(mock_s3_client):
         "ContentLength": 12345,
         "ContentType": "application/pdf",
     }
-    
+
     result = s3_service.head_object("bucket", "key")
     mock_s3_client.head_object.assert_called_once_with(Bucket="bucket", Key="key")
     assert result == mock_s3_client.head_object.return_value
@@ -61,7 +65,7 @@ def test_head_object(mock_s3_client):
 def test_put_object(mock_s3_client):
     """Put object to S3 with content type"""
     s3_service.put_object("bucket", "key", b"data", content_type="text/plain")
-    
+
     mock_s3_client.put_object.assert_called_once_with(
         Bucket="bucket", Key="key", Body=b"data", ContentType="text/plain"
     )
@@ -70,9 +74,7 @@ def test_put_object(mock_s3_client):
 def test_put_object_no_content_type(mock_s3_client):
     """Put object to S3 without content type"""
     s3_service.put_object("bucket", "key", b"data")
-    mock_s3_client.put_object.assert_called_once_with(
-        Bucket="bucket", Key="key", Body=b"data"
-    )
+    mock_s3_client.put_object.assert_called_once_with(Bucket="bucket", Key="key", Body=b"data")
 
 
 def test_get_content_type(mock_s3_client):

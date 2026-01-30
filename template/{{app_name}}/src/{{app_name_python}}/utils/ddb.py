@@ -361,7 +361,8 @@ def insert_ddb(
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
+                user_provided_document_category
+                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
             DocumentMetadata.CREATED_AT: datetime.now(timezone.utc).isoformat(),
             DocumentMetadata.UPDATED_AT: datetime.now(timezone.utc).isoformat(),

@@ -234,6 +234,7 @@ def test_get_schema_not_found():
 
     assert response.status_code == 404
 
+
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_s3_failure():
     """Test S3 upload failure raises HTTPException."""
@@ -323,7 +324,9 @@ def test_create_document_synchronous():
     """Test synchronous document upload (wait=true)."""
     with patch("{{app_name_python}}.main.magic.from_buffer") as mock_magic:
         with patch("{{app_name_python}}.main.upload_document_for_processing"):
-            with patch("{{app_name_python}}.main.get_v1_document_processing_results") as mock_get_results:
+            with patch(
+                "{{app_name_python}}.main.get_v1_document_processing_results"
+            ) as mock_get_results:
                 mock_magic.return_value = "application/pdf"
                 mock_get_results.return_value = {"status": "success", "data": {}}
 
