@@ -22,9 +22,13 @@ dev = [
   "black>=23.0.0",
   "isort>=5.12.0", 
   "pytest>=7.0.0",
+  "pytest-cov>=4.1.0",
+  "pytest-mock>=3.11.0",
   "pytest-xdist>=3.0.0",
+  "pytest-asyncio>=0.23.0",
   "ruff>=0.1.0",
-  "httpx>=0.24.0"
+  "httpx>=0.24.0",
+  "moto[all]>=4.2.0"
 ]
 
 [tool.black]
@@ -37,6 +41,21 @@ line_length = 100
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+addopts = [
+  "--cov=src/{{app_name_python}}",
+  "--cov-report=html",
+  "--cov-report=term-missing",
+  "--cov-fail-under=90"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]

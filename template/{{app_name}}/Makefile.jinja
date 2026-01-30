@@ -73,7 +73,11 @@ stop: ## Stop development server
 ##################################################
 
 test: ## Run test suite
-	uv run pytest
+	uv run pytest -n auto -v
+
+test-coverage: ## Run tests with coverage report
+	uv run pytest -n auto -v --cov-report=html --cov-report=term
+
 
 ##################################################
 # Lint / Format

@@ -229,7 +229,7 @@ def _build_update_expression(
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
-            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE
+            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
@@ -361,7 +361,7 @@ def insert_ddb(
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
+                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
             DocumentMetadata.CREATED_AT: datetime.now(timezone.utc).isoformat(),
             DocumentMetadata.UPDATED_AT: datetime.now(timezone.utc).isoformat(),
