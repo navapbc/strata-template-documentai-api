@@ -262,7 +262,7 @@ def get_user_provided_document_category(object_key: str) -> str:
     )
 
     if not user_provided_document_category:
-        raise ValueError(f"User specified document type not found for file: {object_key}")
+        logger.warning(f"User specified document type not found for file: {object_key}")
 
     return user_provided_document_category
 
