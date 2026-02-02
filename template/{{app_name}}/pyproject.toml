@@ -2,6 +2,7 @@
 name = "documentai-api"
 version = "0.1.0"
 description = "DocumentAI API"
+readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [
