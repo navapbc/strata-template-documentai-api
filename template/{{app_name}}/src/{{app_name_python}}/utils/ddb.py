@@ -372,6 +372,7 @@ def insert_ddb(
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
+
         if pages_detected is not None:
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
