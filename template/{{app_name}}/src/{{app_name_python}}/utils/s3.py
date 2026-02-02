@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any
 
 from services import s3 as s3_service
 
@@ -8,7 +9,7 @@ def validate_s3_event(handler_func: Callable) -> Callable:
     """Decorator to validate S3 event structure before processing."""
 
     @wraps(handler_func)
-    def wrapper(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    def wrapper(event: dict[str, Any], context: Any) -> dict[str, Any]:
         # validate required S3 event structure
         if not event.get("detail"):
             raise ValueError("Missing 'detail' in event")
@@ -29,7 +30,7 @@ __all__ = ["validate_s3_event"]
 
 
 def extract_s3_info_from_event(event, include_metadata=False):
-    """Extract file key and bucket name from EventBridge event"""
+    """Extract file key and bucket name from EventBridge event."""
     try:
         file_key = event["detail"]["object"]["key"]
         bucket_name = event["detail"]["bucket"]["name"]
@@ -40,5 +41,5 @@ def extract_s3_info_from_event(event, include_metadata=False):
             return file_key, bucket_name, metadata
 
         return file_key, bucket_name
-    except (KeyError, TypeError):
-        raise ValueError("Invalid EventBridge event structure")
+    except (KeyError, TypeError) as e:
+        raise ValueError("Invalid EventBridge event structure") from e

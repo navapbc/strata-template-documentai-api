@@ -26,17 +26,17 @@ logger = logging.getLogger(__name__)
 
 
 def is_bda_job_running(status: str) -> bool:
-    """Check if BDA job is still running"""
+    """Check if BDA job is still running."""
     return status in BDA_JOB_STATUS_RUNNING
 
 
 def is_bda_job_failed(status: str) -> bool:
-    """Check if BDA job has failed"""
+    """Check if BDA job has failed."""
     return status in BDA_JOB_STATUS_FAILED
 
 
 def is_bda_job_completed(status: str) -> bool:
-    """Check if BDA job completed successfully"""
+    """Check if BDA job completed successfully."""
     return status in BDA_JOB_STATUS_COMPLETED
 
 
@@ -46,7 +46,7 @@ def _extract_fields_recursive(
     confidence_scores: list,
     empty_fields: list,
     field_confidence_map_list: list,
-    field_values: dict = None,
+    field_values: dict | None = None,
 ):
     """Recursively process fields, handling both flat and nested structures."""
     for field_name, field_data in data.items():
@@ -97,7 +97,7 @@ def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessi
 
 
 def get_text_from_standard_blueprint(bda_result_json):
-    """Extract text from BDA standard output for both document and image modalities"""
+    """Extract text from BDA standard output for both document and image modalities."""
     if not bda_result_json:
         return None
 
@@ -123,7 +123,7 @@ def get_text_from_standard_blueprint(bda_result_json):
 def extract_field_values_from_bda_results(
     bda_result_json: dict,
 ) -> tuple[BdaFieldProcessingData, dict]:
-    """Extract both metadata and field values from BDA result"""
+    """Extract both metadata and field values from BDA result."""
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
         return (BdaFieldProcessingData([], [], []), {})
 
@@ -150,6 +150,6 @@ def extract_field_values_from_bda_results(
 
 
 def extract_field_metadata_from_bda_results(bda_result_json: dict) -> BdaFieldProcessingData:
-    """Extract only metadata (confidence, empty fields) from BDA result"""
+    """Extract only metadata (confidence, empty fields) from BDA result."""
     metadata, _ = extract_field_values_from_bda_results(bda_result_json)
     return metadata

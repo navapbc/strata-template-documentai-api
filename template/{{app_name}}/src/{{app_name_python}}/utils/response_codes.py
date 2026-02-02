@@ -10,7 +10,7 @@ class ResponseCodes:
 
     @classmethod
     def get_message(cls, code: str) -> str:
-        """Get message for response code"""
+        """Get message for response code."""
         messages = {
             cls.SUCCESS: "Document validation passed",
             cls.BITMAP_RECEIVED: "Bitmap received",
@@ -25,5 +25,5 @@ class ResponseCodes:
 
     @classmethod
     def is_success_response_code(cls, code: str) -> str:
-        """Get message for response code"""
+        """Get message for response code."""
         return code.startswith("0")

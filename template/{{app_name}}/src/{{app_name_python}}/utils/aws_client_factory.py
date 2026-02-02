@@ -1,12 +1,11 @@
 import os
 from functools import lru_cache
-from typing import Optional
 
 import boto3
 
 
 class AWSClientFactory:
-    _session: Optional[boto3.Session] = None
+    _session: boto3.Session | None = None
 
     @classmethod
     def get_session(cls) -> boto3.Session:
@@ -47,7 +46,7 @@ class AWSClientFactory:
     @classmethod
     @lru_cache(maxsize=1)
     def get_bda_client(cls):
-        """Get Bedrock Data Automation client for project/blueprint management"""
+        """Get Bedrock Data Automation client for project/blueprint management."""
         return cls.get_session().client(
             "bedrock-data-automation", region_name=cls._get_dde_region()
         )
@@ -55,7 +54,7 @@ class AWSClientFactory:
     @classmethod
     @lru_cache(maxsize=1)
     def get_bda_runtime_client(cls):
-        """Get Bedrock Data Automation Runtime client for job execution (invoke, get status)"""
+        """Get Bedrock Data Automation Runtime client for job execution (invoke, get status)."""
         return cls.get_session().client(
             "bedrock-data-automation-runtime", region_name=cls._get_dde_region()
         )
@@ -67,7 +66,7 @@ class AWSClientFactory:
 
     @classmethod
     def get_ddb_table(cls, table_name: str):
-        """Get DynamoDB table resource by name"""
+        """Get DynamoDB table resource by name."""
         return cls._get_dynamodb_table(table_name)
 
 

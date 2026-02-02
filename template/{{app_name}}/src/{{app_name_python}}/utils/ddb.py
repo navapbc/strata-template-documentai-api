@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from config.constants import (
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
-    """Extract AWS region from BDA invocation ARN"""
+    """Extract AWS region from BDA invocation ARN."""
     try:
         # arn format: arn:aws:bedrock-data-automation:us-east-1:account:job/job-id
         parts = bda_invocation_arn.split(":")
@@ -37,13 +37,12 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
 
 
 def get_elapsed_time_seconds(start_time: datetime, end_time: datetime) -> Decimal:
-    """Calculate elapsed time in seconds with 2 decimal precision"""
+    """Calculate elapsed time in seconds with 2 decimal precision."""
     return Decimal(str(round((end_time - start_time).total_seconds(), 2)))
 
 
 def calculate_bda_processing_times(object_key: str, completion_time: datetime) -> ProcessingTimes:
-    """
-    Calculate BDA processing timing metrics.
+    """Calculate BDA processing timing metrics.
 
     Returns dict with timing data to add to DDB update, or empty dict if calculation fails.
     """
@@ -55,7 +54,7 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
         timing_data = ProcessingTimes()
 
         if created_at_str:
-            created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            created_at = datetime.fromisoformat(created_at_str)
             total_processing_time_seconds = get_elapsed_time_seconds(created_at, completion_time)
             timing_data.total_processing_time_seconds = total_processing_time_seconds
             msg = f"Total processing time: {total_processing_time_seconds:.2f} seconds"
@@ -63,7 +62,7 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             logger.info(msg)
 
         if bda_started_at_str:
-            bda_started_at = datetime.fromisoformat(bda_started_at_str.replace("Z", "+00:00"))
+            bda_started_at = datetime.fromisoformat(bda_started_at_str)
             bda_processing_time_seconds = get_elapsed_time_seconds(bda_started_at, completion_time)
             timing_data.bda_processing_time_seconds = bda_processing_time_seconds
             msg = f"BDA processing time: {bda_processing_time_seconds:.2f} seconds"
@@ -80,16 +79,16 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
 
 
 def _calculate_wait_time(object_key: str) -> Decimal:
-    """Calculate BDA wait time from file creation to BDA start"""
+    """Calculate BDA wait time from file creation to BDA start."""
     ddb_record = get_ddb_record(object_key)
     created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
-    created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
-    current_time = datetime.now(timezone.utc)
+    created_at = datetime.fromisoformat(created_at_str)
+    current_time = datetime.now(UTC)
     return get_elapsed_time_seconds(created_at, current_time)
 
 
 def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
-    """Calculate field count metrics from classification data"""
+    """Calculate field count metrics from classification data."""
     if not data.field_confidence_scores:
         return FieldMetrics(0, 0, None)
 
@@ -101,8 +100,8 @@ def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
     confidence_sum = 0
 
     for field_data in data.field_confidence_scores:
-        field_name = list(field_data.keys())[0]
-        confidence = list(field_data.values())[0]
+        field_name = next(iter(field_data.keys()))
+        confidence = next(iter(field_data.values()))
 
         if field_name not in empty_fields:
             non_empty_count += 1
@@ -114,7 +113,7 @@ def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
 
 
 def _build_completion_timing(object_key: str) -> tuple[list, dict]:
-    """Build completion timing updates"""
+    """Build completion timing updates."""
     updates = []
     values = {}
 
@@ -122,7 +121,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
         ddb_record = get_ddb_record(object_key)
 
         if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
-            completed_time = datetime.now(timezone.utc)
+            completed_time = datetime.now(UTC)
             updates.append(f"{DocumentMetadata.BDA_COMPLETED_AT} = :bdaCompletedAt")
             values[":bdaCompletedAt"] = completed_time.isoformat()
 
@@ -133,7 +132,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
             if timing_data.total_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = " ":totalProcessingTime"
+                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = :totalProcessingTime"
                 )
                 values[":totalProcessingTime"] = timing_data.total_processing_time_seconds
 
@@ -150,7 +149,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
 
 def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
-    """Handle all timing-related updates for different statuses"""
+    """Handle all timing-related updates for different statuses."""
     status = status.value if isinstance(status, ProcessStatus) else status
 
     updates = []
@@ -158,7 +157,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
 
     if status == ProcessStatus.STARTED:
         updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
-        values[":bdaStartedAt"] = datetime.now(timezone.utc).isoformat()
+        values[":bdaStartedAt"] = datetime.now(UTC).isoformat()
 
         try:
             wait_time = _calculate_wait_time(object_key)
@@ -185,13 +184,13 @@ def _build_update_expression(
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
 ) -> tuple[str, dict]:
-    """Build DynamoDB update expression and values"""
+    """Build DynamoDB update expression and values."""
     updates = [
         f"{DocumentMetadata.PROCESS_STATUS} = :processStatus",
         f"{DocumentMetadata.UPDATED_AT} = :updatedAt",
     ]
 
-    values = {":processStatus": status, ":updatedAt": datetime.now(timezone.utc).isoformat()}
+    values = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
 
     if data:
         metrics = _calculate_field_metrics(data)
@@ -252,7 +251,7 @@ def _build_update_expression(
 
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
-    """Execute the DynamoDB update"""
+    """Execute the DynamoDB update."""
     table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
     key = {"fileName": object_key}
 
@@ -260,8 +259,7 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
 
 
 def get_user_provided_document_category(object_key: str) -> str:
-    """
-    Get user specified document type for a file.
+    """Get user specified document type for a file.
 
     This should always succeed - the user document type is set when the file
     is first processed. If this fails, we have a data pipeline problem.
@@ -296,7 +294,7 @@ def get_ddb_record(object_key: str) -> dict:
 
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
-    """Get document metadata record by job ID"""
+    """Get document metadata record by job ID."""
     table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
     index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
 
@@ -313,9 +311,9 @@ def update_ddb(
     internal_api_response: InternalApiResponse,
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
-    error_message: str = None,
+    error_message: str | None = None,
 ):
-    """Update DynamoDB processing status for a file"""
+    """Update DynamoDB processing status for a file."""
     try:
         # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
         # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
@@ -352,11 +350,11 @@ def insert_ddb(
     user_provided_document_category: str | None = None,
     process_status: str | None = None,
     internal_api_response: InternalApiResponse | None = None,
-    file_size_bytes: int = None,
-    content_type: str = None,
-    pages_detected: int = None,
-    job_id: str = None,
-    trace_id: str = None,
+    file_size_bytes: int | None = None,
+    content_type: str | None = None,
+    pages_detected: int | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
     is_password_protected: bool = False,
     is_document_blurry: bool = False,
     document_profile_raw_metrics=None,
@@ -372,8 +370,8 @@ def insert_ddb(
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
                 user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
             ),
-            DocumentMetadata.CREATED_AT: datetime.now(timezone.utc).isoformat(),
-            DocumentMetadata.UPDATED_AT: datetime.now(timezone.utc).isoformat(),
+            DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
+            DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
         }
 
         if file_size_bytes is not None:
@@ -424,16 +422,16 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     user_provided_document_category: str,
-    job_id: str = None,
-    trace_id: str = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
 ):
-    """Insert initial DDB record"""
+    """Insert initial DDB record."""
     # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
     # in other lambdas. only ddb_insert_file_name Lambda
     # has OpenCV/Poppler layers attached. including this import at the top of the
     # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from utils.document_detector import (  # noqa: E402
+    from utils.document_detector import (
         DocumentDetector,
         QualityMetricsNormalized,
         QualityMetricsRaw,
@@ -494,7 +492,6 @@ def insert_initial_ddb_record(
                 process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
-
                 print("=== Starting multi-page detection validation ===")
 
                 try:
@@ -546,7 +543,7 @@ def insert_initial_ddb_record(
 
 
 def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
-    """Mark file processing as started with BDA job ARN"""
+    """Mark file processing as started with BDA job ARN."""
     update_ddb(
         object_key=object_key,
         status=ProcessStatus.STARTED,
@@ -564,7 +561,7 @@ def set_bda_processing_status_not_started(object_key: str):
 
 
 def classify_as_success(object_key: str, response_code: str, data: ClassificationData):
-    """Mark file processing as completed"""
+    """Mark file processing as completed."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=response_code,
@@ -583,7 +580,7 @@ def classify_as_success(object_key: str, response_code: str, data: Classificatio
 
 
 def classify_as_failed(object_key: str, error_message: str, data: ClassificationData):
-    """Mark file processing as failed with error message"""
+    """Mark file processing as failed with error message."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR,
@@ -603,7 +600,7 @@ def classify_as_failed(object_key: str, error_message: str, data: Classification
 
 
 def classify_as_not_implemented(object_key: str, data: ClassificationData):
-    """Mark file processing as not implemented"""
+    """Mark file processing as not implemented."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,
@@ -622,7 +619,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
 
 
 def classify_as_no_document_detected(object_key: str, data: ClassificationData):
-    """Mark file processing as no document detected"""
+    """Mark file processing as no document detected."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.NO_DOCUMENT_DETECTED,
@@ -641,7 +638,7 @@ def classify_as_no_document_detected(object_key: str, data: ClassificationData):
 
 
 def classify_as_no_custom_blueprint_matched(object_key: str, data: ClassificationData):
-    """Mark file processing as not implemented"""
+    """Mark file processing as not implemented."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
         response_code=ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED,

@@ -1,9 +1,8 @@
-"""BDA schema management"""
+"""BDA schema management."""
 
 import json
 import logging
 import os
-from typing import Optional
 
 from config.constants import CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES, CACHE_KEY_BLUEPRINT_SCHEMAS
 from services.bda import get_blueprint, get_data_automation_project
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def _fetch_schemas_from_bda() -> dict:
-    """Fetch schemas from BDA"""
+    """Fetch schemas from BDA."""
     msg = "Fetching schemas from BDA"
     print(msg)
     logger.info(msg)
@@ -64,7 +63,7 @@ def _fetch_schemas_from_bda() -> dict:
 
 
 def _extract_fields(schema: dict) -> list:
-    """Extract field list from schema"""
+    """Extract field list from schema."""
     fields = []
     properties = schema.get("properties", {})
     definitions = schema.get("definitions", {})
@@ -121,7 +120,7 @@ def _extract_fields(schema: dict) -> list:
 
 
 def get_all_schemas() -> dict:
-    """Get all document schemas"""
+    """Get all document schemas."""
     cache = get_cache()
 
     # try cache first
@@ -136,13 +135,13 @@ def get_all_schemas() -> dict:
     return schemas
 
 
-def get_document_schema(document_type: str) -> Optional[dict]:
-    """Get schema for specific document type"""
+def get_document_schema(document_type: str) -> dict | None:
+    """Get schema for specific document type."""
     schemas = get_all_schemas()
     return schemas.get(document_type)
 
 
 def invalidate_schema_cache():
-    """Force refresh of schema cache"""
+    """Force refresh of schema cache."""
     cache = get_cache()
     cache.invalidate(CACHE_KEY_BLUEPRINT_SCHEMAS)

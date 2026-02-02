@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MatchedBlueprintInfo:
-    """Timing data calculated during BDA processing completion"""
+    """Timing data calculated during BDA processing completion."""
 
     name: str
     confidence: str
@@ -31,7 +31,7 @@ class MatchedBlueprintInfo:
 
 @dataclass
 class BdaProcessingResults:
-    """Data elements derrived from BDA output"""
+    """Data elements derrived from BDA output."""
 
     empty_field_list: list = field(default_factory=list)
     field_confidence_map_list: list = field(default_factory=list)
@@ -61,8 +61,7 @@ def _determine_response_code(field_data: BdaFieldProcessingData) -> str:
 
 
 def get_matched_blueprint(bda_result_json: dict) -> MatchedBlueprintInfo:
-    """Extract matched blueprint name and confidence from BDA result JSON"""
-
+    """Extract matched blueprint name and confidence from BDA result JSON."""
     matched_blueprint = bda_result_json.get(BdaResponseFields.MATCHED_BLUEPRINT, {})
     matched_blueprint_name = matched_blueprint.get(BdaResponseFields.MATCHED_BLUEPRINT_NAME)
     matched_blueprint_confidence = matched_blueprint.get(

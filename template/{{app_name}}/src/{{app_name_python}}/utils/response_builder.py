@@ -16,13 +16,13 @@ from utils.response_codes import ResponseCodes
 
 
 def _to_camel_case(snake_str: str) -> str:
-    """Convert snake_case to camelCase"""
+    """Convert snake_case to camelCase."""
     components = snake_str.split("_")
     return components[0].lower() + "".join(word.capitalize() for word in components[1:])
 
 
 def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
-    """Extract field data for API response"""
+    """Extract field data for API response."""
     if not ddb_record:
         return {}
 
@@ -58,8 +58,7 @@ def get_internal_api_response(
     response_code: str,
     matched_document_class: str | None,
 ) -> InternalApiResponse:
-    """
-    Get API response object for internal use
+    """Get API response object for internal use.
 
     Args:
         object_key: S3 file key
@@ -90,8 +89,7 @@ def build_v1_api_response(
     error_message: str | None = None,
     include_extracted_data: bool = False,
 ) -> dict[str, Any]:
-    """
-    Build API response dict for DDB storage.
+    """Build API response dict for DDB storage.
 
     Args:
         status: Processing status
@@ -101,7 +99,6 @@ def build_v1_api_response(
     Returns:
         dict: Response data for DDB JSON storage
     """
-
     status = status.value if isinstance(status, ProcessStatus) else status
     print(
         f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
@@ -174,4 +171,4 @@ def build_v1_api_response(
     return {k: v for k, v in base_response.items() if v is not None}
 
 
-__all__ = ["get_internal_api_response", "build_v1_api_response"]
+__all__ = ["build_v1_api_response", "get_internal_api_response"]

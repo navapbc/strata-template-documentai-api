@@ -1,4 +1,4 @@
-"""Bedrock Data Automation service methods"""
+"""Bedrock Data Automation service methods."""
 
 import json
 
@@ -6,19 +6,19 @@ from utils.aws_client_factory import AWSClientFactory
 
 
 def get_data_automation_project(project_arn: str) -> dict:
-    """Get BDA project details including blueprints"""
+    """Get BDA project details including blueprints."""
     bedrock_client = AWSClientFactory.get_bda_client()
     return bedrock_client.get_data_automation_project(projectArn=project_arn)
 
 
 def get_blueprint(blueprint_arn: str) -> dict:
-    """Get blueprint schema details"""
+    """Get blueprint schema details."""
     bedrock_client = AWSClientFactory.get_bda_client()
     return bedrock_client.get_blueprint(blueprintArn=blueprint_arn)
 
 
 def invoke_data_automation_async(project_arn: str, input_config: dict, output_config: dict) -> dict:
-    """Invoke BDA job asynchronously"""
+    """Invoke BDA job asynchronously."""
     bedrock_client = AWSClientFactory.get_bedrock_data_automation_runtime_client()
 
     return bedrock_client.invoke_data_automation_async(
@@ -27,14 +27,14 @@ def invoke_data_automation_async(project_arn: str, input_config: dict, output_co
 
 
 def get_data_automation_job(job_arn: str) -> dict:
-    """Get BDA job status"""
+    """Get BDA job status."""
     bedrock_client = AWSClientFactory.get_bedrock_data_automation_runtime_client()
 
     return bedrock_client.get_data_automation_job(jobArn=job_arn)
 
 
 def get_bda_result_json(bda_result_uri: str) -> dict | None:
-    """Read and return BDA result JSON from S3"""
+    """Read and return BDA result JSON from S3."""
     if not bda_result_uri:
         return None
 
@@ -54,7 +54,7 @@ def get_bda_result_json(bda_result_uri: str) -> dict | None:
 
 
 def get_bda_job_response(bda_invocation_arn: str) -> str | None:
-    """Get BDA job status"""
+    """Get BDA job status."""
     try:
         bedrock_client = AWSClientFactory.get_bda_runtime_client()
         return bedrock_client.get_data_automation_status(invocationArn=bda_invocation_arn)
@@ -65,7 +65,7 @@ def get_bda_job_response(bda_invocation_arn: str) -> str | None:
 def extract_bda_output_s3_uri(
     bda_output_bucket_name: str, bda_output_object_key: str
 ) -> str | None:
-    """Read and parse BDA job metadata from S3"""
+    """Read and parse BDA job metadata from S3."""
     s3 = AWSClientFactory.get_s3_client()
     metadata_response = s3.get_object(Bucket=bda_output_bucket_name, Key=bda_output_object_key)
     job_metadata = json.loads(metadata_response["Body"].read().decode("utf-8"))

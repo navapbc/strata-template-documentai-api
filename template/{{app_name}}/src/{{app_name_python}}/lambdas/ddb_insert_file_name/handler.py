@@ -13,8 +13,7 @@ from utils.s3 import extract_s3_info_from_event, validate_s3_event
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
-    """Check if file exceeds BDA size limits based on content type"""
-
+    """Check if file exceeds BDA size limits based on content type."""
     if content_type in ["image/jpeg", "image/png"]:
         return file_size_bytes > ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES
     elif content_type in ["application/pdf", "image/tiff"]:
@@ -27,7 +26,7 @@ def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
 def convert_to_grayscale(
     object_key: str, file_bytes: bytes, content_type: str
 ) -> tuple[bytes, str]:
-    """Convert image to grayscale, and to PDF if over 5MB"""
+    """Convert image to grayscale, and to PDF if over 5MB."""
     if content_type not in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
         return file_bytes, content_type
 
@@ -68,7 +67,7 @@ def convert_to_grayscale(
 
 
 def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
-    """Convert S3 image to grayscale in-place"""
+    """Convert S3 image to grayscale in-place."""
     try:
         # download file
         response = s3_service.get_object(bucket_name, object_key)

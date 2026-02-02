@@ -58,8 +58,7 @@ class QualityMetricsNormalized:
 
 @dataclass
 class NormalizationRanges:
-    """
-    Value ranges for normalizing raw blur metrics to 0-1 scale.
+    """Value ranges for normalizing raw blur metrics to 0-1 scale.
 
     Ranges are empirically determined from document analysis:
         - fft_score: FFT high-frequency ratio (0.0=blurry, 1.0=sharp)
@@ -93,8 +92,7 @@ class DocumentProfile:
 
 
 class DocumentDetector:
-    """
-    Document detection utilities for file type, quality, and structure analysis.
+    """Document detection utilities for file type, quality, and structure analysis.
 
     TODO: Consider replacing multipage_detector.py entirely. The same code exists
     but was kept as to not disturb current processing
@@ -137,7 +135,6 @@ class DocumentDetector:
 
     def detect_file_type(self, image_file):
         """Detect file type from binary header bytes."""
-
         try:
             file_type = "Unknown"
 
@@ -196,7 +193,6 @@ class DocumentDetector:
                 pdf_images = convert_from_bytes(file_bytes, poppler_path=poppler_path)
 
             for page in pdf_images:
-
                 # convert the PIL image to a numpy array
                 nparr = np.array(page, dtype=np.uint8)
                 img = cv2.cvtColor(nparr, cv2.COLOR_RGB2GRAY)
@@ -211,7 +207,6 @@ class DocumentDetector:
         return images
 
     def _apply_gamma_correction(self, img, gamma):
-
         # Ensure gamma is a float for calculations
         gamma = float(gamma)
 
@@ -299,7 +294,7 @@ class DocumentDetector:
         return output_bytes.getvalue()
 
     def _process_image_bytes(self, file_bytes, file_name, processor_func):
-        """Process image bytes with proper cleanup"""
+        """Process image bytes with proper cleanup."""
         nparr = np.frombuffer(file_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
 
@@ -315,13 +310,11 @@ class DocumentDetector:
         return result
 
     def _detect_documents_in_image(self, image, file_name):
-        """
-        Detect rectangular document boundaries within a single image.
+        """Detect rectangular document boundaries within a single image.
 
         Returns:
             int: Number of document-like rectangles found
         """
-
         self._pages_detected = None
         img = image
 
@@ -411,8 +404,7 @@ class DocumentDetector:
             return None
 
     def _extract_document_regions_of_interest(self, gray_image, file_name):
-        """
-        Extract content regions from document for quality analysis.
+        """Extract content regions from document for quality analysis.
 
         Returns:
             list: ROI arrays with actual content (non-whitespace)
@@ -439,19 +431,18 @@ class DocumentDetector:
                 if edge_ratio > 0.01:  # At least 0.1% edges
                     rois.append(roi)
 
-        print(f"{file_name}: found {len(rois)} content ROIs out of {grid_size*grid_size} total")
+        print(f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total")
         return rois
 
     def _calculate_edge_score(self, document_roi, file_name):
-        """
-        Calculate the edge score for a grayscale image.
+        """Calculate the edge score for a grayscale image.
 
         Parameters
         ----------
         gray_image : np.ndarray
             Grayscale image (H x W)
 
-        Returns
+        Returns:
         -------
         score : float
             Edge score (0-1), higher = sharper
@@ -478,8 +469,8 @@ class DocumentDetector:
         return sobel_score_raw
 
     def _calculate_noise_stddev(self, document_roi, file_name):
-        H, W = document_roi.shape
-        noisy_region = document_roi[int(H / 4) : int(3 * H / 4), int(W / 4) : int(3 * W / 4)]
+        h, w = document_roi.shape
+        noisy_region = document_roi[int(h / 4) : int(3 * h / 4), int(w / 4) : int(3 * w / 4)]
         med = np.median(noisy_region)
         mad = np.median(np.abs(noisy_region - med))
         noise_stddev = mad * 1.4826
@@ -488,8 +479,7 @@ class DocumentDetector:
     def _get_local_contrast_score(
         self, gray_image, file_name, patch_size=64, ideal_std=60.0, mask=None
     ):
-        """
-        Compute local contrast score for a grayscale image, optionally ignoring whitespace.
+        """Compute local contrast score for a grayscale image, optionally ignoring whitespace.
 
         Parameters
         ----------
@@ -502,7 +492,7 @@ class DocumentDetector:
         mask : np.ndarray or None
             Boolean array of same shape as gray. True = content pixel, False = ignore
 
-        Returns
+        Returns:
         -------
         score : float
             Normalized local contrast score (0-1), higher = sharper
@@ -533,13 +523,11 @@ class DocumentDetector:
         return score
 
     def _normalize(self, value, min_val, max_val):
-        """
-        Scale a metric to 0-1 range.
-        """
+        """Scale a metric to 0-1 range."""
         return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
 
     def _calculate_motion_blur_score(self, document_roi, file_name):
-        """Return a motion blur severity score (0 = sharp, 1 = strong motion blur)"""
+        """Return a motion blur severity score (0 = sharp, 1 = strong motion blur)."""
         kernel_h = np.array([[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=np.float32)
         kernel_v = np.array([[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=np.float32)
 
@@ -551,14 +539,13 @@ class DocumentDetector:
 
         ratio = max(h_var, v_var) / (min(h_var, v_var) + 1e-6)
 
-        # normalize ratio to 0–1 for easier integration
-        score = min((ratio - 1.0) / 9.0, 1.0)  # ratio ~1–10 → score 0–1
+        # normalize ratio to 0-1 for easier integration
+        score = min((ratio - 1.0) / 9.0, 1.0)  # ratio ~1-10 → score 0-1
         score = max(0.0, score)
         return score
 
     def _calculate_quality_metrics(self, file_bytes, file_name):
-        """
-        Calculate comprehensive blur metrics for document.
+        """Calculate comprehensive blur metrics for document.
 
         Returns:
             tuple: (raw_metrics, normalized_metrics, ranges, overall_blur_score)
@@ -584,7 +571,6 @@ class DocumentDetector:
             return None
 
     def _get_quality_metrics(self, gray_image, file_name):
-
         # get multiple content regions of interest (roi) instead of single roi
         content_rois = self._extract_document_regions_of_interest(gray_image, file_name)
 
@@ -601,7 +587,7 @@ class DocumentDetector:
         all_noise = []
         all_motion = []
 
-        for i, roi in enumerate(content_rois):
+        for _i, roi in enumerate(content_rois):
             # calculate all metrics for a specific region of interest
             fft_score = self.fft_blur_score_normalized(roi, file_name)
             edge_score = self._calculate_edge_score(roi, file_name)
@@ -656,8 +642,7 @@ class DocumentDetector:
         normalized_metrics: QualityMetricsNormalized,
         overall_blur_score,
     ):
-        """
-        Determine if document is blurry using two-stage detection.
+        """Determine if document is blurry using two-stage detection.
 
         Returns:
             bool: True if document is considered blurry
@@ -682,7 +667,7 @@ class DocumentDetector:
         return float(result) if result is not None else np.nan
 
     def _calculate_laplacian_variance(self, file_bytes, file_name) -> float:
-        """Returns the Laplacian variance for an image/document"""
+        """Returns the Laplacian variance for an image/document."""
         if not file_bytes:
             print("No image bytes provided")
             return np.nan
@@ -716,15 +701,15 @@ class DocumentDetector:
         h, w = document_roi.shape
         cy, cx = h // 2, w // 2
         radius = min(h, w) // 4
-        Y, X = np.ogrid[:h, :w]
-        dist = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+        y, x = np.ogrid[:h, :w]
+        dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
         mask_freq = (dist > radius).astype(np.float32)
         high = np.sum(magnitude * mask_freq)
         total = np.sum(magnitude)
         return high / total if total > 0 else np.nan
 
     def _calculate_frequency_blur_score(self, file_bytes) -> float:
-        """FFT-based blur detection for natural images"""
+        """FFT-based blur detection for natural images."""
         file_type = self.detect_file_type(file_bytes)
 
         if file_type in IMAGE_FILE_TYPES:
@@ -771,7 +756,7 @@ class DocumentDetector:
             return 1  # Single page for JPEG/PNG/etc.
 
     def _is_password_protected(self, file_bytes):
-        """Detect if PDF is password protected"""
+        """Detect if PDF is password protected."""
         file_type = self.detect_file_type(file_bytes)
 
         if file_type == "PDF":
@@ -844,8 +829,7 @@ class DocumentDetector:
         return np.nan, np.nan
 
     def get_document_profile(self, file_bytes, file_name) -> DocumentProfile:
-        """
-        Analyze document and return comprehensive quality and content metrics.
+        """Analyze document and return comprehensive quality and content metrics.
 
         Args:
             file_bytes: Raw document/image bytes

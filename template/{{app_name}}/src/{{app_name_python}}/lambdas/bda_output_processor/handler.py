@@ -5,7 +5,7 @@ from utils.s3 import extract_s3_info_from_event, validate_s3_event
 
 
 def extract_uploaded_filename(object_key):
-    """Extract uploaded filename from BDA output path"""
+    """Extract uploaded filename from BDA output path."""
     path_parts = object_key.split("/")
     if len(path_parts) >= 2 and path_parts[0] == BDA_PROCESSED_FILE_PREFIX:
         filename = path_parts[1]
@@ -27,7 +27,6 @@ def extract_uploaded_filename(object_key):
 @handle_lambda_errors
 @validate_s3_event
 def handler(event, context):
-
     bda_output_object_key, bda_output_bucket_name = extract_s3_info_from_event(event)
     uploaded_filename = extract_uploaded_filename(bda_output_object_key)
 

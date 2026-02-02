@@ -1,12 +1,12 @@
-"""S3 Service methods"""
+"""S3 Service methods."""
 
 from utils.aws_client_factory import AWSClientFactory
 
 
 def upload_file(
-    bucket: str, key: str, file_obj, content_type: str = None, metadata: dict = None
+    bucket: str, key: str, file_obj, content_type: str | None = None, metadata: dict | None = None
 ) -> None:
-    """Upload file to S3"""
+    """Upload file to S3."""
     s3_client = AWSClientFactory.get_s3_client()
 
     extra_args = {}
@@ -20,19 +20,19 @@ def upload_file(
 
 
 def get_object(bucket: str, key: str) -> dict:
-    """Get object from S3"""
+    """Get object from S3."""
     s3_client = AWSClientFactory.get_s3_client()
     return s3_client.get_object(Bucket=bucket, Key=key)
 
 
 def head_object(bucket: str, key: str) -> dict:
-    """Get object metadata from S3"""
+    """Get object metadata from S3."""
     s3_client = AWSClientFactory.get_s3_client()
     return s3_client.head_object(Bucket=bucket, Key=key)
 
 
-def put_object(bucket: str, key: str, body: bytes, content_type: str = None) -> None:
-    """Put object to S3"""
+def put_object(bucket: str, key: str, body: bytes, content_type: str | None = None) -> None:
+    """Put object to S3."""
     s3_client = AWSClientFactory.get_s3_client()
 
     extra_args = {}
@@ -43,25 +43,25 @@ def put_object(bucket: str, key: str, body: bytes, content_type: str = None) -> 
 
 
 def get_content_type(bucket: str, key: str) -> str:
-    """Get file content type"""
+    """Get file content type."""
     response = head_object(bucket, key)
     return response.get("ContentType", "application/octet-stream")
 
 
 def get_file_size_bytes(bucket: str, key: str) -> int:
-    """Get file size in bytes"""
+    """Get file size in bytes."""
     response = head_object(bucket, key)
     return response.get("ContentLength", 0)
 
 
 def get_file_bytes(bucket: str, key: str) -> bytes:
-    """Get file content as bytes"""
+    """Get file content as bytes."""
     response = get_object(bucket, key)
     return response["Body"].read()
 
 
 def is_password_protected(bucket: str, key: str) -> bool:
-    """Check if PDF is password protected"""
+    """Check if PDF is password protected."""
     content_type = get_content_type(bucket, key)
 
     if content_type in ["application/pdf", "binary/octet-stream"]:

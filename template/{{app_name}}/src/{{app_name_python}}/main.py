@@ -4,12 +4,13 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from typing import Annotated
 
 import magic
 from config.constants import (
-    API_VERSION,
-    API_TITLE,
     API_DESCRIPTION,
+    API_TITLE,
+    API_VERSION,
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
@@ -78,7 +79,7 @@ def get_config(request: Request):
 
 @dataclass
 class JobStatus:
-    """Job status data from DDB"""
+    """Job status data from DDB."""
 
     ddb_record: dict | None
     object_key: str | None
@@ -87,8 +88,7 @@ class JobStatus:
 
 
 def _get_job_status(job_id: str) -> JobStatus:
-    """
-    Get job status from DDB.
+    """Get job status from DDB.
 
     Returns:
         JobStatus: Job status data with all fields None if job not found
@@ -113,11 +113,11 @@ async def upload_document_for_processing(
     unique_file_name: str,
     content_type: str,
     user_provided_document_category: DocumentCategory = None,
-    job_id: str = None,
-    trace_id: str = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
 ):
     print("=== S3 UPLOAD STARTED ===")
-    print(f"DEBUG S3: user_provided_document_category = {repr(user_provided_document_category)}")
+    print(f"DEBUG S3: user_provided_document_category = {user_provided_document_category!r}")
     print(f"DEBUG S3: type = {type(user_provided_document_category)}")
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
@@ -133,7 +133,7 @@ async def upload_document_for_processing(
                     f"Expected DocumentCategory, got {type(user_provided_document_category)}"
                 )
 
-            print(f"DEBUG S3: Converting to string: {str(user_provided_document_category)}")
+            print(f"DEBUG S3: Converting to string: {user_provided_document_category!s}")
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
@@ -146,8 +146,8 @@ async def upload_document_for_processing(
 
         print(f"DEBUG S3: About to upload with metadata: {metadata}")
         print(f"DEBUG S3: file.file = {file.file}")
-        print(f"DEBUG S3: document_upload_bucket_name = {repr(bucket_name)}")
-        print(f"DEBUG S3: unique_file_name = {repr(unique_file_name)}")
+        print(f"DEBUG S3: document_upload_bucket_name = {bucket_name!r}")
+        print(f"DEBUG S3: unique_file_name = {unique_file_name!r}")
 
         s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
         print("=== S3 UPLOAD SUCCESS ===")
@@ -158,11 +158,11 @@ async def upload_document_for_processing(
         raise HTTPException(
             status_code=500,
             detail="Document upload failed",
-        )
+        ) from e
 
 
 async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
-    """Poll for document processing completion with timeout"""
+    """Poll for document processing completion with timeout."""
     elapsed_time = 0
     object_key = None
     polling_interval = 5
@@ -216,8 +216,10 @@ async def create_document(
     request: Request,
     response: Response,
     file: UploadFile,
-    category: DocumentCategory | None = Form(None, description="Type of document being uploaded"),
-    trace_id: str = Header(None, alias="X-Trace-ID"),
+    category: Annotated[
+        DocumentCategory | None, Form(description="Type of document being uploaded")
+    ] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
     timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
 ):
@@ -243,11 +245,7 @@ async def create_document(
             ),
         )
 
-    print(
-        f"Processing {file.filename}; "
-        f"category: {category}; "
-        f"content-type: {actual_content_type}"
-    )
+    print(f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}")
 
     file.file.seek(0)
     file_extension = file.filename.split(".")[-1]
@@ -278,7 +276,7 @@ async def create_document(
 
 @app.get("/v1/documents/{job_id}")
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
-    """Get processing results by job ID"""
+    """Get processing results by job ID."""
     try:
         job_status = _get_job_status(job_id)
 
@@ -312,19 +310,19 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         msg = f"Error retrieving results for job {job_id}: {e}"
         logging.error(msg)
         print(msg)
-        raise HTTPException(status_code=500, detail="Failed to retrieve results")
+        raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
 @app.get("/v1/schemas")
 async def list_schemas():
-    """List all supported document types"""
+    """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
 @app.get("/v1/schemas/{document_type}")
 async def get_schema(document_type: str):
-    """Get field schema for a specific document type"""
+    """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)
 
     if not schema:

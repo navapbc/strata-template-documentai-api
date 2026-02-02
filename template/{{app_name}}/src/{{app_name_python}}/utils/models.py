@@ -1,4 +1,4 @@
-"""Data models for document classification and field metrics"""
+"""Data models for document classification and field metrics."""
 
 from dataclasses import dataclass
 
@@ -7,7 +7,7 @@ from config.constants import DocumentCategory
 
 @dataclass
 class InternalApiResponse:
-    """Shared API response model"""
+    """Shared API response model."""
 
     validation_passed: bool
     document_category: DocumentCategory
@@ -18,7 +18,7 @@ class InternalApiResponse:
 
 @dataclass
 class ClassificationData:
-    """Data required for document classification operations"""
+    """Data required for document classification operations."""
 
     bda_output_s3_uri: str | None = None
     matched_document_class: str | None = None
@@ -32,7 +32,7 @@ class ClassificationData:
 
 @dataclass
 class FieldMetrics:
-    """Field count and confidence metrics for BDA processing"""
+    """Field count and confidence metrics for BDA processing."""
 
     field_count: int
     field_count_not_empty: int
@@ -41,7 +41,7 @@ class FieldMetrics:
 
 @dataclass
 class ProcessingTimes:
-    """Timing data calculated during BDA processing completion"""
+    """Timing data calculated during BDA processing completion."""
 
     total_processing_time_seconds: float = 0.0
     bda_processing_time_seconds: float = 0.0

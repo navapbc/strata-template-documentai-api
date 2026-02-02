@@ -9,7 +9,7 @@ from utils.env import (
 
 
 def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
-    """Invoke BDA and return job ARN"""
+    """Invoke BDA and return job ARN."""
     dde_project_arn = os.getenv(DDE_PROJECT_ARN)
     dde_profile_arn = os.getenv(DDE_PROFILE_ARN)
     dde_output_location = os.getenv(DDE_OUTPUT_LOCATION).replace("s3://", "")
@@ -26,7 +26,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
 
     try:
         from services import s3 as s3_service
-        from utils.document_detector import (  # noqa: E402
+        from utils.document_detector import (
             MULTIPAGE_DETECTION_MAX_PAGES,
             DocumentDetector,
         )
