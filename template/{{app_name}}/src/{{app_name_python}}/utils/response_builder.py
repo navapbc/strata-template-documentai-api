@@ -115,7 +115,7 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {"job_id": job_id, "status": status, "createdAt": created_at}
+    base_response = {"jobId": job_id, "status": status, "createdAt": created_at}
 
     if completed_at:
         base_response["completedAt"] = completed_at
