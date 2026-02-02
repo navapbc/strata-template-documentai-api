@@ -81,13 +81,11 @@ test: ## Run test suite
 
 format: ## Format code
 	$(CHECK_VENV)
-	uv run black . && \
-	uv run isort . && \
-	uv run ruff check --fix .
+	uv run ruff format .
 
 lint: ## Lint code
 	$(CHECK_VENV)
-	uv run ruff check .
+	uv run ruff check --fix .
 
 lint-ci: ## Lint code (CI mode, no fixes)
 	$(CHECK_VENV)
