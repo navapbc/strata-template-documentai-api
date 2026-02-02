@@ -3,12 +3,16 @@
 # - https://github.com/navapbc/platform-cli/blob/main/Dockerfile
 # - https://docs.astral.sh/uv/guides/integration/docker/
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:abee452509bff525494b21aea05708bfa026802b12741213594be2be13741a97
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 # install runtime dependencies
-RUN apt-get update && \
-    apt-get install --no-install-recommends --yes curl libmagic1 && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq \
+    && apt-get install --no-install-recommends --yes \
+        build-essential \
+        curl \
+        libmagic1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
