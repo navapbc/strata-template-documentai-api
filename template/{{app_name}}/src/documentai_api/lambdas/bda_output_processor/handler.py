@@ -1,7 +1,7 @@
-from config.constants import BDA_PROCESSED_FILE_PREFIX
-from utils.bda_output_processor import get_api_response_data
-from utils.error_handling import handle_lambda_errors
-from utils.s3 import extract_s3_info_from_event, validate_s3_event
+from documentai_api.config.constants import BDA_PROCESSED_FILE_PREFIX
+from documentai_api.utils.bda_output_processor import get_api_response_data
+from documentai_api.utils.error_handling import handle_lambda_errors
+from documentai_api.utils.s3 import extract_s3_info_from_event, validate_s3_event
 
 
 def extract_uploaded_filename(object_key):

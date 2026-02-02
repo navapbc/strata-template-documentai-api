@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import magic
-from config.constants import (
+from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+
+from documentai_api.config.constants import (
     API_DESCRIPTION,
     API_TITLE,
     API_VERSION,
@@ -17,12 +20,10 @@ from config.constants import (
     DocumentCategory,
     ProcessStatus,
 )
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from schemas.document_metadata import DocumentMetadata
-from services import s3 as s3_service
-from utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
-from utils.schemas import get_all_schemas, get_document_schema
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.services import s3 as s3_service
+from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logging.basicConfig(
     level=logging.INFO,

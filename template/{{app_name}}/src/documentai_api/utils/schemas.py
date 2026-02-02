@@ -4,9 +4,12 @@ import json
 import logging
 import os
 
-from config.constants import CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES, CACHE_KEY_BLUEPRINT_SCHEMAS
-from services.bda import get_blueprint, get_data_automation_project
-from utils.cache import get_cache
+from documentai_api.config.constants import (
+    CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES,
+    CACHE_KEY_BLUEPRINT_SCHEMAS,
+)
+from documentai_api.services.bda import get_blueprint, get_data_automation_project
+from documentai_api.utils.cache import get_cache
 
 logger = logging.getLogger(__name__)
 

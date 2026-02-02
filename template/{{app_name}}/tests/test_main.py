@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from {{app_name_python}}.main import app
+from documentai_api.main import app
 
 client = TestClient(app)
 

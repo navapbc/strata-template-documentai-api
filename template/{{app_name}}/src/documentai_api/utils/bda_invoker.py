@@ -1,7 +1,7 @@
 import os
 
-from utils.aws_client_factory import AWSClientFactory
-from utils.env import (
+from documentai_api.utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.env import (
     DDE_OUTPUT_LOCATION,
     DDE_PROFILE_ARN,
     DDE_PROJECT_ARN,

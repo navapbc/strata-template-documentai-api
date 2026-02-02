@@ -1,6 +1,6 @@
 """DynamoDB service methods."""
 
-from utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 def get_item(table_name: str, key: dict, consistent_read: bool = True) -> dict:

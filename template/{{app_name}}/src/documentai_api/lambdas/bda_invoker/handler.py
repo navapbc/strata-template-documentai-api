@@ -1,15 +1,15 @@
 import os
 
-from config.constants import ProcessStatus
-from schemas.document_metadata import DocumentMetadata
-from utils.bda_invoker import invoke_bedrock_data_automation
-from utils.ddb import (
+from documentai_api.config.constants import ProcessStatus
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
+from documentai_api.utils.ddb import (
     ClassificationData,
     classify_as_failed,
     set_bda_processing_status_started,
 )
-from utils.env import DDE_INPUT_LOCATION
-from utils.error_handling import handle_lambda_errors
+from documentai_api.utils.env import DDE_INPUT_LOCATION
+from documentai_api.utils.error_handling import handle_lambda_errors
 
 
 @handle_lambda_errors

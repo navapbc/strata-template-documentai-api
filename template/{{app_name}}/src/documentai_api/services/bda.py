@@ -2,7 +2,7 @@
 
 import json
 
-from utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 def get_data_automation_project(project_arn: str) -> dict:

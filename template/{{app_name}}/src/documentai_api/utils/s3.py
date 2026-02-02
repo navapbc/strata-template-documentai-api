@@ -2,7 +2,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from services import s3 as s3_service
+from documentai_api.services import s3 as s3_service
 
 
 def validate_s3_event(handler_func: Callable) -> Callable:

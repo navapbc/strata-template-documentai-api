@@ -5,18 +5,23 @@ import random
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from config.constants import (
+from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
     ProcessStatus,
 )
-from schemas.document_metadata import DocumentMetadata
-from services import ddb as ddb_service
-from services import s3 as s3_service
-from utils.models import ClassificationData, FieldMetrics, InternalApiResponse, ProcessingTimes
-from utils.response_builder import build_v1_api_response, get_internal_api_response
-from utils.response_codes import ResponseCodes
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.services import ddb as ddb_service
+from documentai_api.services import s3 as s3_service
+from documentai_api.utils.models import (
+    ClassificationData,
+    FieldMetrics,
+    InternalApiResponse,
+    ProcessingTimes,
+)
+from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
+from documentai_api.utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
 

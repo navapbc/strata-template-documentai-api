@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 
-from config.constants import (
+from documentai_api.config.constants import (
     BDA_JOB_STATUS_COMPLETED,
     BDA_JOB_STATUS_FAILED,
     BDA_JOB_STATUS_RUNNING,

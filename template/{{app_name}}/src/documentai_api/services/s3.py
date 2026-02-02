@@ -1,6 +1,6 @@
 """S3 Service methods."""
 
-from utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 def upload_file(

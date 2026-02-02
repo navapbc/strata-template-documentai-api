@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from config.constants import DocumentCategory
+from documentai_api.config.constants import DocumentCategory
 
 
 @dataclass

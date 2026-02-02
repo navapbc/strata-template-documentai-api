@@ -3,16 +3,16 @@
 import json
 from typing import Any
 
-from config.constants import (
+from documentai_api.config.constants import (
     PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUSES_SUCCESSFUL,
     ProcessStatus,
 )
-from schemas.document_metadata import DocumentMetadata
-from services.bda import get_bda_result_json
-from utils.bda import extract_field_values_from_bda_results
-from utils.models import ClassificationData, InternalApiResponse
-from utils.response_codes import ResponseCodes
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.services.bda import get_bda_result_json
+from documentai_api.utils.bda import extract_field_values_from_bda_results
+from documentai_api.utils.models import ClassificationData, InternalApiResponse
+from documentai_api.utils.response_codes import ResponseCodes
 
 
 def _to_camel_case(snake_str: str) -> str:

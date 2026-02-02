@@ -1,15 +1,15 @@
-from config.constants import UPLOAD_METADATA_KEYS, ConfigDefaults, ProcessStatus
-from schemas.document_metadata import DocumentMetadata
-from services import s3 as s3_service
-from utils.ddb import (
+from documentai_api.config.constants import UPLOAD_METADATA_KEYS, ConfigDefaults, ProcessStatus
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.services import s3 as s3_service
+from documentai_api.utils.ddb import (
     classify_as_not_implemented,
     get_ddb_record,
     insert_initial_ddb_record,
     set_bda_processing_status_not_started,
 )
-from utils.error_handling import handle_lambda_errors
-from utils.models import ClassificationData
-from utils.s3 import extract_s3_info_from_event, validate_s3_event
+from documentai_api.utils.error_handling import handle_lambda_errors
+from documentai_api.utils.models import ClassificationData
+from documentai_api.utils.s3 import extract_s3_info_from_event, validate_s3_event
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:

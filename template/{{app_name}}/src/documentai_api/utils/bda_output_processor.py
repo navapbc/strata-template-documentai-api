@@ -1,14 +1,14 @@
 import logging
 from dataclasses import dataclass, field
 
-from config.constants import BdaResponseFields, ConfigDefaults
-from services.bda import extract_bda_output_s3_uri, get_bda_result_json
-from utils.bda import (
+from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
+from documentai_api.services.bda import extract_bda_output_s3_uri, get_bda_result_json
+from documentai_api.utils.bda import (
     BdaFieldProcessingData,
     extract_field_metadata_from_bda_results,
     get_text_from_standard_blueprint,
 )
-from utils.ddb import (
+from documentai_api.utils.ddb import (
     ClassificationData,
     classify_as_no_custom_blueprint_matched,
     classify_as_no_document_detected,
@@ -16,7 +16,7 @@ from utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
-from utils.response_codes import ResponseCodes
+from documentai_api.utils.response_codes import ResponseCodes
 
 logger = logging.getLogger(__name__)
 

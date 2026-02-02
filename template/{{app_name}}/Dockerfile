@@ -27,12 +27,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 # copy application code
-COPY src/{{app_name_python}}/ /app/src/{{app_name_python}}/
+COPY src/ /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH=/app/src/{{app_name_python}} \
     PORT=8000
 
 # use PORT environment variable (required by platform)
