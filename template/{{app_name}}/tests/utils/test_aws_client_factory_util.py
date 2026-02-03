@@ -1,15 +1,15 @@
-"""Tests for utils/aws_client_factory.py"""
+"""Tests for utils/aws_client_factory.py."""
 
 import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 @pytest.fixture(autouse=True)
 def reset_session():
-    """Reset the session between tests"""
+    """Reset the session between tests."""
     AWSClientFactory._session = None
     yield
     AWSClientFactory._session = None
@@ -17,7 +17,7 @@ def reset_session():
 
 @pytest.fixture(autouse=True)
 def clear_lru_cache():
-    """Clear LRU cache between tests"""
+    """Clear LRU cache between tests."""
     AWSClientFactory.get_s3_client.cache_clear()
     AWSClientFactory.get_dynamodb_resource.cache_clear()
     AWSClientFactory.get_bda_client.cache_clear()
@@ -28,7 +28,7 @@ def clear_lru_cache():
 
 @pytest.fixture
 def clear_env_vars():
-    """Clear all environment variables"""
+    """Clear all environment variables."""
     with patch.dict(os.environ, {}, clear=True):
         yield
 
@@ -43,7 +43,7 @@ def mock_boto3_session_class():
     
     Yields the mock class so you can assert 'mock.assert_called_once_with(profile_name=...)'
     """
-    with patch("utils.aws_client_factory.boto3.Session") as mock_class:
+    with patch("documentai_api.utils.aws_client_factory.boto3.Session") as mock_class:
         mock_class.return_value = MagicMock()
         yield mock_class
 
@@ -58,7 +58,7 @@ def mock_aws_session_instance():
     
     Yields the mock session instance so you can assert 'mock.client.assert_called_once_with("s3")'
     """
-    with patch("utils.aws_client_factory.AWSClientFactory.get_session") as mock_get_session:
+    with patch("documentai_api.utils.aws_client_factory.AWSClientFactory.get_session") as mock_get_session:
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
         yield mock_session
@@ -94,7 +94,7 @@ def test_get_session_in_lambda(mock_boto3_session_class):
 
 
 def test_get_session_no_profile(clear_env_vars, mock_boto3_session_class):
-    """Get session without profile"""
+    """Get session without profile."""
     session = AWSClientFactory.get_session()
     mock_boto3_session_class.assert_called_once_with()
     assert session is not None
@@ -117,26 +117,26 @@ def test_get_session_singleton(clear_env_vars, mock_boto3_session_class):
 
 
 def test_get_region_default(clear_env_vars):
-    """Test that _get_region() returns default when AWS_REGION not set"""
+    """Test that _get_region() returns default when AWS_REGION not set."""
     region = AWSClientFactory._get_region()
     assert region == "us-east-1"
 
 
 def test_get_region_from_env():
-    """Test that _get_region() returns value from AWS_REGION env var"""
+    """Test that _get_region() returns value from AWS_REGION env var."""
     with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}):
         region = AWSClientFactory._get_region()
         assert region == "us-west-2"
 
 
 def test_get_dde_region_default(clear_env_vars):
-    """Test that _get_dde_region() returns default when DDE_REGION not set"""
+    """Test that _get_dde_region() returns default when DDE_REGION not set."""
     region = AWSClientFactory._get_dde_region()
     assert region == "us-east-1"
 
 
 def test_get_dde_region_from_env():
-    """Test that _get_dde_region() returns value from DDE_REGION env var"""
+    """Test that _get_dde_region() returns value from DDE_REGION env var."""
     with patch.dict(os.environ, {"DDE_REGION": "eu-west-1"}):
         region = AWSClientFactory._get_dde_region()
         assert region == "eu-west-1"
@@ -171,14 +171,14 @@ def test_get_s3_client_cached(mock_aws_session_instance):
 
 
 def test_get_dynamodb_resource(mock_aws_session_instance):
-    """Test that get_dynamodb_resource() calls session.resource("dynamodb")"""
+    """Test that get_dynamodb_resource() calls session.resource("dynamodb")."""
     resource = AWSClientFactory.get_dynamodb_resource()
     mock_aws_session_instance.resource.assert_called_once_with("dynamodb", region_name="us-east-1")
     assert resource is not None
 
 
 def test_get_bda_client(mock_aws_session_instance):
-    """Test that get_bda_client() calls session.client("bedrock-data-automation")"""
+    """Test that get_bda_client() calls session.client("bedrock-data-automation")."""
     client = AWSClientFactory.get_bda_client()
 
     mock_aws_session_instance.client.assert_called_once_with(
@@ -188,7 +188,7 @@ def test_get_bda_client(mock_aws_session_instance):
 
 
 def test_get_bda_runtime_client(mock_aws_session_instance):
-    """Test that get_bda_runtime_client() calls session.client("bedrock-data-automation-runtime")"""
+    """Test that get_bda_runtime_client() calls session.client("bedrock-data-automation-runtime")."""
     client = AWSClientFactory.get_bda_runtime_client()
 
     mock_aws_session_instance.client.assert_called_once_with(
@@ -198,7 +198,7 @@ def test_get_bda_runtime_client(mock_aws_session_instance):
 
 
 def test_get_ssm_client(mock_aws_session_instance):
-    """Test that get_ssm_client() calls session.client("ssm")"""
+    """Test that get_ssm_client() calls session.client("ssm")."""
     client = AWSClientFactory.get_ssm_client()
     mock_aws_session_instance.client.assert_called_once_with("ssm", region_name="us-east-1")
     assert client is not None

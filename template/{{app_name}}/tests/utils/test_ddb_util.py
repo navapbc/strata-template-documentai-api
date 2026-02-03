@@ -4,29 +4,29 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from config.constants import ProcessStatus
-from schemas.document_metadata import DocumentMetadata
-from utils import ddb as ddb_util
-from utils.models import ClassificationData, InternalApiResponse
-from utils.response_codes import ResponseCodes
+from documentai_api.config.constants import ProcessStatus
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.utils import ddb as ddb_util
+from documentai_api.utils.models import ClassificationData, InternalApiResponse
+from documentai_api.utils.response_codes import ResponseCodes
 
 
 @pytest.fixture
 def mock_s3_service():
-    """Mock s3_service"""
-    with patch("utils.ddb.s3_service") as mock:
+    """Mock s3_service."""
+    with patch("documentai_api.utils.ddb.s3_service") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_ddb_service():
-    """Mock ddb_service"""
-    with patch("utils.ddb.ddb_service") as mock:
+    """Mock ddb_service."""
+    with patch("documentai_api.utils.ddb.ddb_service") as mock:
         yield mock
 
 
 @pytest.mark.parametrize(
-    "arn,expected_region",
+    ("arn","expected_region"),
     [
         ("arn:aws:bedrock-data-automation:us-east-1:123456789012:job/abc123", "us-east-1"),
         ("arn:aws:bedrock-data-automation:eu-west-1:123456789012:job/xyz789", "eu-west-1"),
@@ -34,12 +34,12 @@ def mock_ddb_service():
     ],
 )
 def test_extract_region_from_bda_arn(arn, expected_region):
-    """Test extracting AWS region from BDA ARN"""
+    """Test extracting AWS region from BDA ARN."""
     assert ddb_util.extract_region_from_bda_arn(arn) == expected_region
 
 
 def test_get_elapsed_time_seconds():
-    """Test elapsed time calculation"""
+    """Test elapsed time calculation."""
     year = datetime.now().year
     start = datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     end = datetime(year, 1, 1, 12, 0, 5, 500000, tzinfo=timezone.utc)  # 5.5 seconds later
@@ -51,13 +51,13 @@ def test_get_elapsed_time_seconds():
 
 
 def test_calculate_bda_processing_times():
-    """Test BDA processing time calculation"""
+    """Test BDA processing time calculation."""
     year = datetime.now().year
     created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     bda_started_at = datetime(year, 1, 1, 12, 0, 5, tzinfo=timezone.utc)
     completion_time = datetime(year, 1, 1, 12, 0, 15, tzinfo=timezone.utc)
 
-    with patch("utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = {
             DocumentMetadata.CREATED_AT: created_at.isoformat(),
             DocumentMetadata.BDA_STARTED_AT: bda_started_at.isoformat(),
@@ -70,14 +70,14 @@ def test_calculate_bda_processing_times():
 
 
 def test_calculate_wait_time():
-    """Test BDA wait time calculation"""
+    """Test BDA wait time calculation."""
     year = datetime.now().year
     created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-    with patch("utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = {DocumentMetadata.CREATED_AT: created_at.isoformat()}
 
-        with patch("utils.ddb.datetime") as mock_datetime:
+        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
             # mock current time to be 10 seconds later
             mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
             mock_datetime.fromisoformat = datetime.fromisoformat
@@ -86,7 +86,7 @@ def test_calculate_wait_time():
 
 
 @pytest.mark.parametrize(
-    "field_confidence_scores,field_empty_list,expected_count,expected_non_empty,expected_avg",
+    ("field_confidence_scores","field_empty_list","expected_count","expected_non_empty","expected_avg"),
     [
         (None, None, 0, 0, None),
         ([], None, 0, 0, None),
@@ -98,7 +98,7 @@ def test_calculate_wait_time():
 def test_calculate_field_metrics(
     field_confidence_scores, field_empty_list, expected_count, expected_non_empty, expected_avg
 ):
-    """Test field metrics calculation"""
+    """Test field metrics calculation."""
     data = ClassificationData(
         field_confidence_scores=field_confidence_scores,
         field_empty_list=field_empty_list,
@@ -113,7 +113,7 @@ def test_calculate_field_metrics(
 
 @pytest.mark.parametrize("has_bda_started_at", [True, False])
 def test_build_completion_timing(has_bda_started_at):
-    """Test completion timing updates"""
+    """Test completion timing updates."""
     year = datetime.now().year
     ddb_record = {
         DocumentMetadata.CREATED_AT: datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc).isoformat()
@@ -124,10 +124,10 @@ def test_build_completion_timing(has_bda_started_at):
             year, 1, 1, 12, 0, 5, tzinfo=timezone.utc
         ).isoformat()
 
-    with patch("utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = ddb_record
 
-        with patch("utils.ddb.datetime") as mock_datetime:
+        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 15, tzinfo=timezone.utc)
             mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -158,7 +158,7 @@ def test_build_completion_timing(has_bda_started_at):
     ],
 )
 def test_build_timing_updates(status):
-    """Test timing updates for different statuses"""
+    """Test timing updates for different statuses."""
     year = datetime.now().year
     ddb_record = {
         DocumentMetadata.CREATED_AT: datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc).isoformat()
@@ -169,10 +169,10 @@ def test_build_timing_updates(status):
             year, 1, 1, 12, 0, 5, tzinfo=timezone.utc
         ).isoformat()
 
-    with patch("utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = ddb_record
 
-        with patch("utils.ddb.datetime") as mock_datetime:
+        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
             mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -200,7 +200,7 @@ def test_build_timing_updates(status):
 
 
 @pytest.mark.parametrize(
-    "internal_api_response,v1_api_response,bda_invocation_arn,error_message",
+    ("internal_api_response","v1_api_response","bda_invocation_arn","error_message"),
     [
         # all parameters populated. tests all 'if' paths
         (
@@ -222,7 +222,7 @@ def test_build_timing_updates(status):
 def test_build_update_expression(
     internal_api_response, v1_api_response, bda_invocation_arn, error_message
 ):
-    """Test update expression building"""
+    """Test update expression building."""
     data = ClassificationData(
         bda_output_s3_uri="s3://bucket/key",
         matched_blueprint_name="test-blueprint",
@@ -299,7 +299,7 @@ def test_execute_ddb_update(mock_ddb_service):
 @pytest.mark.parametrize("user_provided_document_category", ["income", None])
 def test_get_user_provided_document_category(user_provided_document_category) -> str:
 
-    with patch("utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = {
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: user_provided_document_category
         }
@@ -323,7 +323,7 @@ def test_get_ddb_record(mock_ddb_service):
 
 
 def test_get_ddb_by_job_id(mock_ddb_service):
-    """Test getting DDB record by job ID"""
+    """Test getting DDB record by job ID."""
     with patch.dict(
         os.environ,
         {
@@ -347,7 +347,7 @@ def test_get_ddb_by_job_id(mock_ddb_service):
 
 
 @pytest.mark.parametrize(
-    "status,has_timing",
+    ("status","has_timing"),
     [
         (ProcessStatus.SUCCESS.value, True),
         (ProcessStatus.STARTED.value, True),
@@ -355,7 +355,7 @@ def test_get_ddb_by_job_id(mock_ddb_service):
     ],
 )
 def test_update_ddb(status, has_timing):
-    """Test DDB update"""
+    """Test DDB update."""
     internal_response = InternalApiResponse(
         validation_passed=True,
         document_category="income",
@@ -365,10 +365,10 @@ def test_update_ddb(status, has_timing):
     )
     data = ClassificationData(matched_document_class="paystub")
 
-    with patch("utils.ddb._execute_ddb_update") as mock_execute:
-        with patch("utils.ddb._build_update_expression") as mock_build_expr:
-            with patch("utils.ddb._build_timing_updates") as mock_timing:
-                with patch("utils.ddb.build_v1_api_response") as mock_v1:
+    with (patch("documentai_api.utils.ddb._execute_ddb_update") as mock_execute,
+         patch("documentai_api.utils.ddb._build_update_expression") as mock_build_expr,
+             patch("documentai_api.utils.ddb._build_timing_updates") as mock_timing,
+                 patch("documentai_api.utils.ddb.build_v1_api_response") as mock_v1):
                     mock_build_expr.return_value = ("SET status = :s", {":s": status})
                     mock_timing.return_value = ("timing", {":t": "val"}) if has_timing else ("", {})
                     mock_v1.return_value = {"status": "completed"}
@@ -382,7 +382,7 @@ def test_update_ddb(status, has_timing):
 
 
 def test_insert_ddb(mock_ddb_service):
-    """Test DDB insert with all fields"""
+    """Test DDB insert with all fields."""
     with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
         mock_raw_metrics = MagicMock()
         mock_raw_metrics.to_json_dict.return_value = {"raw": "data"}
@@ -440,7 +440,7 @@ def test_insert_ddb(mock_ddb_service):
 
 
 @pytest.mark.parametrize(
-    "user_provided_document_category,content_type,is_password_protected,is_blurry,expected_status,has_internal_response",
+    ("user_provided_document_category","content_type","is_password_protected","is_blurry","expected_status","has_internal_response"),
     [
         ("income", "image/bmp", False, False, ProcessStatus.NOT_IMPLEMENTED, True),
         ("income", "application/pdf", True, False, ProcessStatus.PASSWORD_PROTECTED, True),
@@ -460,23 +460,23 @@ def test_insert_initial_ddb_record(
     has_internal_response,
 ):
     with (
-        patch("utils.document_detector.DocumentDetector") as MockDocumentDetector,
-        patch("utils.document_detector.QualityMetricsNormalized") as MockQualityMetricsNormalized,
-        patch("utils.document_detector.QualityMetricsRaw") as MockQualityMetricsRaw,
-        patch("utils.ddb.get_internal_api_response") as mock_get_internal_api_response,
-        patch("utils.ddb.insert_ddb") as mock_insert_ddb,
+        patch("documentai_api.utils.document_detector.DocumentDetector") as mock_document_detector_class,
+        patch("documentai_api.utils.document_detector.QualityMetricsNormalized") as mock_quality_metrics_normalized,
+        patch("documentai_api.utils.document_detector.QualityMetricsRaw") as mock_quality_metrics_raw,
+        patch("documentai_api.utils.ddb.get_internal_api_response") as mock_get_internal_api_response,
+        patch("documentai_api.utils.ddb.insert_ddb") as mock_insert_ddb,
     ):
 
         mock_document_profile = MagicMock(
             page_count=1,
             is_password_protected=is_password_protected,
             is_blurry=is_blurry,
-            raw_metrics=MockQualityMetricsRaw,
-            normalized_metrics=MockQualityMetricsNormalized,
+            raw_metrics=mock_quality_metrics_raw,
+            normalized_metrics=mock_quality_metrics_normalized,
             overall_blur_score=0.0,
         )
 
-        mock_document_detector = MockDocumentDetector.return_value
+        mock_document_detector = mock_document_detector_class.return_value
         mock_document_detector.get_document_profile.return_value = mock_document_profile
         mock_s3_service.get_content_type.return_value = content_type
         mock_s3_service.get_file_size_bytes.return_value = 1024
@@ -512,8 +512,8 @@ def test_insert_initial_ddb_record(
 
 
 def test_set_bda_processing_status_started():
-    """Test setting BDA status to started"""
-    with patch("utils.ddb.update_ddb") as mock_update:
+    """Test setting BDA status to started."""
+    with patch("documentai_api.utils.ddb.update_ddb") as mock_update:
         ddb_util.set_bda_processing_status_started("test-file", "arn:aws:bda:us-east-1:123:job/1")
 
         mock_update.assert_called_once_with(
@@ -525,8 +525,8 @@ def test_set_bda_processing_status_started():
 
 
 def test_set_bda_processing_status_not_started():
-    """Test setting BDA status to not started"""
-    with patch("utils.ddb.update_ddb") as mock_update:
+    """Test setting BDA status to not started."""
+    with patch("documentai_api.utils.ddb.update_ddb") as mock_update:
         ddb_util.set_bda_processing_status_not_started("test-file")
 
         mock_update.assert_called_once_with(
@@ -540,7 +540,7 @@ def test_set_bda_processing_status_not_started():
 # the structure is essentially the identical, test using parameterization rather
 # than repeating boilerplate code each time
 @pytest.mark.parametrize(
-    "function,response_code,status,matched_document_class,error_msg",
+    ("function","response_code","status","matched_document_class","error_msg"),
     [
         (
             ddb_util.classify_as_success,
@@ -580,11 +580,11 @@ def test_set_bda_processing_status_not_started():
     ],
 )
 def test_classify_functions(function, response_code, status, matched_document_class, error_msg):
-    """Test all classify_as_* functions"""
+    """Test all classify_as_* functions."""
     data = ClassificationData(matched_document_class="paystub")
 
-    with patch("utils.ddb.get_internal_api_response") as mock_get_response:
-        with patch("utils.ddb.update_ddb") as mock_update:
+    with (patch("documentai_api.utils.ddb.get_internal_api_response") as mock_get_response,
+         patch("documentai_api.utils.ddb.update_ddb") as mock_update):
             # all classify functions require an object key and classification data
             args = ["test-file", data]
 

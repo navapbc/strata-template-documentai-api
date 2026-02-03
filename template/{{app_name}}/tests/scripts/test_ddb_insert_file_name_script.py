@@ -1,10 +1,10 @@
-"""Tests for scripts/ddb_insert_file_name.py"""
+"""Tests for scripts/ddb_insert_file_name.py."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from config.constants import ConfigDefaults
-from scripts.ddb_insert_file_name import (
+from documentai_api.config.constants import ConfigDefaults
+from documentai_api.scripts.ddb_insert_file_name import (
     convert_s3_object_to_grayscale,
     convert_to_grayscale,
     is_file_too_large_for_bda,
@@ -16,14 +16,14 @@ from scripts.ddb_insert_file_name import (
 def mock_grayscale_dependencies():
     with (
         patch("cv2.imdecode") as mock_cv2_imdecode,
-        patch("cv2.cvtColor") as mock_c2_cvtColor,
+        patch("cv2.cvtColor") as mock_cv2_cvtcolor,
         patch("PIL.Image.fromarray") as mock_pil_fromarray,
     ):
-        yield mock_cv2_imdecode, mock_c2_cvtColor, mock_pil_fromarray
+        yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
 
 
 @pytest.mark.parametrize(
-    "content_type,file_size,expected",
+    ("content_type","file_size","expected"),
     [
         ("image/jpeg", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value, False),
         ("image/jpeg", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1, True),
@@ -53,11 +53,11 @@ def test_convert_to_grayscale_non_image():
 
 def test_convert_s3_object_to_grayscale_success():
     """Test successful S3 object grayscale conversion."""
-    with patch("scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get:
-        with patch("scripts.ddb_insert_file_name.s3_service.put_object") as mock_s3_put:
-            with patch(
-                "scripts.ddb_insert_file_name.convert_to_grayscale"
-            ) as mock_convert_to_grayscale:
+    with (patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.put_object") as mock_s3_put,
+             patch(
+                "documentai_api.scripts.ddb_insert_file_name.convert_to_grayscale"
+            ) as mock_convert_to_grayscale):
                 mock_s3_get.return_value = {
                     "Body": MagicMock(read=lambda: b"image data"),
                     "ContentType": "image/jpeg",
@@ -72,8 +72,8 @@ def test_convert_s3_object_to_grayscale_success():
 
 def test_main_first_time_processing_not_started():
     """Test first time processing file that goes to not_started status."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
-        with patch("scripts.ddb_insert_file_name.insert_initial_ddb_record"):
+    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record")):
             mock_ddb_get.side_effect = [
                 ValueError("Record not found"),
                 {"processStatus": "not_started"},
@@ -86,11 +86,11 @@ def test_main_first_time_processing_not_started():
 
 def test_main_first_time_processing_pending_grayscale():
     """Test first time processing file that needs grayscale conversion."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
-        with patch("scripts.ddb_insert_file_name.insert_initial_ddb_record"):
-            with patch(
-                "scripts.ddb_insert_file_name.convert_s3_object_to_grayscale"
-            ) as mock_convert:
+    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
+             patch(
+                "documentai_api.scripts.ddb_insert_file_name.convert_s3_object_to_grayscale"
+            ) as mock_convert):
                 mock_ddb_get.side_effect = [
                     ValueError("Record not found"),
                     {"processStatus": "pending_grayscale_conversion"},
@@ -104,11 +104,11 @@ def test_main_first_time_processing_pending_grayscale():
 
 def test_main_second_event_grayscale_file_not_too_large():
     """Test processing grayscale file that is not too large."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
-        with patch("scripts.ddb_insert_file_name.s3_service.head_object") as mock_head:
-            with patch(
-                "scripts.ddb_insert_file_name.set_bda_processing_status_not_started"
-            ) as mock_set_status:
+    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+             patch(
+                "documentai_api.scripts.ddb_insert_file_name.set_bda_processing_status_not_started"
+            ) as mock_set_status):
                 mock_ddb_get.return_value = {
                     "processStatus": "pending_grayscale_conversion",
                     "userProvidedDocumentCategory": "income",
@@ -126,11 +126,11 @@ def test_main_second_event_grayscale_file_not_too_large():
 
 def test_main_second_event_grayscale_file_too_large():
     """Test processing grayscale file that exceeds BDA limits."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
-        with patch("scripts.ddb_insert_file_name.s3_service.head_object") as mock_head:
-            with patch(
-                "scripts.ddb_insert_file_name.classify_as_not_implemented"
-            ) as mock_classify_as_not_implemented:
+    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+             patch(
+                "documentai_api.scripts.ddb_insert_file_name.classify_as_not_implemented"
+            ) as mock_classify_as_not_implemented):
                 mock_ddb_get.return_value = {
                     "processStatus": "pending_grayscale_conversion",
                     "userProvidedDocumentCategory": "income",
@@ -148,7 +148,7 @@ def test_main_second_event_grayscale_file_too_large():
 
 def test_main_already_processed():
     """Test that already processed files are skipped."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
+    with patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
         mock_ddb_get.return_value = {"processStatus": "success"}
 
         result = main("test-bucket", "test.pdf")
@@ -158,8 +158,8 @@ def test_main_already_processed():
 
 def test_main_with_metadata():
     """Test processing with optional metadata parameters."""
-    with patch("scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
-        with patch("scripts.ddb_insert_file_name.insert_initial_ddb_record") as mock_insert_ddb:
+    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record") as mock_insert_ddb):
             mock_ddb_get.side_effect = [
                 ValueError("Record not found"),
                 {"processStatus": "not_started"},
@@ -198,12 +198,12 @@ def test_convert_to_grayscale_small_image(mock_grayscale_dependencies):
     def mock_save(buf, format, quality=None):
         buf.write(b"small jpeg")
 
-    mock_cv2_imdecode, mock_cv2_cvtColor, mock_pil_fromarray = mock_grayscale_dependencies
+    mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray = mock_grayscale_dependencies
 
     # mock image processing
     mock_img = MagicMock()
     mock_cv2_imdecode.return_value = mock_img
-    mock_cv2_cvtColor.return_value = MagicMock()
+    mock_cv2_cvtcolor.return_value = MagicMock()
 
     mock_pil = MagicMock()
     mock_pil_fromarray.return_value = mock_pil
@@ -218,10 +218,10 @@ def test_convert_to_grayscale_small_image(mock_grayscale_dependencies):
 def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_dependencies):
     """Test large image converts to PDF."""
 
-    mock_cv2_imdecode, mock_cv2_cvtColor, mock_pil_fromarray = mock_grayscale_dependencies
+    mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray = mock_grayscale_dependencies
 
     mock_cv2_imdecode.return_value = MagicMock()
-    mock_cv2_cvtColor.return_value = MagicMock()
+    mock_cv2_cvtcolor.return_value = MagicMock()
 
     mock_pil = MagicMock()
     mock_pil_fromarray.return_value = mock_pil
@@ -242,7 +242,7 @@ def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_depende
 
 def test_convert_s3_object_to_grayscale_error():
     """Test S3 grayscale conversion handles errors gracefully."""
-    with patch("scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get:
+    with patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get:
         mock_s3_get.side_effect = Exception("S3 error")
 
         # should not raise, just log error

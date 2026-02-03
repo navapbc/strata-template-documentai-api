@@ -82,9 +82,9 @@ async def test_upload_document_for_processing_success():
     mock_file = MagicMock()
     mock_file.file = MagicMock()
 
-    with patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"):
-        with patch("documentai_api.app.s3_service.upload_file") as mock_upload:
-            from config.constants import DocumentCategory
+    with (patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+         patch("documentai_api.app.s3_service.upload_file") as mock_upload):
+            from documentai_api.config.constants import DocumentCategory
 
             await upload_document_for_processing(
                 file=mock_file,
@@ -103,8 +103,8 @@ async def test_upload_document_for_processing_no_env():
     """Test upload fails when DDE_INPUT_LOCATION not set."""
     mock_file = MagicMock()
 
-    with patch("documentai_api.app.DDE_INPUT_LOCATION", None):
-        with pytest.raises(ValueError, match="DDE_INPUT_LOCATION"):
+    with (patch("documentai_api.app.DDE_INPUT_LOCATION", None),
+         pytest.raises(ValueError, match="DDE_INPUT_LOCATION")):
             await upload_document_for_processing(
                 file=mock_file,
                 unique_file_name="test.pdf",
@@ -131,8 +131,8 @@ async def test_get_v1_document_processing_results_success():
 @pytest.mark.asyncio
 async def test_get_v1_document_processing_results_timeout():
     """Test polling timeout with object_key."""
-    with patch("documentai_api.app._get_job_status") as mock_get_job_status:
-        with patch("documentai_api.app.classify_as_failed") as mock_classify_as_failed:
+    with (patch("documentai_api.app._get_job_status") as mock_get_job_status,
+         patch("documentai_api.app.classify_as_failed") as mock_classify_as_failed):
             mock_get_job_status.return_value = JobStatus(
                 ddb_record={"fileName": "test.pdf"},
                 object_key="test.pdf",
@@ -166,8 +166,8 @@ async def test_get_v1_document_processing_results_timeout_no_object_key():
 
 def test_get_document_results_with_extracted_data():
     """Test getting results with extracted data."""
-    with patch("documentai_api.app._get_job_status") as mock_get_job_status:
-        with patch("utils.response_builder.build_v1_api_response") as mock_build_api_response:
+    with (patch("documentai_api.app._get_job_status") as mock_get_job_status,
+         patch("documentai_api.utils.response_builder.build_v1_api_response") as mock_build_api_response):
             mock_get_job_status.return_value = JobStatus(
                 ddb_record={"fileName": "test.pdf"},
                 object_key="test.pdf",
@@ -241,8 +241,8 @@ async def test_upload_document_for_processing_s3_failure():
     mock_file = MagicMock()
     mock_file.file = MagicMock()
 
-    with patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"):
-        with patch("documentai_api.app.s3_service.upload_file") as mock_upload:
+    with (patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+         patch("documentai_api.app.s3_service.upload_file") as mock_upload):
             mock_upload.side_effect = Exception("S3 error")
 
             with pytest.raises(HTTPException) as exc_info:
@@ -262,8 +262,8 @@ async def test_upload_document_for_processing_invalid_category_type():
     mock_file = MagicMock()
     mock_file.file = MagicMock()
 
-    with patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"):
-        with pytest.raises(HTTPException):
+    with (patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+         pytest.raises(HTTPException)):
             await upload_document_for_processing(
                 file=mock_file,
                 unique_file_name="test.pdf",
@@ -306,8 +306,8 @@ def test_create_document_invalid_file_type():
 
 def test_create_document_asynchronous():
     """Test asynchronous document upload (default behavior, returns job_id immediately)."""
-    with patch("documentai_api.app.magic.from_buffer") as mock_magic:
-        with patch("documentai_api.app.upload_document_for_processing"):
+    with (patch("documentai_api.app.magic.from_buffer") as mock_magic,
+         patch("documentai_api.app.upload_document_for_processing")):
             mock_magic.return_value = "application/pdf"
 
             files = {"file": ("test.pdf", b"fake pdf", "application/pdf")}
@@ -322,11 +322,11 @@ def test_create_document_asynchronous():
 
 def test_create_document_synchronous():
     """Test synchronous document upload (wait=true)."""
-    with patch("documentai_api.app.magic.from_buffer") as mock_magic:
-        with patch("documentai_api.app.upload_document_for_processing"):
-            with patch(
+    with (patch("documentai_api.app.magic.from_buffer") as mock_magic,
+         patch("documentai_api.app.upload_document_for_processing"),
+             patch(
                 "documentai_api.app.get_v1_document_processing_results"
-            ) as mock_get_results:
+            ) as mock_get_results):
                 mock_magic.return_value = "application/pdf"
                 mock_get_results.return_value = {"status": "success", "data": {}}
 

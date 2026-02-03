@@ -6,7 +6,7 @@ from documentai_api.utils.response_codes import ResponseCodes
 
 
 @pytest.mark.parametrize(
-    "bda_result,expected_response_code,expected_has_confidence_map",
+    ("bda_result","expected_response_code","expected_has_confidence_map"),
     [
         (
             {"explainability_info": [{"field1": {"confidence": 0.9, "value": "data"}}]},
@@ -30,7 +30,7 @@ def test_get_bda_processing_results(
 
 
 @pytest.mark.parametrize(
-    "bda_result,expected_name,expected_confidence",
+    ("bda_result","expected_name","expected_confidence"),
     [
         (
             {"matched_blueprint": {"name": "invoice_blueprint", "confidence": "0.95"}},
@@ -91,7 +91,7 @@ def test_get_api_response_data_blueprint_matched():
 
 
 @pytest.mark.parametrize(
-    "text,expected_status,expected_classify_method",
+    ("text","expected_status","expected_classify_method"),
     [
         ("a" * 100, "success", "classify_as_no_custom_blueprint_matched"),
         ("abc", "failure", "classify_as_no_document_detected"),

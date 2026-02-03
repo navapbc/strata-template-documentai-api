@@ -76,7 +76,6 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
 
     if not user_provided_document_category:
         msg = "No user specified document type provided. Document not implemented"
-        print(msg)
         logger.info(msg)
 
         return classify_as_not_implemented(

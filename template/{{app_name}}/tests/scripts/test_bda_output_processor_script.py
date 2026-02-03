@@ -1,13 +1,13 @@
-"""Tests for scripts/bda_output_processor.py"""
+"""Tests for scripts/bda_output_processor.py."""
 
 from unittest.mock import patch
 
 import pytest
-from scripts.bda_output_processor import extract_uploaded_filename, main
+from documentai_api.scripts.bda_output_processor import extract_uploaded_filename, main
 
 
 @pytest.mark.parametrize(
-    "object_key,expected_filename",
+    ("object_key", "expected_filename"),
     [
         ("processed/test-file.pdf/output.json", "test-file.pdf"),
         ("processed/document.png/output.json", "document.png"),
@@ -22,12 +22,12 @@ def test_extract_uploaded_filename_success(object_key, expected_filename):
 
 
 @pytest.mark.parametrize(
-    "invalid_key",
+    ("invalid_key",),
     [
-        "invalid/path/output.json",
-        "output.json",
-        "processed",
-        "other-prefix/file.pdf/output.json",
+        ("invalid/path/output.json",),
+        ("output.json",),
+        ("processed",),
+        ("other-prefix/file.pdf/output.json",),
     ],
 )
 def test_extract_uploaded_filename_invalid_path(invalid_key):
@@ -38,7 +38,7 @@ def test_extract_uploaded_filename_invalid_path(invalid_key):
 
 def test_main_success():
     """Test successful BDA output processing."""
-    with patch("scripts.bda_output_processor.get_api_response_data") as mock_get_data:
+    with patch("documentai_api.scripts.bda_output_processor.get_api_response_data") as mock_get_data:
         mock_get_data.return_value = {"status": "success", "data": {"field1": "value1"}}
         result = main("test-bucket", "processed/test-file.pdf/output.json")
 
@@ -50,7 +50,7 @@ def test_main_success():
 
 def test_main_with_truncated_filename():
     """Test processing BDA output with truncated filename."""
-    with patch("scripts.bda_output_processor.get_api_response_data") as mock_get_data:
+    with patch("documentai_api.scripts.bda_output_processor.get_api_response_data") as mock_get_data:
         mock_get_data.return_value = {"status": "success"}
         main("test-bucket", "processed/long_truncated.pdf/output.json")
 

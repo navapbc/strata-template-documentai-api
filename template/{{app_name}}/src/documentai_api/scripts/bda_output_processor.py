@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 def extract_uploaded_filename(object_key: str) -> str:
-    """Extract uploaded filename from BDA output path"""
+    """Extract uploaded filename from BDA output path."""
     path_parts = object_key.split("/")
     if len(path_parts) >= 2 and path_parts[0] == BDA_PROCESSED_FILE_PREFIX:
         filename = path_parts[1]

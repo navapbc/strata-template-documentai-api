@@ -294,7 +294,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         # processing complete
         if include_extracted_data:
             # rebuild response with extracted data
-            from utils.response_builder import build_v1_api_response
+            from documentai_api.utils.response_builder import build_v1_api_response
 
             return build_v1_api_response(
                 object_key=job_status.object_key,

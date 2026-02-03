@@ -1,14 +1,14 @@
-"""Tests for utils/schemas.py"""
+"""Tests for utils/schemas.py."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from utils import schemas
+from documentai_api.utils import schemas
 
 
 @pytest.fixture(autouse=True)
 def mock_env():
-    """Mock environment variables"""
+    """Mock environment variables."""
     with patch.dict(
         "os.environ", {"DDE_PROJECT_ARN": "arn:aws:bedrock:us-east-1:123:project/test"}
     ):
@@ -17,8 +17,8 @@ def mock_env():
 
 @pytest.fixture
 def mock_cache():
-    """Mock cache"""
-    with patch("utils.schemas.get_cache") as mock:
+    """Mock cache."""
+    with patch("documentai_api.utils.schemas.get_cache") as mock:
         cache = MagicMock()
         mock.return_value = cache
         yield cache
@@ -26,10 +26,10 @@ def mock_cache():
 
 @pytest.fixture
 def mock_bda_services():
-    """Mock BDA service calls"""
+    """Mock BDA service calls."""
     with (
-        patch("utils.schemas.get_data_automation_project") as mock_bda_project,
-        patch("utils.schemas.get_blueprint") as mock_bda_blueprint,
+        patch("documentai_api.utils.schemas.get_data_automation_project") as mock_bda_project,
+        patch("documentai_api.utils.schemas.get_blueprint") as mock_bda_blueprint,
     ):
         yield {"project": mock_bda_project, "blueprint": mock_bda_blueprint}
 
@@ -45,7 +45,7 @@ def mock_bda_blueprint(mock_bda_services):
 
 
 def test_fetch_schemas_from_bda_success(mock_bda_project, mock_bda_blueprint):
-    """Fetch schemas from BDA successfully"""
+    """Fetch schemas from BDA successfully."""
     mock_bda_project.return_value = {
         "project": {
             "customOutputConfiguration": {
@@ -70,14 +70,14 @@ def test_fetch_schemas_from_bda_success(mock_bda_project, mock_bda_blueprint):
 
 
 def test_fetch_schemas_from_bda_no_project_arn():
-    """Return empty dict when DDE_PROJECT_ARN not set"""
+    """Return empty dict when DDE_PROJECT_ARN not set."""
     with patch.dict("os.environ", {}, clear=True):
         result = schemas._fetch_schemas_from_bda()
         assert result == {}
 
 
 def test_fetch_schemas_from_bda_exception(mock_bda_project):
-    """Return empty dict when BDA call fails"""
+    """Return empty dict when BDA call fails."""
     mock_bda_project.side_effect = Exception("API error")
 
     result = schemas._fetch_schemas_from_bda()
@@ -86,7 +86,7 @@ def test_fetch_schemas_from_bda_exception(mock_bda_project):
 
 
 def test_extract_fields():
-    """Extract basic fields from schema"""
+    """Extract basic fields from schema."""
     schema = {
         "properties": {
             "name": {"type": "string", "instruction": "Customer name"},
@@ -103,7 +103,7 @@ def test_extract_fields():
 
 
 def test_extract_fields_with_ref():
-    """Extract nested fields with $ref"""
+    """Extract nested fields with $ref."""
     schema = {
         "properties": {"address": {"$ref": "#/definitions/Address"}},
         "definitions": {
@@ -124,7 +124,7 @@ def test_extract_fields_with_ref():
 
 
 def test_extract_fields_array_with_ref():
-    """Extract array fields with $ref"""
+    """Extract array fields with $ref."""
     schema = {
         "properties": {"items": {"type": "array", "items": {"$ref": "#/definitions/Item"}}},
         "definitions": {
@@ -145,7 +145,7 @@ def test_extract_fields_array_with_ref():
 
 
 def test_extract_fields_array_without_ref():
-    """Extract simple array fields"""
+    """Extract simple array fields."""
     schema = {"properties": {"tags": {"type": "array", "instruction": "List of tags"}}}
 
     fields = schemas._extract_fields(schema)
@@ -156,7 +156,7 @@ def test_extract_fields_array_without_ref():
 
 
 def test_get_all_schemas_from_cache(mock_cache):
-    """Get schemas from cache when available"""
+    """Get schemas from cache when available."""
     cached_schemas = {"Invoice": {"documentType": "Invoice", "fields": []}}
     mock_cache.get.return_value = cached_schemas
 
@@ -168,7 +168,7 @@ def test_get_all_schemas_from_cache(mock_cache):
 
 
 def test_get_all_schemas_fetch_and_cache(mock_cache, mock_bda_services):
-    """Fetch schemas from BDA and cache them"""
+    """Fetch schemas from BDA and cache them."""
     mock_cache.get.return_value = None
 
     mock_bda_services["project"].return_value = {
@@ -190,7 +190,7 @@ def test_get_all_schemas_fetch_and_cache(mock_cache, mock_bda_services):
 
 
 def test_get_document_schema_found(mock_cache):
-    """Get specific document schema"""
+    """Get specific document schema."""
     mock_cache.get.return_value = {
         "Invoice": {"documentType": "Invoice", "fields": []},
         "Receipt": {"documentType": "Receipt", "fields": []},
@@ -202,7 +202,7 @@ def test_get_document_schema_found(mock_cache):
 
 
 def test_get_document_schema_not_found(mock_cache):
-    """Return None when document type not found"""
+    """Return None when document type not found."""
     mock_cache.get.return_value = {"Invoice": {"documentType": "Invoice", "fields": []}}
 
     result = schemas.get_document_schema("Unknown")
@@ -211,7 +211,7 @@ def test_get_document_schema_not_found(mock_cache):
 
 
 def test_invalidate_schema_cache(mock_cache):
-    """Invalidate schema cache"""
+    """Invalidate schema cache."""
     schemas.invalidate_schema_cache()
 
     mock_cache.invalidate.assert_called_once_with("blueprint_schemas")

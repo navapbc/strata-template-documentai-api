@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Process uploaded files to S3 - insert DDB records and convert images to grayscale if needed.
-"""
+"""Process uploaded files to S3, insert DDB, convert to grayscale if needed."""
 
 import argparse
 import sys
@@ -22,7 +20,7 @@ logger = get_logger(__name__)
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
-    """Check if file exceeds BDA size limits based on content type"""
+    """Check if file exceeds BDA size limits based on content type."""
     # ensure file_size_bytes is an int
     file_size_bytes = int(file_size_bytes)
 
@@ -38,7 +36,7 @@ def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
 def convert_to_grayscale(
     object_key: str, file_bytes: bytes, content_type: str
 ) -> tuple[bytes, str]:
-    """Convert image to grayscale, and to PDF if over 5MB"""
+    """Convert image to grayscale, and to PDF if over 5MB."""
     if content_type not in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
         return file_bytes, content_type
 
@@ -79,7 +77,7 @@ def convert_to_grayscale(
 
 
 def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
-    """Convert S3 image to grayscale in-place"""
+    """Convert S3 image to grayscale in-place."""
     try:
         # download file
         response = s3_service.get_object(bucket_name, object_key)
@@ -100,9 +98,9 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
 def main(
     bucket_name: str,
     object_key: str,
-    user_provided_document_category: str = None,
-    job_id: str = None,
-    trace_id: str = None,
+    user_provided_document_category: str | None = None,
+    job_id: str | None  = None,
+    trace_id: str | None  = None,
 ) -> dict:
     """Process uploaded file.
 

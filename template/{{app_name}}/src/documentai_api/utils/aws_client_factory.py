@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 
 import boto3
-from utils.logger import get_logger
+from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

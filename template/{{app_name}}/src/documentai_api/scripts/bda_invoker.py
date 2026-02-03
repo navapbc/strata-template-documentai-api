@@ -21,7 +21,7 @@ from documentai_api.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool = False) -> dict:
+def main(file_name: str, bucket_name: str | None = None, bypass_ddb_status_check: bool = False) -> dict:
     """Invoke BDA for a file.
 
     Args:

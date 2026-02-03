@@ -1,6 +1,6 @@
-"""Tests for utils/env.py"""
+"""Tests for utils/env.py."""
 
-from utils import env
+from documentai_api.utils import env
 
 
 def test_environment_variable_names_are_defined():

@@ -22,20 +22,28 @@ def generate_bda_status_test_cases():
     test_cases = []
 
     # running statuses
-    for status in BDA_JOB_STATUS_RUNNING:
-        test_cases.append(BdaJobStatusTestCase(status, True, False, False))
+    test_cases.extend(
+        BdaJobStatusTestCase(status, True, False, False)
+        for status in BDA_JOB_STATUS_RUNNING
+    )
 
     # failed statuses
-    for status in BDA_JOB_STATUS_FAILED:
-        test_cases.append(BdaJobStatusTestCase(status, False, True, False))
+    test_cases.extend(
+        BdaJobStatusTestCase(status, False, True, False)
+        for status in BDA_JOB_STATUS_FAILED
+    )
 
     # completed statuses
-    for status in BDA_JOB_STATUS_COMPLETED:
-        test_cases.append(BdaJobStatusTestCase(status, False, False, True))
+    test_cases.extend(
+        BdaJobStatusTestCase(status, False, False, True)
+        for status in BDA_JOB_STATUS_COMPLETED
+    )
 
     # invalid/bogus statuses
-    for status in ["UNKNOWN", "INVALID", "", None]:
-        test_cases.append(BdaJobStatusTestCase(status, False, False, False))
+    test_cases.extend(
+        BdaJobStatusTestCase(status, False, False, False)
+        for status in ["UNKNOWN", "INVALID", "", None]
+    )
 
     return test_cases
 
@@ -90,7 +98,7 @@ def test_extract_fields_recursive():
 
 
 @pytest.mark.parametrize(
-    "field_data,expected_confidence,expected_is_empty",
+    ("field_data","expected_confidence","expected_is_empty"),
     [
         ({"confidence": 0.95, "value": "John"}, 0.95, False),
         ({"confidence": 0.80, "value": ""}, 0.80, True),

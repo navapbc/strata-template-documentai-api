@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from utils.cache import Cache, CacheItem, get_cache
+from documentai_api.utils.cache import Cache, CacheItem, get_cache
 
 
 def test_cache_item_not_expired():
@@ -25,7 +25,7 @@ def test_cache_get_expired_item():
     cache = Cache()
     year = datetime.now().year
 
-    with patch("utils.cache.datetime") as mock_datetime:
+    with patch("documentai_api.utils.cache.datetime") as mock_datetime:
         # add item with 5 minute time-to-live
         mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0)
         cache.add("key1", "value1", ttl_minutes=5)

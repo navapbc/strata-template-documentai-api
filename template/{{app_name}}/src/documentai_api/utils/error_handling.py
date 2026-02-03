@@ -3,7 +3,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-from utils.logger import get_logger
+from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,9 +24,9 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
 
             # try to update DDB status to failed
             try:
-                from config.constants import BDA_PROCESSED_FILE_PREFIX
-                from utils.ddb import ClassificationData, classify_as_failed
-                from utils.s3 import extract_s3_info_from_event
+                from documentai_api.config.constants import BDA_PROCESSED_FILE_PREFIX
+                from documentai_api.utils.ddb import ClassificationData, classify_as_failed
+                from documentai_api.utils.s3 import extract_s3_info_from_event
 
                 object_key, _ = extract_s3_info_from_event(event)
 

@@ -6,7 +6,7 @@ from documentai_api.utils.env import (
     DDE_PROFILE_ARN,
     DDE_PROJECT_ARN,
 )
-from utils.logger import get_logger
+from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -28,8 +28,8 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
         raise
 
     try:
-        from services import s3 as s3_service
-        from utils.document_detector import (
+        from documentai_api.services import s3 as s3_service
+        from documentai_api.utils.document_detector import (
             MULTIPAGE_DETECTION_MAX_PAGES,
             DocumentDetector,
         )
