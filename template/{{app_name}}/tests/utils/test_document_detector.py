@@ -1,0 +1,201 @@
+import io
+
+import pytest
+from PIL import Image
+from utils.document_detector import DocumentDetector, QualityMetricsNormalized, QualityMetricsRaw
+
+
+@pytest.fixture
+def detector():
+    return DocumentDetector()
+
+
+def generate_blank_pdf(num_pages=1, width=100, height=100) -> bytes:
+    """Generate a blank PDF with specified number of pages"""
+    images = [Image.new("RGB", (width, height), "white") for _ in range(num_pages)]
+    pdf_bytes = io.BytesIO()
+
+    if num_pages == 1:
+        images[0].save(pdf_bytes, format="PDF")
+    else:
+        images[0].save(pdf_bytes, format="PDF", save_all=True, append_images=images[1:])
+
+    return pdf_bytes.getvalue()
+
+
+def generate_blank_tiff(num_pages=1, width=100, height=100) -> bytes:
+    """Generate a blank TIFF with specified number of pages"""
+    images = [Image.new("RGB", (width, height), "white") for _ in range(num_pages)]
+    tiff_bytes = io.BytesIO()
+
+    if num_pages == 1:
+        images[0].save(tiff_bytes, format="TIFF")
+    else:
+        images[0].save(tiff_bytes, format="TIFF", save_all=True, append_images=images[1:])
+
+    return tiff_bytes.getvalue()
+
+
+def generate_blank_image(format="JPEG", width=100, height=100) -> bytes:
+    """Generate a blank image in specified format"""
+    img = Image.new("RGB", (width, height), "white")
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format=format)
+    return img_bytes.getvalue()
+
+
+@pytest.mark.parametrize(
+    "file_bytes,expected_type",
+    [
+        (b"\xff\xd8", "JPEG"),
+        (b"\x89PNG\r\n\x1a\n", "PNG"),
+        (b"GIF87a", "GIF"),
+        (b"GIF89a", "GIF"),
+        (b"%PDF", "PDF"),
+        (b"\x49\x49\x2a\x00", "TIFF"),
+        (b"\x4d\x4d\x00\x2a", "TIFF"),
+        (b"BM", "BMP"),
+        (b"UNKNOWN", "Unknown"),
+    ],
+)
+def test_detect_file_type(detector, file_bytes, expected_type):
+    assert detector.detect_file_type(file_bytes) == expected_type
+
+
+@pytest.mark.parametrize(
+    "generator,expected_type",
+    [
+        (lambda: generate_blank_image("JPEG"), "JPEG"),
+        (lambda: generate_blank_image("PNG"), "PNG"),
+        (lambda: generate_blank_image("GIF"), "GIF"),
+        (lambda: generate_blank_image("BMP"), "BMP"),
+        (lambda: generate_blank_pdf(), "PDF"),
+        (lambda: generate_blank_tiff(), "TIFF"),
+    ],
+)
+def test_detect_file_type_generated_files(detector, generator, expected_type):
+    """Test file type detection with all generated file types"""
+    assert detector.detect_file_type(generator()) == expected_type
+
+
+def test_is_pdf(detector):
+    assert detector.is_pdf(b"%PDF-1.4") is True
+    assert detector.is_pdf(b"\xff\xd8") is False
+
+
+def test_is_tiff(detector):
+    assert detector.is_tiff(b"\x49\x49\x2a\x00") is True
+    assert detector.is_tiff(b"%PDF") is False
+
+
+def test_is_password_protected_true(detector):
+    pdf_with_encrypt = b"%PDF-1.4\n" + b"/Encrypt" + b"\x00" * 4000
+    assert detector._is_password_protected(pdf_with_encrypt) is True
+
+
+def test_is_password_protected_false(detector):
+    pdf_without_encrypt = b"%PDF-1.4\n" + b"\x00" * 4000
+    assert detector._is_password_protected(pdf_without_encrypt) is False
+
+
+def test_is_password_protected_non_pdf(detector):
+    assert detector._is_password_protected(b"\xff\xd8") is False
+
+
+@pytest.mark.parametrize(
+    "generator,expected_page_count",
+    [
+        (lambda: generate_blank_image("JPEG"), 1),
+        (lambda: generate_blank_image("PNG"), 1),
+        (lambda: generate_blank_image("GIF"), 1),
+        (lambda: generate_blank_image("BMP"), 1),
+        (lambda: generate_blank_pdf(), 1),
+        (lambda: generate_blank_tiff(), 1),
+        (lambda: generate_blank_pdf(num_pages=3), 3),
+        (lambda: generate_blank_tiff(num_pages=3), 3),
+        (lambda: generate_blank_pdf(num_pages=20), 20),
+        (lambda: generate_blank_tiff(num_pages=20), 20),
+    ],
+)
+def test_get_page_count(detector, generator, expected_page_count):
+    assert detector.get_page_count(generator()) == expected_page_count
+
+
+@pytest.mark.parametrize(
+    "value,min_val,max_val,expected",
+    [
+        (50, 0, 100, 0.5),
+        (0, 0, 100, 0.0),
+        (100, 0, 100, 1.0),
+        (-10, 0, 100, 0.0),  # resolves to 0
+        (150, 0, 100, 1.0),  # resolves to 1
+    ],
+)
+def test_normalize(detector, value, min_val, max_val, expected):
+    assert detector._normalize(value, min_val, max_val) == expected
+
+
+def test_quality_metrics_raw_to_json_dict_with_nan():
+    metrics = QualityMetricsRaw(
+        fft_score=0.5,
+        edge_score=float("nan"),
+        laplacian_variance=100.0,
+        local_contrast=float("nan"),
+        sobel_score=50.0,
+        noise_stddev=10.0,
+        motion_blur_score=0.2,
+    )
+    result = metrics.to_json_dict()
+    assert result["fft_score"] == 0.5
+    assert result["edge_score"] is None
+    assert result["laplacian_variance"] == 100.0
+    assert result["local_contrast"] is None
+
+
+def test_quality_metrics_normalized_to_json_dict_with_nan():
+    metrics = QualityMetricsNormalized(
+        fft_score=0.5,
+        edge_score=float("nan"),
+        laplacian_variance=0.8,
+        local_contrast=float("nan"),
+        sobel_score=0.6,
+        noise_stddev=0.3,
+    )
+    result = metrics.to_json_dict()
+    assert result["fft_score"] == 0.5
+    assert result["edge_score"] is None
+    assert result["local_contrast"] is None
+
+
+def test_get_document_profile_empty(detector):
+    """Test with empty input"""
+    profile = detector.get_document_profile(b"", "empty.pdf")
+    assert profile.page_count is None
+    assert profile.is_blurry is False
+    assert profile.is_multipage is False
+    assert profile.is_password_protected is False
+
+
+@pytest.mark.parametrize(
+    "generator,is_image,max_pages,expected_count",
+    [
+        (lambda: generate_blank_image("JPEG"), True, 1, 1),
+        (lambda: generate_blank_image("PNG"), True, 1, 1),
+        (lambda: generate_blank_image("GIF"), True, 1, 1),
+        (lambda: generate_blank_image("BMP"), True, 1, 1),
+        (lambda: generate_blank_pdf(), False, 3, 1),
+        (lambda: generate_blank_tiff(), False, 3, 1),
+        (lambda: generate_blank_pdf(num_pages=20), False, 3, 3),
+        (lambda: generate_blank_pdf(num_pages=20), False, 6, 6),
+        (lambda: generate_blank_tiff(num_pages=20), False, 3, 3),
+        (lambda: generate_blank_tiff(num_pages=20), False, 6, 6),
+    ],
+)
+def test_truncate_to_pages(detector, generator, is_image, max_pages, expected_count):
+    bytes = generator()
+    truncated = detector.truncate_to_pages(bytes, max_pages=max_pages)
+
+    if not is_image:
+        assert detector.get_page_count(truncated) == expected_count
+    else:
+        assert truncated == bytes  # should return unchanged
