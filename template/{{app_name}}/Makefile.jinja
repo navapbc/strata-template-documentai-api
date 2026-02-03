@@ -12,9 +12,6 @@
 
 .DEFAULT_GOAL := help
 
-# check dependencies helper
-CHECK_VENV = @test -d .venv || (echo "Error: Dependencies not installed. Run 'make init' first." && exit 1)
-
 # Check that given variables are set and all have non-empty values,
 # die with an error otherwise.
 #
@@ -42,7 +39,7 @@ APP_NAME := {{app_name}}
 ##################################################
 
 init: ## Install dependencies
-	uv sync --all-extras
+	uv sync --all-extras --frozen
 
 ##################################################
 # Build / Release
@@ -79,17 +76,12 @@ test: ## Run test suite
 ##################################################
 
 format: ## Format code
-	$(CHECK_VENV)
-	uv run black . && \
-	uv run isort . && \
-	uv run ruff check --fix .
+	uv run ruff format .
 
 lint: ## Lint code
-	$(CHECK_VENV)
-	uv run ruff check .
+	uv run ruff check --fix .
 
 lint-ci: ## Lint code (CI mode, no fixes)
-	$(CHECK_VENV)
 	uv run ruff check --no-fix .
 
 
@@ -105,5 +97,3 @@ help: ## Show help
 	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "APP_NAME=$(APP_NAME)"
-
-
