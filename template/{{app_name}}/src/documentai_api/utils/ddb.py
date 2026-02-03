@@ -1,8 +1,7 @@
 import json
-import logging
 import os
 import random
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from documentai_api.config.constants import (
@@ -14,16 +13,12 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
-from documentai_api.utils.models import (
-    ClassificationData,
-    FieldMetrics,
-    InternalApiResponse,
-    ProcessingTimes,
-)
+from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData, FieldMetrics, InternalApiResponse, ProcessingTimes
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -35,9 +30,7 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
             return parts[3]  # Region is the 4th part
         return None
     except Exception as e:
-        msg = f"Failed to extract region from ARN {bda_invocation_arn}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to extract region from ARN {bda_invocation_arn}: {e}")
         return None
 
 
@@ -47,7 +40,8 @@ def get_elapsed_time_seconds(start_time: datetime, end_time: datetime) -> Decima
 
 
 def calculate_bda_processing_times(object_key: str, completion_time: datetime) -> ProcessingTimes:
-    """Calculate BDA processing timing metrics.
+    """
+    Calculate BDA processing timing metrics.
 
     Returns dict with timing data to add to DDB update, or empty dict if calculation fails.
     """
@@ -62,24 +56,18 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             created_at = datetime.fromisoformat(created_at_str)
             total_processing_time_seconds = get_elapsed_time_seconds(created_at, completion_time)
             timing_data.total_processing_time_seconds = total_processing_time_seconds
-            msg = f"Total processing time: {total_processing_time_seconds:.2f} seconds"
-            print(msg)
-            logger.info(msg)
+            logger.info(f"Total processing time: {total_processing_time_seconds:.2f} seconds")
 
         if bda_started_at_str:
             bda_started_at = datetime.fromisoformat(bda_started_at_str)
             bda_processing_time_seconds = get_elapsed_time_seconds(bda_started_at, completion_time)
             timing_data.bda_processing_time_seconds = bda_processing_time_seconds
-            msg = f"BDA processing time: {bda_processing_time_seconds:.2f} seconds"
-            print(msg)
-            logger.info(msg)
+            logger.info(f"BDA processing time: {bda_processing_time_seconds:.2f} seconds")
 
         return timing_data
 
     except Exception as e:
-        msg = f"Failed to calculate completion timing: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to calculate completion timing: {e}")
         return ProcessingTimes()
 
 
@@ -88,7 +76,7 @@ def _calculate_wait_time(object_key: str) -> Decimal:
     ddb_record = get_ddb_record(object_key)
     created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
     created_at = datetime.fromisoformat(created_at_str)
-    current_time = datetime.now(UTC)
+    current_time = datetime.now(timezone.utc)
     return get_elapsed_time_seconds(created_at, current_time)
 
 
@@ -126,7 +114,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
         ddb_record = get_ddb_record(object_key)
 
         if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
-            completed_time = datetime.now(UTC)
+            completed_time = datetime.now(timezone.utc)
             updates.append(f"{DocumentMetadata.BDA_COMPLETED_AT} = :bdaCompletedAt")
             values[":bdaCompletedAt"] = completed_time.isoformat()
 
@@ -137,7 +125,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
             if timing_data.total_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = :totalProcessingTime"
+                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = " ":totalProcessingTime"
                 )
                 values[":totalProcessingTime"] = timing_data.total_processing_time_seconds
 
@@ -162,16 +150,14 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
 
     if status == ProcessStatus.STARTED:
         updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
-        values[":bdaStartedAt"] = datetime.now(UTC).isoformat()
+        values[":bdaStartedAt"] = datetime.now(timezone.utc).isoformat()
 
         try:
             wait_time = _calculate_wait_time(object_key)
             updates.append(f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds")
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
-            msg = f"Failed to calculate bda wait time for {object_key}: {e}"
-            print(msg)
-            logger.error(msg)
+            logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
     elif status in PROCESSING_STATUS_COMPLETED:
         completion_updates, completion_values = _build_completion_timing(object_key)
@@ -195,7 +181,7 @@ def _build_update_expression(
         f"{DocumentMetadata.UPDATED_AT} = :updatedAt",
     ]
 
-    values = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
+    values = {":processStatus": status, ":updatedAt": datetime.now(timezone.utc).isoformat()}
 
     if data:
         metrics = _calculate_field_metrics(data)
@@ -243,7 +229,7 @@ def _build_update_expression(
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
-            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE
+            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
@@ -264,7 +250,8 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
 
 
 def get_user_provided_document_category(object_key: str) -> str:
-    """Get user specified document type for a file.
+    """
+    Get user specified document type for a file.
 
     This should always succeed - the user document type is set when the file
     is first processed. If this fails, we have a data pipeline problem.
@@ -275,7 +262,7 @@ def get_user_provided_document_category(object_key: str) -> str:
     )
 
     if not user_provided_document_category:
-        raise ValueError(f"User specified document type not found for file: {object_key}")
+        logger.warning(f"User specified document type not found for file: {object_key}")
 
     return user_provided_document_category
 
@@ -292,9 +279,7 @@ def get_ddb_record(object_key: str) -> dict:
 
         return item
     except Exception as e:
-        msg = f"Failed to get DDB record for {object_key}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to get DDB record for {object_key}: {e}")
         raise
 
 
@@ -320,17 +305,12 @@ def update_ddb(
 ):
     """Update DynamoDB processing status for a file."""
     try:
-        # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
-        # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
-        # stored in ddb and won't be in the stored v1ApiResponseJson.
-        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
-
-        # build base update expression
+        # build base update expression (without v1_response)
         update_expr, expr_values = _build_update_expression(
             status=status,
             data=data,
             internal_api_response=internal_api_response,
-            v1_api_response=v1_response,
+            v1_api_response=None,  # built after ddb update
             bda_invocation_arn=bda_invocation_arn,
             error_message=error_message,
         )
@@ -341,6 +321,14 @@ def update_ddb(
             update_expr += f", {timing_updates}"
             expr_values.update(timing_values)
 
+        _execute_ddb_update(object_key, update_expr, expr_values)
+
+        # build v1 response after ddb has been updated
+        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
+
+        # update ddb again with v1_response
+        update_expr = f"SET {DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson"
+        expr_values = {":v1ResponseJson": json.dumps(v1_response)}
         _execute_ddb_update(object_key, update_expr, expr_values)
 
     except Exception as e:
@@ -360,8 +348,8 @@ def insert_ddb(
     pages_detected: int | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-    is_password_protected: bool = False,
-    is_document_blurry: bool = False,
+    is_password_protected: bool | None = False,
+    is_document_blurry: bool | None = False,
     document_profile_raw_metrics=None,
     document_profile_normalized_metrics=None,
     overall_blur_score=None,
@@ -373,16 +361,18 @@ def insert_ddb(
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
+                user_provided_document_category
+                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
-            DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
-            DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
+            DocumentMetadata.CREATED_AT: datetime.now(timezone.utc).isoformat(),
+            DocumentMetadata.UPDATED_AT: datetime.now(timezone.utc).isoformat(),
         }
 
         if file_size_bytes is not None:
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
+
         if pages_detected is not None:
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
@@ -417,9 +407,7 @@ def insert_ddb(
         ddb_service.put_item(table_name, item)
 
     except Exception as e:
-        msg = f"Failed to create DDB record for {object_key}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to create DDB record for {object_key}: {e}")
         raise
 
 
@@ -427,7 +415,7 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     user_provided_document_category: str,
-    job_id: str | None = None,
+    job_id: str | None  = None,
     trace_id: str | None = None,
 ):
     """Insert initial DDB record."""
@@ -436,18 +424,16 @@ def insert_initial_ddb_record(
     # has OpenCV/Poppler layers attached. including this import at the top of the
     # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from utils.document_detector import (
+    from documentai_api.utils.document_detector import (  # noqa: E402
         DocumentDetector,
         QualityMetricsNormalized,
         QualityMetricsRaw,
     )
 
-    print(
-        f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}"
-    )
-
     if not user_provided_document_category:
-        print(f"Warning: user_provided_document_category is None/empty for {source_object_key}")
+        logger.warning(
+            f"Warning: user_provided_document_category is None/empty for {source_object_key}"
+        )
         user_provided_document_category = "unknown"
 
     document_detector = DocumentDetector()
@@ -497,21 +483,22 @@ def insert_initial_ddb_record(
                 process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
-                print("=== Starting multi-page detection validation ===")
+
+                logger.info("=== Starting multi-page detection validation ===")
 
                 try:
                     if document_detector.is_multipage_document(file_bytes):
-                        print(f"{source_object_key} is a multipage doc")
+                        logger.info(f"{source_object_key} is a multipage doc")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
                     else:
-                        print(f"{source_object_key} is a single page doc")
+                        logger.info(f"{source_object_key} is a single page doc")
 
                 except Exception as e:
-                    print(f"=== Multipage detection failed: {e} ===")
+                    logger.info(f"=== Multipage detection failed: {e} ===")
 
-            print("=== Finished multi-page detection validation ===")
+            logger.info("=== Finished multi-page detection validation ===")
 
     else:
         process_status = ProcessStatus.NOT_SAMPLED

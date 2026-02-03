@@ -11,8 +11,11 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services.bda import get_bda_result_json
 from documentai_api.utils.bda import extract_field_values_from_bda_results
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
+
+logger = get_logger(__name__)
 
 
 def _to_camel_case(snake_str: str) -> str:
@@ -58,7 +61,8 @@ def get_internal_api_response(
     response_code: str,
     matched_document_class: str | None,
 ) -> InternalApiResponse:
-    """Get API response object for internal use.
+    """
+    Get API response object for internal use.
 
     Args:
         object_key: S3 file key
@@ -69,7 +73,7 @@ def get_internal_api_response(
         InternalApiResponse: Response object for API endpoints
     """
     # import here to avoid circular dependency
-    from utils.ddb import get_user_provided_document_category
+    from documentai_api.utils.ddb import get_user_provided_document_category
 
     user_provided_document_category = get_user_provided_document_category(object_key)
 
@@ -89,7 +93,8 @@ def build_v1_api_response(
     error_message: str | None = None,
     include_extracted_data: bool = False,
 ) -> dict[str, Any]:
-    """Build API response dict for DDB storage.
+    """
+    Build API response dict for DDB storage.
 
     Args:
         status: Processing status
@@ -99,13 +104,9 @@ def build_v1_api_response(
     Returns:
         dict: Response data for DDB JSON storage
     """
-    status = status.value if isinstance(status, ProcessStatus) else status
-    print(
-        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
-    )
-    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
 
-    from utils.ddb import get_ddb_record
+    status = status.value if isinstance(status, ProcessStatus) else status
+    from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
     job_id = ddb_record.get(DocumentMetadata.JOB_ID)
@@ -114,7 +115,7 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {"job_id": job_id, "status": status, "createdAt": created_at}
+    base_response = {"jobId": job_id, "status": status, "createdAt": created_at}
 
     if completed_at:
         base_response["completedAt"] = completed_at
@@ -171,4 +172,4 @@ def build_v1_api_response(
     return {k: v for k, v in base_response.items() if v is not None}
 
 
-__all__ = ["build_v1_api_response", "get_internal_api_response"]
+__all__ = ["get_internal_api_response", "build_v1_api_response"]
