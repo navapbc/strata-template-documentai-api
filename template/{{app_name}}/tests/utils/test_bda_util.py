@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
 import pytest
-from config.constants import (
+from documentai_api.config.constants import (
     BDA_JOB_STATUS_COMPLETED,
     BDA_JOB_STATUS_FAILED,
     BDA_JOB_STATUS_RUNNING,
 )
-from utils import bda as bda_util
+from documentai_api.utils import bda as bda_util
 
 
 @dataclass
@@ -18,7 +18,7 @@ class BdaJobStatusTestCase:
 
 
 def generate_bda_status_test_cases():
-    """Generate comprehensive test cases for all BDA status checks"""
+    """Generate comprehensive test cases for all BDA status checks."""
     test_cases = []
 
     # running statuses
@@ -55,9 +55,38 @@ def test_is_bda_job_completed(test_case):
     assert bda_util.is_bda_job_completed(test_case.status) == test_case.expect_is_completed
 
 
-@pytest.mark.skip(reason="Pending sample BDA output files")
 def test_extract_fields_recursive():
-    pass
+    data = {
+        "name": {"confidence": 0.95, "value": "John"},
+        "age": {"confidence": 0.80, "value": "30"},
+        "empty_field": {"confidence": 0.70, "value": ""},
+        # only dict values with confidence or value fields are extracted. non-dict
+        # values are ignored. include scalars as a negative test.
+        "string_value": "not_a_dict",
+        "number_value": 123,
+        "person": {
+            "address": {
+                "street": {"confidence": 0.85, "value": "123 Main St"},
+                "city": {"confidence": 0.90, "value": ""},
+            }
+        },
+    }
+    confidence_scores = []
+    empty_fields = []
+    field_confidence_map_list = []
+    field_values = {}
+
+    bda_util._extract_fields_recursive(
+        data, "", confidence_scores, empty_fields, field_confidence_map_list, field_values
+    )
+
+    assert len(confidence_scores) == 3
+    assert "empty_field" in empty_fields
+    assert "person.address.city" in empty_fields
+    assert field_values["name"] == "John"
+    assert field_values["person.address.street"] == "123 Main St"
+    assert "string_value" not in field_values
+    assert "number_value" not in field_values
 
 
 @pytest.mark.parametrize(
@@ -75,16 +104,47 @@ def test_process_single_field(field_data, expected_confidence, expected_is_empty
     assert result.is_empty == expected_is_empty
 
 
-@pytest.mark.skip(reason="Pending sample BDA output files")
-def test_get_text_from_standard_blueprint():
-    pass
+def test_get_text_from_standard_blueprint_document_modality():
+    bda_result = {
+        "metadata": {"semantic_modality": "DOCUMENT"},
+        "pages": [{"representation": {"text": "  Sample document text  "}}],
+    }
+    text = bda_util.get_text_from_standard_blueprint(bda_result)
+    assert text == "Sample document text"
 
 
-@pytest.mark.skip(reason="Pending sample BDA output files")
+def test_get_text_from_standard_blueprint_image_modality():
+    bda_result = {
+        "metadata": {"semantic_modality": "IMAGE"},
+        "image": {
+            "text_words": [
+                {"text": "Hello"},
+                {"text": "World"},
+                {"text": ""},
+            ]
+        },
+    }
+    text = bda_util.get_text_from_standard_blueprint(bda_result)
+    assert text == "Hello World"
+
+
 def test_extract_field_values_from_bda_results():
-    pass
+    bda_result = {
+        "explainability_info": [
+            {
+                "name": {"confidence": 0.95, "value": "John"},
+                "email": {"confidence": 0.85, "value": "john@example.com"},
+            }
+        ]
+    }
+    metadata, field_values = bda_util.extract_field_values_from_bda_results(bda_result)
 
+    assert len(metadata.confidence_scores) == 2
+    assert len(metadata.empty_fields) == 0
+    assert field_values["name"] == "John"
+    assert field_values["email"] == "john@example.com"
 
-@pytest.mark.skip(reason="Pending sample BDA output files")
-def test_extract_field_metadata_from_bda_results():
-    pass
+    # confirm extract_field_metadata_from_bda_results wrapper returns same metadata
+    metadata_only = bda_util.extract_field_metadata_from_bda_results(bda_result)
+    assert metadata_only.confidence_scores == metadata.confidence_scores
+    assert metadata_only.empty_fields == metadata.empty_fields
