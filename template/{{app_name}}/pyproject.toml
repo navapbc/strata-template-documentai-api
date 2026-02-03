@@ -25,6 +25,9 @@ dev = [
   "httpx>=0.24.0"
 ]
 
+[project.scripts]
+documentai_api = "documentai_api.main:main"
+
 [tool.ruff]
 line-length = 100
 # see docs at https://docs.astral.sh/ruff/rules

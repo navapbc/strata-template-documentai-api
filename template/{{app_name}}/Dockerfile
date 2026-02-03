@@ -31,9 +31,12 @@ COPY src/ /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-ENV PATH="/app/.venv/bin:$PATH" \
-    PORT=8000
+# Add project's virtual env to the PATH so we can directly run scripts defined
+# in pyproject.toml
+ENV PATH="/app/.venv/bin:$PATH"
 
-# use PORT environment variable (required by platform)
-# https://github.com/navapbc/template-infra/blob/main/template-only-docs/application-requirements.md
-CMD python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+# Set the host to 0.0.0.0 to make the server available external to the container
+# that it's running in.
+ENV HOST=0.0.0.0
+
+CMD ["documentai_api"]
