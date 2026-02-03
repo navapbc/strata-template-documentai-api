@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+
 from documentai_api.utils import s3 as s3_util
 
 
@@ -80,7 +81,7 @@ def test_extract_s3_info_include_metadata_false(mock_s3_service, include_metadat
 
 
 @pytest.mark.parametrize(
-    ("head_object_response","expected_metadata"),
+    ("head_object_response", "expected_metadata"),
     [
         ({"Metadata": {"job-id": "123", "trace-id": "abc"}}, {"job-id": "123", "trace-id": "abc"}),
         ({}, {}),

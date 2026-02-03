@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
+
 from documentai_api.config.constants import (
     PROCESSING_STATUSES_SUCCESSFUL,
     ProcessStatus,
@@ -13,7 +14,7 @@ from documentai_api.utils.response_codes import ResponseCodes
 
 
 @pytest.mark.parametrize(
-    ("snake_case","expected_camel"),
+    ("snake_case", "expected_camel"),
     [
         ("user_provided_document_category", "userProvidedDocumentCategory"),
         ("job_id", "jobId"),
@@ -36,7 +37,9 @@ def test_extract_field_values_empty_record():
 def test_extract_field_values(include_extracted_data):
     with (
         patch("documentai_api.utils.response_builder.get_bda_result_json") as mock_get_bda,
-        patch("documentai_api.utils.response_builder.extract_field_values_from_bda_results") as mock_extract_bda,
+        patch(
+            "documentai_api.utils.response_builder.extract_field_values_from_bda_results"
+        ) as mock_extract_bda,
     ):
         from documentai_api.utils.bda import BdaFieldProcessingData
 
@@ -68,7 +71,7 @@ def test_extract_field_values(include_extracted_data):
 
 
 @pytest.mark.parametrize(
-    ("response_code","matched_document_class"),
+    ("response_code", "matched_document_class"),
     [
         (ResponseCodes.SUCCESS, "income"),
         (ResponseCodes.NO_DOCUMENT_DETECTED, "income"),
@@ -76,7 +79,6 @@ def test_extract_field_values(include_extracted_data):
     ],
 )
 def test_get_internal_api_response(response_code, matched_document_class):
-
     with patch("documentai_api.utils.ddb.get_user_provided_document_category") as mock_get_category:
         mock_get_category.return_value = "income"
 
@@ -94,7 +96,15 @@ def test_get_internal_api_response(response_code, matched_document_class):
 
 
 @pytest.mark.parametrize(
-    ("status","error_message","additional_info","include_extracted_data","expected_status","expected_message","expected_error"),
+    (
+        "status",
+        "error_message",
+        "additional_info",
+        "include_extracted_data",
+        "expected_status",
+        "expected_message",
+        "expected_error",
+    ),
     [
         (
             ProcessStatus.SUCCESS.value,
@@ -180,8 +190,8 @@ def test_build_v1_api_response(
     expected_error: str | None,
 ):
     year = datetime.now().year
-    created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    bda_completed_at = datetime(year, 1, 1, 12, 0, 10, tzinfo=timezone.utc)
+    created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC)
+    bda_completed_at = datetime(year, 1, 1, 12, 0, 10, tzinfo=UTC)
     matched_document_class = "paystub"
     data = ClassificationData(
         matched_document_class=matched_document_class, additional_info=additional_info
@@ -189,9 +199,10 @@ def test_build_v1_api_response(
 
     with (
         patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
-        patch("documentai_api.utils.response_builder._extract_field_values") as mock_extract_field_values,
+        patch(
+            "documentai_api.utils.response_builder._extract_field_values"
+        ) as mock_extract_field_values,
     ):
-
         mock_get_ddb_record.return_value = {
             DocumentMetadata.JOB_ID: "test-job-id",
             DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: "paystub",

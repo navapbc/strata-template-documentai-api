@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from documentai_api.services import bda as bda_service
 
 
@@ -11,10 +12,11 @@ def mock_aws_clients():
     """Mock all AWS clients used by BDA service."""
     with (
         patch("documentai_api.services.bda.AWSClientFactory.get_bda_client") as mock_bda,
-        patch("documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client") as mock_bda_runtime,
+        patch(
+            "documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client"
+        ) as mock_bda_runtime,
         patch("documentai_api.services.bda.AWSClientFactory.get_s3_client") as mock_s3,
     ):
-
         yield {
             "bda": mock_bda.return_value,
             "bda_runtime": mock_bda_runtime.return_value,

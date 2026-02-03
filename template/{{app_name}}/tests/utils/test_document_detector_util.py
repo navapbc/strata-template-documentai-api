@@ -2,7 +2,12 @@ import io
 
 import pytest
 from PIL import Image
-from documentai_api.utils.document_detector import DocumentDetector, QualityMetricsNormalized, QualityMetricsRaw
+
+from documentai_api.utils.document_detector import (
+    DocumentDetector,
+    QualityMetricsNormalized,
+    QualityMetricsRaw,
+)
 
 
 @pytest.fixture
@@ -45,7 +50,7 @@ def generate_blank_image(format="JPEG", width=100, height=100) -> bytes:
 
 
 @pytest.mark.parametrize(
-    ("file_bytes","expected_type"),
+    ("file_bytes", "expected_type"),
     [
         (b"\xff\xd8", "JPEG"),
         (b"\x89PNG\r\n\x1a\n", "PNG"),
@@ -63,7 +68,7 @@ def test_detect_file_type(detector, file_bytes, expected_type):
 
 
 @pytest.mark.parametrize(
-    ("generator","expected_type"),
+    ("generator", "expected_type"),
     [
         (lambda: generate_blank_image("JPEG"), "JPEG"),
         (lambda: generate_blank_image("PNG"), "PNG"),
@@ -103,7 +108,7 @@ def test_is_password_protected_non_pdf(detector):
 
 
 @pytest.mark.parametrize(
-    ("generator","expected_page_count"),
+    ("generator", "expected_page_count"),
     [
         (lambda: generate_blank_image("JPEG"), 1),
         (lambda: generate_blank_image("PNG"), 1),
@@ -122,7 +127,7 @@ def test_get_page_count(detector, generator, expected_page_count):
 
 
 @pytest.mark.parametrize(
-    ("value","min_val","max_val","expected"),
+    ("value", "min_val", "max_val", "expected"),
     [
         (50, 0, 100, 0.5),
         (0, 0, 100, 0.0),
@@ -177,7 +182,7 @@ def test_get_document_profile_empty(detector):
 
 
 @pytest.mark.parametrize(
-    ("generator","is_image","max_pages","expected_count"),
+    ("generator", "is_image", "max_pages", "expected_count"),
     [
         (lambda: generate_blank_image("JPEG"), True, 1, 1),
         (lambda: generate_blank_image("PNG"), True, 1, 1),

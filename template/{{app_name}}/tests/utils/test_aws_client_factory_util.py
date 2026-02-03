@@ -4,6 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
@@ -23,7 +24,7 @@ def clear_lru_cache():
     AWSClientFactory.get_bda_client.cache_clear()
     AWSClientFactory.get_bda_runtime_client.cache_clear()
     AWSClientFactory.get_ssm_client.cache_clear()
-    yield
+    return
 
 
 @pytest.fixture
@@ -35,12 +36,11 @@ def clear_env_vars():
 
 @pytest.fixture
 def mock_boto3_session_class():
-    """
-    Mock boto3.Session class for testing session creation.
-    
-    Use this when testing get_session() itself - it lets the real get_session() 
+    """Mock boto3.Session class for testing session creation.
+
+    Use this when testing get_session() itself - it lets the real get_session()
     code execute but replaces boto3.Session with a mock.
-    
+
     Yields the mock class so you can assert 'mock.assert_called_once_with(profile_name=...)'
     """
     with patch("documentai_api.utils.aws_client_factory.boto3.Session") as mock_class:
@@ -50,24 +50,24 @@ def mock_boto3_session_class():
 
 @pytest.fixture
 def mock_aws_session_instance():
-    """
-    Mock AWSClientFactory.get_session() for testing client getters.
-    
+    """Mock AWSClientFactory.get_session() for testing client getters.
+
     Use this when testing get_s3_client(), get_bda_client(), etc. - it replaces
     get_session() entirely to enable testing the client getters call on the session object.
-    
+
     Yields the mock session instance so you can assert 'mock.client.assert_called_once_with("s3")'
     """
-    with patch("documentai_api.utils.aws_client_factory.AWSClientFactory.get_session") as mock_get_session:
+    with patch(
+        "documentai_api.utils.aws_client_factory.AWSClientFactory.get_session"
+    ) as mock_get_session:
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
         yield mock_session
 
 
 def test_get_session_with_profile(mock_boto3_session_class):
-    """
-    Test that get_session() creates a boto3.Session with the profile name.
-    
+    """Test that get_session() creates a boto3.Session with the profile name.
+
     Flow:
         1. Set AWS_PROFILE env var
         2. Call get_session() - actual code execution
@@ -82,9 +82,8 @@ def test_get_session_with_profile(mock_boto3_session_class):
 
 
 def test_get_session_in_lambda(mock_boto3_session_class):
-    """
-    Test that get_session() creates a boto3.Session without profile in Lambda.
-    
+    """Test that get_session() creates a boto3.Session without profile in Lambda.
+
     In Lambda environment (AWS_LAMBDA_FUNCTION_NAME is set), no profile should be used.
     """
     with patch.dict(os.environ, {"AWS_LAMBDA_FUNCTION_NAME": "test-function"}):
@@ -101,9 +100,8 @@ def test_get_session_no_profile(clear_env_vars, mock_boto3_session_class):
 
 
 def test_get_session_singleton(clear_env_vars, mock_boto3_session_class):
-    """
-    Test that get_session() returns the same session instance (singleton pattern).
-    
+    """Test that get_session() returns the same session instance (singleton pattern).
+
     Flow:
         1. Call get_session() twice
         2. Assert both calls return the same object
@@ -143,9 +141,8 @@ def test_get_dde_region_from_env():
 
 
 def test_get_s3_client(mock_aws_session_instance):
-    """
-    Test that get_s3_client() calls session.client("s3").
-    
+    """Test that get_s3_client() calls session.client("s3").
+
     Flow:
         1. get_s3_client() calls get_session() - mock returns fake session
         2. Real code calls session.client("s3", region_name="us-east-1")
@@ -157,10 +154,9 @@ def test_get_s3_client(mock_aws_session_instance):
 
 
 def test_get_s3_client_cached(mock_aws_session_instance):
-    """
-    Test that get_s3_client() caches the client (LRU cache).
-    
-    Calling get_s3_client() twice should return the same client and only call 
+    """Test that get_s3_client() caches the client (LRU cache).
+
+    Calling get_s3_client() twice should return the same client and only call
     session.client() once.
     """
     client1 = AWSClientFactory.get_s3_client()

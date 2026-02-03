@@ -61,8 +61,7 @@ def get_internal_api_response(
     response_code: str,
     matched_document_class: str | None,
 ) -> InternalApiResponse:
-    """
-    Get API response object for internal use.
+    """Get API response object for internal use.
 
     Args:
         object_key: S3 file key
@@ -93,8 +92,7 @@ def build_v1_api_response(
     error_message: str | None = None,
     include_extracted_data: bool = False,
 ) -> dict[str, Any]:
-    """
-    Build API response dict for DDB storage.
+    """Build API response dict for DDB storage.
 
     Args:
         status: Processing status
@@ -104,7 +102,6 @@ def build_v1_api_response(
     Returns:
         dict: Response data for DDB JSON storage
     """
-
     status = status.value if isinstance(status, ProcessStatus) else status
     from documentai_api.utils.ddb import get_ddb_record
 
@@ -172,4 +169,4 @@ def build_v1_api_response(
     return {k: v for k, v in base_response.items() if v is not None}
 
 
-__all__ = ["get_internal_api_response", "build_v1_api_response"]
+__all__ = ["build_v1_api_response", "get_internal_api_response"]

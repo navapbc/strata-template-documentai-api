@@ -1,12 +1,13 @@
 from unittest.mock import patch
 
 import pytest
+
 from documentai_api.utils import bda_output_processor as bda_output_processor_util
 from documentai_api.utils.response_codes import ResponseCodes
 
 
 @pytest.mark.parametrize(
-    ("bda_result","expected_response_code","expected_has_confidence_map"),
+    ("bda_result", "expected_response_code", "expected_has_confidence_map"),
     [
         (
             {"explainability_info": [{"field1": {"confidence": 0.9, "value": "data"}}]},
@@ -30,7 +31,7 @@ def test_get_bda_processing_results(
 
 
 @pytest.mark.parametrize(
-    ("bda_result","expected_name","expected_confidence"),
+    ("bda_result", "expected_name", "expected_confidence"),
     [
         (
             {"matched_blueprint": {"name": "invoice_blueprint", "confidence": "0.95"}},
@@ -56,7 +57,6 @@ def test_get_api_response_data_no_user_category():
             "documentai_api.utils.bda_output_processor.classify_as_not_implemented"
         ) as mock_classify_as_not_implemented,
     ):
-
         mock_get_category.return_value = None
         mock_classify_as_not_implemented.return_value = {"status": "not_implemented"}
 
@@ -71,9 +71,13 @@ def test_get_api_response_data_blueprint_matched():
         patch(
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
         ) as mock_get_category,
-        patch("documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri") as mock_extract_uri,
+        patch(
+            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri"
+        ) as mock_extract_uri,
         patch("documentai_api.utils.bda_output_processor.get_bda_result_json") as mock_get_json,
-        patch("documentai_api.utils.bda_output_processor.classify_as_success") as mock_classify_as_success,
+        patch(
+            "documentai_api.utils.bda_output_processor.classify_as_success"
+        ) as mock_classify_as_success,
     ):
         mock_get_category.return_value = "invoice"
         mock_extract_uri.return_value = "s3://bucket/output"
@@ -91,7 +95,7 @@ def test_get_api_response_data_blueprint_matched():
 
 
 @pytest.mark.parametrize(
-    ("text","expected_status","expected_classify_method"),
+    ("text", "expected_status", "expected_classify_method"),
     [
         ("a" * 100, "success", "classify_as_no_custom_blueprint_matched"),
         ("abc", "failure", "classify_as_no_document_detected"),
@@ -104,10 +108,16 @@ def test_get_api_response_data_no_matching_blueprint(
         patch(
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
         ) as mock_get_category,
-        patch("documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri") as mock_extract_uri,
+        patch(
+            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri"
+        ) as mock_extract_uri,
         patch("documentai_api.utils.bda_output_processor.get_bda_result_json") as mock_get_json,
-        patch("documentai_api.utils.bda_output_processor.get_text_from_standard_blueprint") as mock_get_text,
-        patch(f"documentai_api.utils.bda_output_processor.{expected_classify_method}") as mock_classify_method,
+        patch(
+            "documentai_api.utils.bda_output_processor.get_text_from_standard_blueprint"
+        ) as mock_get_text,
+        patch(
+            f"documentai_api.utils.bda_output_processor.{expected_classify_method}"
+        ) as mock_classify_method,
     ):
         mock_get_category.return_value = "invoice"
         mock_extract_uri.return_value = "s3://bucket/output"

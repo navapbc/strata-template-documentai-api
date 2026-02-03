@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from pdf2image import convert_from_bytes
 from PIL import Image
+
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -61,8 +62,7 @@ class QualityMetricsNormalized:
 
 @dataclass
 class NormalizationRanges:
-    """
-    Value ranges for normalizing raw blur metrics to 0-1 scale.
+    """Value ranges for normalizing raw blur metrics to 0-1 scale.
 
     Ranges are empirically determined from document analysis:
         - fft_score: FFT high-frequency ratio (0.0=blurry, 1.0=sharp)
@@ -96,8 +96,7 @@ class DocumentProfile:
 
 
 class DocumentDetector:
-    """
-    Document detection utilities for file type, quality, and structure analysis.
+    """Document detection utilities for file type, quality, and structure analysis.
 
     TODO: Consider replacing multipage_detector.py entirely. The same code exists
     but was kept as to not disturb current processing
@@ -140,7 +139,6 @@ class DocumentDetector:
 
     def detect_file_type(self, image_file):
         """Detect file type from binary header bytes."""
-
         try:
             file_type = "Unknown"
 
@@ -203,7 +201,6 @@ class DocumentDetector:
                 pdf_images = convert_from_bytes(file_bytes, poppler_path=poppler_path)
 
             for page in pdf_images:
-
                 # convert the PIL image to a numpy array
                 nparr = np.array(page, dtype=np.uint8)
                 img = cv2.cvtColor(nparr, cv2.COLOR_RGB2GRAY)
@@ -218,7 +215,6 @@ class DocumentDetector:
         return images
 
     def _apply_gamma_correction(self, img, gamma):  # pragma: no cover - OpenCV library wrapper
-
         # Ensure gamma is a float for calculations
         gamma = float(gamma)
 
@@ -332,13 +328,11 @@ class DocumentDetector:
     def _detect_documents_in_image(
         self, image, file_name
     ):  # pragma: no cover - OpenCV contour detection
-        """
-        Detect rectangular document boundaries within a single image.
+        """Detect rectangular document boundaries within a single image.
 
         Returns:
             int: Number of document-like rectangles found
         """
-
         self._pages_detected = None
         img = image
 
@@ -430,8 +424,7 @@ class DocumentDetector:
     def _extract_document_regions_of_interest(
         self, gray_image, file_name
     ):  # pragma: no cover - OpenCV ROI extraction
-        """
-        Extract content regions from document for quality analysis.
+        """Extract content regions from document for quality analysis.
 
         Returns:
             list: ROI arrays with actual content (non-whitespace)
@@ -459,22 +452,21 @@ class DocumentDetector:
                     rois.append(roi)
 
         logger.info(
-            f"{file_name}: found {len(rois)} content ROIs out of {grid_size*grid_size} total"
+            f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total"
         )
         return rois
 
     def _calculate_edge_score(
         self, document_roi, file_name
     ):  # pragma: no cover - OpenCV Canny edge detection
-        """
-        Calculate the edge score for a grayscale image.
+        """Calculate the edge score for a grayscale image.
 
         Parameters
         ----------
         gray_image : np.ndarray
             Grayscale image (H x W)
 
-        Returns
+        Returns:
         -------
         score : float
             Edge score (0-1), higher = sharper
@@ -515,8 +507,7 @@ class DocumentDetector:
     def _get_local_contrast_score(
         self, gray_image, file_name, patch_size=64, ideal_std=60.0, mask=None
     ):  # pragma: no cover - Image contrast analysis
-        """
-        Compute local contrast score for a grayscale image, optionally ignoring whitespace.
+        """Compute local contrast score for a grayscale image, optionally ignoring whitespace.
 
         Parameters
         ----------
@@ -529,7 +520,7 @@ class DocumentDetector:
         mask : np.ndarray or None
             Boolean array of same shape as gray. True = content pixel, False = ignore
 
-        Returns
+        Returns:
         -------
         score : float
             Normalized local contrast score (0-1), higher = sharper
@@ -586,8 +577,7 @@ class DocumentDetector:
     def _calculate_quality_metrics(
         self, file_bytes, file_name
     ):  # pragma: no cover - Obtains image quality methods
-        """
-        Calculate comprehensive blur metrics for document.
+        """Calculate comprehensive blur metrics for document.
 
         Returns:
             tuple: (raw_metrics, normalized_metrics, ranges, overall_blur_score)
@@ -615,7 +605,6 @@ class DocumentDetector:
     def _get_quality_metrics(
         self, gray_image, file_name
     ):  # pragma: no cover - Image quality metric calculations
-
         # get multiple content regions of interest (roi) instead of single roi
         content_rois = self._extract_document_regions_of_interest(gray_image, file_name)
 
@@ -687,8 +676,7 @@ class DocumentDetector:
         normalized_metrics: QualityMetricsNormalized,
         overall_blur_score,
     ):  # pragma: no cover - Image quality heuristic
-        """
-        Determine if document is blurry using two-stage detection.
+        """Determine if document is blurry using two-stage detection.
 
         Returns:
             bool: True if document is considered blurry
@@ -906,8 +894,7 @@ class DocumentDetector:
         return np.nan, np.nan
 
     def get_document_profile(self, file_bytes, file_name) -> DocumentProfile:
-        """
-        Analyze document and return comprehensive quality and content metrics.
+        """Analyze document and return comprehensive quality and content metrics.
 
         Args:
             file_bytes: Raw document/image bytes

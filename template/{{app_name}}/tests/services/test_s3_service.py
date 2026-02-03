@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from documentai_api.services import s3 as s3_service
 
 

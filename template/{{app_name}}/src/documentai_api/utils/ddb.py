@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from documentai_api.config.constants import (
@@ -14,7 +14,12 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.logger import get_logger
-from documentai_api.utils.models import ClassificationData, FieldMetrics, InternalApiResponse, ProcessingTimes
+from documentai_api.utils.models import (
+    ClassificationData,
+    FieldMetrics,
+    InternalApiResponse,
+    ProcessingTimes,
+)
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
@@ -40,8 +45,7 @@ def get_elapsed_time_seconds(start_time: datetime, end_time: datetime) -> Decima
 
 
 def calculate_bda_processing_times(object_key: str, completion_time: datetime) -> ProcessingTimes:
-    """
-    Calculate BDA processing timing metrics.
+    """Calculate BDA processing timing metrics.
 
     Returns dict with timing data to add to DDB update, or empty dict if calculation fails.
     """
@@ -76,7 +80,7 @@ def _calculate_wait_time(object_key: str) -> Decimal:
     ddb_record = get_ddb_record(object_key)
     created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
     created_at = datetime.fromisoformat(created_at_str)
-    current_time = datetime.now(timezone.utc)
+    current_time = datetime.now(UTC)
     return get_elapsed_time_seconds(created_at, current_time)
 
 
@@ -114,7 +118,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
         ddb_record = get_ddb_record(object_key)
 
         if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
-            completed_time = datetime.now(timezone.utc)
+            completed_time = datetime.now(UTC)
             updates.append(f"{DocumentMetadata.BDA_COMPLETED_AT} = :bdaCompletedAt")
             values[":bdaCompletedAt"] = completed_time.isoformat()
 
@@ -125,7 +129,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
 
             if timing_data.total_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = " ":totalProcessingTime"
+                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = :totalProcessingTime"
                 )
                 values[":totalProcessingTime"] = timing_data.total_processing_time_seconds
 
@@ -150,7 +154,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
 
     if status == ProcessStatus.STARTED:
         updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
-        values[":bdaStartedAt"] = datetime.now(timezone.utc).isoformat()
+        values[":bdaStartedAt"] = datetime.now(UTC).isoformat()
 
         try:
             wait_time = _calculate_wait_time(object_key)
@@ -181,7 +185,7 @@ def _build_update_expression(
         f"{DocumentMetadata.UPDATED_AT} = :updatedAt",
     ]
 
-    values = {":processStatus": status, ":updatedAt": datetime.now(timezone.utc).isoformat()}
+    values = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
 
     if data:
         metrics = _calculate_field_metrics(data)
@@ -250,8 +254,7 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
 
 
 def get_user_provided_document_category(object_key: str) -> str:
-    """
-    Get user specified document type for a file.
+    """Get user specified document type for a file.
 
     This should always succeed - the user document type is set when the file
     is first processed. If this fails, we have a data pipeline problem.
@@ -364,8 +367,8 @@ def insert_ddb(
                 user_provided_document_category
                 or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
-            DocumentMetadata.CREATED_AT: datetime.now(timezone.utc).isoformat(),
-            DocumentMetadata.UPDATED_AT: datetime.now(timezone.utc).isoformat(),
+            DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
+            DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
         }
 
         if file_size_bytes is not None:
@@ -415,7 +418,7 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     user_provided_document_category: str,
-    job_id: str | None  = None,
+    job_id: str | None = None,
     trace_id: str | None = None,
 ):
     """Insert initial DDB record."""
@@ -424,7 +427,7 @@ def insert_initial_ddb_record(
     # has OpenCV/Poppler layers attached. including this import at the top of the
     # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from documentai_api.utils.document_detector import (  # noqa: E402
+    from documentai_api.utils.document_detector import (
         DocumentDetector,
         QualityMetricsNormalized,
         QualityMetricsRaw,
@@ -483,7 +486,6 @@ def insert_initial_ddb_record(
                 process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
-
                 logger.info("=== Starting multi-page detection validation ===")
 
                 try:

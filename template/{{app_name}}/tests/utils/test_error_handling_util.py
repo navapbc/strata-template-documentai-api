@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from documentai_api.utils.error_handling import handle_lambda_errors
 
 
@@ -46,7 +47,7 @@ def test_handle_lambda_errors_success(s3_event, mock_context):
 
 
 @pytest.mark.parametrize(
-    ("s3_key","expected_filename"),
+    ("s3_key", "expected_filename"),
     [
         ("test-file.pdf", "test-file.pdf"),
         (
@@ -64,13 +65,15 @@ def test_handle_lambda_errors_on_failure(s3_event, s3_key, expected_filename, mo
     error_message = "Test error"
     handler = create_failing_handler(ValueError(error_message))
 
-    with (patch("documentai_api.utils.error_handling.logger") as mock_logger,
-         patch("documentai_api.utils.ddb.classify_as_failed") as mock_classify_as_failed,
-             patch(
-                "documentai_api.utils.s3.extract_s3_info_from_event",
-                return_value=(s3_key, "test-bucket"),
-            )):
-                result = handler(s3_event(s3_key), mock_context)
+    with (
+        patch("documentai_api.utils.error_handling.logger") as mock_logger,
+        patch("documentai_api.utils.ddb.classify_as_failed") as mock_classify_as_failed,
+        patch(
+            "documentai_api.utils.s3.extract_s3_info_from_event",
+            return_value=(s3_key, "test-bucket"),
+        ),
+    ):
+        result = handler(s3_event(s3_key), mock_context)
 
     # verify error response
     assert result["statusCode"] == 500
@@ -88,11 +91,13 @@ def test_handle_lambda_errors_when_ddb_update_fails(s3_event, mock_context):
     error_message = "Handler failed"
     handler = create_failing_handler(Exception(error_message))
 
-    with (patch("documentai_api.utils.ddb.classify_as_failed", side_effect=Exception("DDB error")),
+    with (
+        patch("documentai_api.utils.ddb.classify_as_failed", side_effect=Exception("DDB error")),
         patch(
             "documentai_api.utils.s3.extract_s3_info_from_event",
             return_value=("test-file.pdf", "test-bucket"),
-        )):
-            result = handler(s3_event(), mock_context)
+        ),
+    ):
+        result = handler(s3_event(), mock_context)
 
     assert result["statusCode"] == 500

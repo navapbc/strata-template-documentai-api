@@ -99,8 +99,8 @@ def main(
     bucket_name: str,
     object_key: str,
     user_provided_document_category: str | None = None,
-    job_id: str | None  = None,
-    trace_id: str | None  = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
 ) -> dict:
     """Process uploaded file.
 

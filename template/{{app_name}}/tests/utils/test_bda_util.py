@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pytest
+
 from documentai_api.config.constants import (
     BDA_JOB_STATUS_COMPLETED,
     BDA_JOB_STATUS_FAILED,
@@ -23,20 +24,17 @@ def generate_bda_status_test_cases():
 
     # running statuses
     test_cases.extend(
-        BdaJobStatusTestCase(status, True, False, False)
-        for status in BDA_JOB_STATUS_RUNNING
+        BdaJobStatusTestCase(status, True, False, False) for status in BDA_JOB_STATUS_RUNNING
     )
 
     # failed statuses
     test_cases.extend(
-        BdaJobStatusTestCase(status, False, True, False)
-        for status in BDA_JOB_STATUS_FAILED
+        BdaJobStatusTestCase(status, False, True, False) for status in BDA_JOB_STATUS_FAILED
     )
 
     # completed statuses
     test_cases.extend(
-        BdaJobStatusTestCase(status, False, False, True)
-        for status in BDA_JOB_STATUS_COMPLETED
+        BdaJobStatusTestCase(status, False, False, True) for status in BDA_JOB_STATUS_COMPLETED
     )
 
     # invalid/bogus statuses
@@ -98,7 +96,7 @@ def test_extract_fields_recursive():
 
 
 @pytest.mark.parametrize(
-    ("field_data","expected_confidence","expected_is_empty"),
+    ("field_data", "expected_confidence", "expected_is_empty"),
     [
         ({"confidence": 0.95, "value": "John"}, 0.95, False),
         ({"confidence": 0.80, "value": ""}, 0.80, True),

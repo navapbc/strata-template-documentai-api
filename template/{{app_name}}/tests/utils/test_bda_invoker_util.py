@@ -15,7 +15,9 @@ def test_invoke_bedrock_data_automation_single_page():
                 "DDE_OUTPUT_LOCATION": "s3://output-bucket/path",
             },
         ),
-        patch("documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client") as mock_get_bda_client,
+        patch(
+            "documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client"
+        ) as mock_get_bda_client,
         patch("documentai_api.services.s3.get_file_bytes") as mock_get_file_bytes,
         patch("documentai_api.utils.document_detector.DocumentDetector") as mock_detector_class,
     ):
@@ -47,7 +49,9 @@ def test_invoke_bedrock_data_automation_document_truncation():
                 "DDE_OUTPUT_LOCATION": "s3://output-bucket/path",
             },
         ),
-        patch("documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client") as mock_get_bda_client,
+        patch(
+            "documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client"
+        ) as mock_get_bda_client,
         patch("documentai_api.services.s3.get_file_bytes") as mock_get_file_bytes,
         patch("documentai_api.services.s3.put_object") as mock_put_object,
         patch("documentai_api.utils.document_detector.DocumentDetector") as mock_detector_class,

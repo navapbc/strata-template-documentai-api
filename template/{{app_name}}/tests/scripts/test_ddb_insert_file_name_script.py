@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from documentai_api.config.constants import ConfigDefaults
 from documentai_api.scripts.ddb_insert_file_name import (
     convert_s3_object_to_grayscale,
@@ -23,7 +24,7 @@ def mock_grayscale_dependencies():
 
 
 @pytest.mark.parametrize(
-    ("content_type","file_size","expected"),
+    ("content_type", "file_size", "expected"),
     [
         ("image/jpeg", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value, False),
         ("image/jpeg", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1, True),
@@ -53,17 +54,19 @@ def test_convert_to_grayscale_non_image():
 
 def test_convert_s3_object_to_grayscale_success():
     """Test successful S3 object grayscale conversion."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.put_object") as mock_s3_put,
-             patch(
-                "documentai_api.scripts.ddb_insert_file_name.convert_to_grayscale"
-            ) as mock_convert_to_grayscale):
-                mock_s3_get.return_value = {
-                    "Body": MagicMock(read=lambda: b"image data"),
-                    "ContentType": "image/jpeg",
-                }
-                mock_convert_to_grayscale.return_value = (b"grayscale data", "image/jpeg")
-                convert_s3_object_to_grayscale("test-bucket", "test.jpg")
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get,
+        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.put_object") as mock_s3_put,
+        patch(
+            "documentai_api.scripts.ddb_insert_file_name.convert_to_grayscale"
+        ) as mock_convert_to_grayscale,
+    ):
+        mock_s3_get.return_value = {
+            "Body": MagicMock(read=lambda: b"image data"),
+            "ContentType": "image/jpeg",
+        }
+        mock_convert_to_grayscale.return_value = (b"grayscale data", "image/jpeg")
+        convert_s3_object_to_grayscale("test-bucket", "test.jpg")
 
     mock_s3_get.assert_called_once_with("test-bucket", "test.jpg")
     mock_convert_to_grayscale.assert_called_once_with("test.jpg", b"image data", "image/jpeg")
@@ -72,31 +75,35 @@ def test_convert_s3_object_to_grayscale_success():
 
 def test_main_first_time_processing_not_started():
     """Test first time processing file that goes to not_started status."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record")):
-            mock_ddb_get.side_effect = [
-                ValueError("Record not found"),
-                {"processStatus": "not_started"},
-            ]
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
+    ):
+        mock_ddb_get.side_effect = [
+            ValueError("Record not found"),
+            {"processStatus": "not_started"},
+        ]
 
-            result = main("test-bucket", "test.pdf")
+        result = main("test-bucket", "test.pdf")
 
     assert result == {"statusCode": 200}
 
 
 def test_main_first_time_processing_pending_grayscale():
     """Test first time processing file that needs grayscale conversion."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
-             patch(
-                "documentai_api.scripts.ddb_insert_file_name.convert_s3_object_to_grayscale"
-            ) as mock_convert):
-                mock_ddb_get.side_effect = [
-                    ValueError("Record not found"),
-                    {"processStatus": "pending_grayscale_conversion"},
-                ]
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
+        patch(
+            "documentai_api.scripts.ddb_insert_file_name.convert_s3_object_to_grayscale"
+        ) as mock_convert,
+    ):
+        mock_ddb_get.side_effect = [
+            ValueError("Record not found"),
+            {"processStatus": "pending_grayscale_conversion"},
+        ]
 
-                result = main("test-bucket", "test.jpg")
+        result = main("test-bucket", "test.jpg")
 
     mock_convert.assert_called_once_with("test-bucket", "test.jpg")
     assert result == {"statusCode": 200}
@@ -104,21 +111,23 @@ def test_main_first_time_processing_pending_grayscale():
 
 def test_main_second_event_grayscale_file_not_too_large():
     """Test processing grayscale file that is not too large."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
-             patch(
-                "documentai_api.scripts.ddb_insert_file_name.set_bda_processing_status_not_started"
-            ) as mock_set_status):
-                mock_ddb_get.return_value = {
-                    "processStatus": "pending_grayscale_conversion",
-                    "userProvidedDocumentCategory": "income",
-                }
-                mock_head.return_value = {
-                    "ContentLength": 1_000_000,
-                    "ContentType": "image/jpeg",
-                }
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+        patch(
+            "documentai_api.scripts.ddb_insert_file_name.set_bda_processing_status_not_started"
+        ) as mock_set_status,
+    ):
+        mock_ddb_get.return_value = {
+            "processStatus": "pending_grayscale_conversion",
+            "userProvidedDocumentCategory": "income",
+        }
+        mock_head.return_value = {
+            "ContentLength": 1_000_000,
+            "ContentType": "image/jpeg",
+        }
 
-                result = main("test-bucket", "test.jpg")
+        result = main("test-bucket", "test.jpg")
 
     mock_set_status.assert_called_once_with("test.jpg")
     assert result == {"statusCode": 200}
@@ -126,21 +135,23 @@ def test_main_second_event_grayscale_file_not_too_large():
 
 def test_main_second_event_grayscale_file_too_large():
     """Test processing grayscale file that exceeds BDA limits."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
-             patch(
-                "documentai_api.scripts.ddb_insert_file_name.classify_as_not_implemented"
-            ) as mock_classify_as_not_implemented):
-                mock_ddb_get.return_value = {
-                    "processStatus": "pending_grayscale_conversion",
-                    "userProvidedDocumentCategory": "income",
-                }
-                mock_head.return_value = {
-                    "ContentLength": 10_000_000,
-                    "ContentType": "image/jpeg",
-                }
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+        patch(
+            "documentai_api.scripts.ddb_insert_file_name.classify_as_not_implemented"
+        ) as mock_classify_as_not_implemented,
+    ):
+        mock_ddb_get.return_value = {
+            "processStatus": "pending_grayscale_conversion",
+            "userProvidedDocumentCategory": "income",
+        }
+        mock_head.return_value = {
+            "ContentLength": 10_000_000,
+            "ContentType": "image/jpeg",
+        }
 
-                result = main("test-bucket", "test.jpg")
+        result = main("test-bucket", "test.jpg")
 
     mock_classify_as_not_implemented.assert_called_once()
     assert result == {"statusCode": 200}
@@ -158,20 +169,24 @@ def test_main_already_processed():
 
 def test_main_with_metadata():
     """Test processing with optional metadata parameters."""
-    with (patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-         patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record") as mock_insert_ddb):
-            mock_ddb_get.side_effect = [
-                ValueError("Record not found"),
-                {"processStatus": "not_started"},
-            ]
+    with (
+        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch(
+            "documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"
+        ) as mock_insert_ddb,
+    ):
+        mock_ddb_get.side_effect = [
+            ValueError("Record not found"),
+            {"processStatus": "not_started"},
+        ]
 
-            result = main(
-                "test-bucket",
-                "test.pdf",
-                user_provided_document_category="income",
-                job_id="job-123",
-                trace_id="trace-456",
-            )
+        result = main(
+            "test-bucket",
+            "test.pdf",
+            user_provided_document_category="income",
+            job_id="job-123",
+            trace_id="trace-456",
+        )
 
     mock_insert_ddb.assert_called_once_with(
         source_bucket_name="test-bucket",
@@ -217,7 +232,6 @@ def test_convert_to_grayscale_small_image(mock_grayscale_dependencies):
 
 def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_dependencies):
     """Test large image converts to PDF."""
-
     mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray = mock_grayscale_dependencies
 
     mock_cv2_imdecode.return_value = MagicMock()
