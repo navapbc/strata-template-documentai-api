@@ -1,8 +1,251 @@
-# {{app_name}} API
+# Document AI API
 
-A FastAPI-based Document AI API.
+This is the application code for DocumentAI.
 
-## Getting Started
+## Overview
 
-[Add setup instructions here]
+A serverless document processing system built on AWS that uses Amazon Bedrock Data Automation (BDA) to classify and extract data from uploaded documents.
 
+## Features
+
+- **AWS Bedrock Data Automation (BDA) Integration** - Automated document classification and data extraction
+- **Intelligent Document Detection** - Quality analysis, blur detection, and document validation
+- **Multi-format Support** - Process PDF, JPEG, PNG, TIFF, and BMP documents
+- **Event-driven Processing** - S3-triggered Lambda pipeline for scalable document processing
+- **Comprehensive Testing** - 95% test coverage with 306+ unit and integration tests
+- **Local Development** - Docker Compose environment for testing without AWS deployment
+- **Structured Logging** - Standardized logging across all components
+- **DynamoDB Tracking** - Complete processing history and metadata storage
+
+## Prerequisites
+
+- **Python 3.11+** - Required for running the application
+- **uv** - Fast Python package installer ([installation guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Docker & Docker Compose** - For local development environment
+- **Make** - For running development commands 
+- **AWS CLI** (optional) - For interacting with AWS services during development
+
+**For deployment:**
+- AWS account with appropriate permissions
+- Infrastructure deployed (see [Deployment](#deployment) section)
+
+## Installation
+
+1\. **Clone the repository**
+```
+git clone <repository-url>
+cd <project-directory>
+```
+
+2\. **Install Python dependencies**
+```
+uv sync
+```
+
+_This installs all dependencies defined in pyproject.toml including development and test dependencies._
+
+3\. **Verify installation**
+```bash
+make test
+```
+
+_All 306 tests should pass with 95%+ coverage._
+
+
+## Configuration
+
+### Environment Variables
+
+**Required for AWS service integration** (set by infrastructure when deployed):
+
+- `DDE_INPUT_LOCATION` - S3 bucket for document uploads (e.g., `s3://bucket-name`)
+- `DDE_OUTPUT_LOCATION` - S3 bucket for BDA processing results
+- `DDE_DOCUMENT_METADATA_TABLE_NAME` - DynamoDB table for tracking document processing
+- `DDE_PROJECT_ARN` - AWS Bedrock Data Automation project ARN
+- `DDE_PROFILE_ARN` - AWS Bedrock Data Automation profile ARN
+- `DDE_REGION` - AWS region for BDA service
+
+**Optional for local development:**
+
+- `APP_HOST` - FastAPI host (default: `localhost`)
+- `APP_PORT` - FastAPI port (default: `8000`)
+- `ENVIRONMENT` - Environment name (e.g., `dev`, `prod`, `local`)
+- `IMAGE_TAG` - Docker image tag for version tracking
+
+
+### Application Constants
+
+Core application settings are defined in `src/documentai_api/config/constants.json`. These constants are loaded at startup and do not require environment variables.
+
+- **Document categories** - Supported document types (`income`, `expenses`, `legal_documents`, `employment_training`)
+- **File validation** - Supported content types (PDF, JPEG, PNG, TIFF)
+- **Processing statuses** - Document processing states and completion criteria
+- **BDA configuration** - Job statuses, response field mappings, output prefixes
+- **Timeouts and thresholds** - Confidence thresholds, polling intervals, file size limits
+
+
+## Usage
+
+### Local Development
+
+**Start the local environment:**
+```bash
+docker compose up
+```
+
+This starts LocalStack (mock AWS services) and the FastAPI application at http://localhost:8000.
+
+**Run the FastAPI server directly:**
+```
+uv run uvicorn documentai_api.app:app --reload --host localhost --port 8000
+```
+
+### API Endpoints
+**Upload a document (async)** - returns immediately with `jobId` for polling:
+```
+curl -X POST http://localhost:8000/v1/documents \
+  -F "file=@/path/to/document.pdf" \
+  -F "category=income"
+```
+
+**Upload a document (sync)** - waits for processing to complete:
+
+```
+curl -X POST "http://localhost:8000/v1/documents?wait=true&timeout=120" \
+  -F "file=@/path/to/document.pdf" \
+  -F "category=income"
+```
+
+**Check processing status:**
+```
+curl http://localhost:8000/v1/documents/{jobId}
+```
+
+**Get extracted data:**
+```
+curl "http://localhost:8000/v1/documents/{jobId}?include_extracted_data=true"
+```
+
+**List available schemas:**
+```
+curl http://localhost:8000/v1/schemas
+```
+
+**Get schema for document type:**
+```
+curl http://localhost:8000/v1/schemas/W-2
+```
+
+### Development Commands
+```bash
+make test          # Run all tests with coverage
+make lint          # Run ruff linter
+make format        # Format code with ruff
+make type-check    # Run mypy type checking
+```
+
+## Testing
+
+Tests use pytest with FastAPI's TestClient and run without requiring actual AWS infrastructure.
+
+**Run all tests with coverage:**
+```bash
+make test
+```
+
+**Run specific test file:**
+```bash
+uv run pytest tests/test_document_detector.py
+```
+
+**Run specific test:**
+```bash
+uv run pytest tests/test_document_detector.py::test_detect_multipage_document
+```
+
+**Run tests in parallel:**
+```bash
+uv run pytest -n auto
+```
+
+**Generate HTML coverage report:**
+```bash
+uv run pytest --cov-report=html
+open htmlcov/index.html
+```
+
+For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writing-tests.md).
+
+## 🏗️ Project Structure
+
+```bash
+├── src/
+│ └── documentai_api/
+│ ├── app.py                      # FastAPI application
+│ ├── main.py                     # CLI entry point
+│ ├── config/                     # Configuration and constants
+│ ├── schemas/                    # Data models
+│ ├── services/                   # AWS service clients (S3, DynamoDB, BDA)
+│ ├── scripts/                    # Lambda handler scripts
+│ │ ├── bda_invoker.py
+│ │ ├── bda_output_processor.py
+│ │ └── ddb_insert_file_name.py
+│ └── utils/                      # Utilities (document detection, response building, etc.)
+├── tests/                        # Unit and integration tests
+├── docker-compose.yml            # Local development environment
+├── Dockerfile                    # Container definition
+├── Makefile                      # Development commands
+└── pyproject.toml                # Python dependencies and configuration
+```
+
+### Key Components
+- **Lambda Handlers** (`scripts/`) - Event-driven document processing pipeline
+- **Services** - AWS client wrappers for S3, DynamoDB, and Bedrock Data Automation
+- **Utils** - Document detection, quality analysis, response formatting
+- **FastAPI App** - Local development and testing interface
+
+## Deployment
+
+This application is deployed as part of AWS infrastructure managed in separate repositories. The application code is packaged as a Docker container and deployed to AWS ECS/Lambda by infrastructure-as-code.
+
+**Deployment process:**
+
+1. Application code is built into a Docker image
+2. Image is pushed to Amazon ECR
+3. Infrastructure deploys the image to:
+   - ECS Fargate (FastAPI application)
+   - Lambda functions (event handlers)
+
+**Environment variables** listed in the [Configuration](#configuration) section are set by the infrastructure during deployment.
+
+For infrastructure setup and deployment instructions, refer to the infrastructure repository documentation.
+
+## Contributing
+
+Thank you for your interest in contributing! We welcome all contributions.
+
+**To contribute:**
+
+1. Create a feature branch from `main`
+2. Make your changes with clear commit messages
+3. Add or update tests as needed
+4. Run `make test` and `make lint` to verify
+5. Submit a pull request with:
+   - Clear title and description
+   - Reference to related issues
+   - Test results
+
+**Code review criteria:**
+
+- Functionality and correctness
+- Test coverage
+- Code readability and maintainability
+- Security considerations
+- Documentation updates
+
+All contributors are expected to follow our [Code of Conduct](../CODE_OF_CONDUCT.md).
+
+
+## License
+
+This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.

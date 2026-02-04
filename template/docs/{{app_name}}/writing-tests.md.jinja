@@ -1,0 +1,83 @@
+# Writing Tests
+
+[pytest](https://docs.pytest.org) is our test runner, which is simple but powerful. If you are new to pytest, reading up on how [fixtures work](https://docs.pytest.org/en/latest/explanation/fixtures.html) in particular might be helpful as it's one area that is a bit different than is common with other runners (and languages).
+
+## Naming
+
+pytest automatically discovers tests by [following a number of conventions](https://docs.pytest.org/en/stable/goodpractices.html#conventions-for-python-test-discovery) (what it calls "collection").
+
+For this project specifically:
+
+- All tests live under `tests/`
+- Under `tests/`, the organization mirrors the source code structure
+  - The tests for `src/documentai_api/services/` are found at `tests/services/`
+- Test files should begin with the `test_` prefix, followed by the module the tests cover, for example:
+    - `utils/foo.py` will have tests in a file `tests/utils/test_foo_util.py`
+    - `services/foo.py` will have tests in a file `tests/services/test_foo_service.py`
+- Test cases should begin with the `test_` prefix, followed by the function it's testing and a description of what about the function it is testing, for example: 
+    - `test_upload_file_success` tests the `upload_file` function's success case
+    - `test_upload_file_failure` tests the `upload_file` function's failure case
+
+There are occasions where tests may not line up exactly with a single source file, function, or otherwise may need to deviate from this exact structure, but this is the setup in general.
+
+## Mocking AWS Services
+
+Tests use [pytest-mock](https://pytest-mock.readthedocs.io/) to mock AWS service calls. This allows tests to run without requiring actual AWS infrastructure.
+
+Example mocking boto3 clients:
+
+```python
+def test_upload_file(mocker):
+    mock_s3_client = mocker.MagicMock()
+    mocker.patch(
+        "documentai_api.services.s3.get_s3_client",
+        return_value=mock_s3_client
+    )
+    
+    # Test code that calls upload_file
+    # Assertions on mock_s3_client.put_object calls
+```
+
+## Testing FastAPI Endpoints
+
+Use FastAPI's `TestClient` for testing API endpoints:
+
+```python
+from fastapi.testclient import TestClient
+from documentai_api.app import app
+
+client = TestClient(app)
+
+def test_health_endpoint():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"message": "healthy"}
+```
+
+## Test Fixtures
+
+Test fixtures provide reusable test data and setup. Place shared fixtures in `tests/conftest.py` or define them in individual test files.
+
+Example fixture:
+
+```python
+import pytest
+
+@pytest.fixture
+def sample_pdf_bytes():
+    return b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n..."
+
+def test_document_processing(sample_pdf_bytes):
+    # Use sample_pdf_bytes in test
+    pass
+```
+
+## Coverage Requirements
+
+- Minimum coverage: 90% (enforced in CI)
+- Run `make test-coverage` to see coverage report
+- Generate HTML report: `uv run pytest --cov-report=html`
+
+## Running Tests
+
+See the [Testing section in the README](../../{{app_name}}/README.md#testing) for available commands.
