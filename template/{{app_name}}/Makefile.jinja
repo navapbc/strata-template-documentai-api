@@ -1,11 +1,18 @@
 .PHONY: \
 	build \
+	check \
 	clean \
+	clean-volumes \
 	format \
+	format-check \
 	help \
+	init \
+	init-local \
 	lint \
 	lint-ci \
 	release-build \
+	run-logs \
+	setup-local \
 	start \
 	stop \
 	test
@@ -34,18 +41,49 @@ __check_defined = \
 
 APP_NAME := {{app_name}}
 
+# By default, all python/uv commands will run inside of the docker container
+# if you wish to run this natively, add PY_RUN_APPROACH=local to your environment vars
+# You can set this by either running `export PY_RUN_APPROACH=local` in your shell or add
+# it to your ~/.zshrc file (and run `source ~/.zshrc`)
+ifeq "$(PY_RUN_APPROACH)" "local"
+PY_RUN_CMD := uv run
+else
+PY_RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME) uv run
+endif
+
 ##################################################
-# Setup
+# Local Development Environment Setup
 ##################################################
 
-init: ## Install dependencies
-	uv sync --all-extras --frozen
+setup-local: ## Setup for local/native development
+	uv sync
 
 ##################################################
-# Build / Release
+# Build & Run
 ##################################################
-build: ## Build development Docker image
+
+build: ## Build Docker containers
 	docker compose build
+
+start: ## Start containers in detached mode
+	docker compose up --detach
+
+run-logs: start ## Start containers and follow logs
+	docker compose logs --follow --no-color $(APP_NAME)
+
+init: ## Initialize project (container-based)
+	docker compose build
+
+init-local: ## Initialize project for native development
+	uv sync
+
+clean-volumes: ## Remove project docker volumes
+	docker compose down --volumes
+
+stop: ## Stop containers
+	docker compose down
+
+check: format-check lint test ## Run all checks
 
 release-build: ## Build production Docker image
 	docker buildx build \
@@ -54,40 +92,35 @@ release-build: ## Build production Docker image
 		.
 
 ##################################################
-# Development
-##################################################
-
-start: ## Start development server
-	docker compose up
-
-stop: ## Stop development server
-	docker compose down
-
-
-##################################################
 # Testing
 ##################################################
 
 test: ## Run test suite
-	uv run pytest
+	$(PY_RUN_CMD) pytest
 
 ##################################################
 # Lint / Format
 ##################################################
 
 format: ## Format code
-	uv run ruff format .
+	$(PY_RUN_CMD) ruff format .
+
+format-check: ## check format without modifying
+	$(PY_RUN_CMD) ruff format --check
 
 lint: ## Lint code
-	uv run ruff check --fix .
+	$(PY_RUN_CMD) ruff check --fix .
 
 lint-ci: ## Lint code (CI mode, no fixes)
-	uv run ruff check --no-fix .
+	$(PY_RUN_CMD) ruff check --no-fix .
 
 
 ##################################################
-# Utilities
+# Miscellaneous Utilities
 ##################################################
+
+login: start ## Start shell in running container
+	docker exec -it $(APP_NAME) bash
 
 clean: ## Clean build artifacts
 	rm -rf .pytest_cache htmlcov .coverage __pycache__
