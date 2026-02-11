@@ -1,29 +1,25 @@
 #!/usr/bin/env python3
-"""
-Process uploaded files to S3 - insert DDB records and convert images to grayscale if needed.
-"""
+"""Process uploaded files to S3 - insert DDB, convert images to grayscale if needed."""
 
-import argparse
-import sys
+import typer
 
-from config.constants import ConfigDefaults, ProcessStatus
-from schemas.document_metadata import DocumentMetadata
-from services import s3 as s3_service
-from utils.ddb import (
+from documentai_api.config.constants import ConfigDefaults, ProcessStatus
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.services import s3 as s3_service
+from documentai_api.utils.ddb import (
     classify_as_not_implemented,
     get_ddb_record,
     insert_initial_ddb_record,
     set_bda_processing_status_not_started,
 )
-from utils.logger import get_logger
-from utils.models import ClassificationData
+from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData
 
 logger = get_logger(__name__)
 
 
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
-    """Check if file exceeds BDA size limits based on content type"""
-
+    """Check if file exceeds BDA size limits based on content type."""
     if content_type in ["image/jpeg", "image/png"]:
         return file_size_bytes > ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES
     elif content_type in ["application/pdf", "image/tiff"]:
@@ -36,7 +32,7 @@ def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
 def convert_to_grayscale(
     object_key: str, file_bytes: bytes, content_type: str
 ) -> tuple[bytes, str]:
-    """Convert image to grayscale, and to PDF if over 5MB"""
+    """Convert image to grayscale, and to PDF if over 5MB."""
     if content_type not in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
         return file_bytes, content_type
 
@@ -77,7 +73,7 @@ def convert_to_grayscale(
 
 
 def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
-    """Convert S3 image to grayscale in-place"""
+    """Convert S3 image to grayscale in-place."""
     try:
         # download file
         response = s3_service.get_object(bucket_name, object_key)
@@ -98,10 +94,10 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str):
 def main(
     bucket_name: str,
     object_key: str,
-    user_provided_document_category: str = None,
-    job_id: str = None,
-    trace_id: str = None,
-) -> dict:
+    user_provided_document_category: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+):
     """Process uploaded file.
 
     Args:
@@ -111,12 +107,11 @@ def main(
         job_id: Optional job ID
         trace_id: Optional trace ID
 
-    Returns:
-        Status dictionary
+    Returns: None
     """
     logger.info(f"Processing upload: s3://{bucket_name}/{object_key}")
 
-    # Check if DDB record exists
+    # check if DDB record exists
     try:
         existing_record = get_ddb_record(object_key)
         status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
@@ -140,11 +135,9 @@ def main(
             else:
                 set_bda_processing_status_not_started(object_key)
 
-            return {"statusCode": 200}
         else:
             # already processed, skip
             logger.info(f"File {object_key} already processed with status {status}")
-            return {"statusCode": 200}
 
     except ValueError:
         # no ddb record exists - first time processing
@@ -166,29 +159,21 @@ def main(
             convert_s3_object_to_grayscale(bucket_name, object_key)
             logger.info(f"Converted {object_key} to grayscale for BDA processing")
 
-        return {"statusCode": 200}
+
+def cli(
+    bucket_name: str = typer.Option(..., help="S3 bucket name"),
+    object_key: str = typer.Option(..., help="S3 object key"),
+    user_provided_document_category: str | None = typer.Option(
+        None, help="User provided document category"
+    ),
+    job_id: str | None = typer.Option(None, help="Job ID"),
+    trace_id: str | None = typer.Option(None, help="Trace ID"),
+):
+    try:
+        main(bucket_name, object_key, user_provided_document_category, job_id, trace_id)
+    except Exception:
+        raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process uploaded file")
-    parser.add_argument("--bucket", required=True, help="S3 bucket name")
-    parser.add_argument("--key", required=True, help="S3 object key")
-    parser.add_argument("--category", help="User provided document category")
-    parser.add_argument("--job-id", help="Job ID")
-    parser.add_argument("--trace-id", help="Trace ID")
-
-    args = parser.parse_args()
-
-    try:
-        result = main(
-            args.bucket,
-            args.key,
-            args.category,
-            args.job_id,
-            args.trace_id,
-        )
-        print(result)
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Failed to process upload: {e}", exc_info=True)
-        sys.exit(1)
+    typer.run(cli)

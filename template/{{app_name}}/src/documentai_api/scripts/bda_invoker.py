@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
 """Invoke Bedrock Data Automation for document processing."""
 
-import argparse
 import json
 import os
-import sys
 
-from config.constants import ProcessStatus
-from schemas.document_metadata import DocumentMetadata
-from utils.bda_invoker import invoke_bedrock_data_automation
-from utils.ddb import (
+import typer
+
+from documentai_api.config.constants import ProcessStatus
+from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
+from documentai_api.utils.ddb import (
     ClassificationData,
     classify_as_failed,
     get_ddb_record,
     set_bda_processing_status_started,
 )
-from utils.env import DDE_INPUT_LOCATION
-from utils.logger import get_logger
+from documentai_api.utils.env import DDE_INPUT_LOCATION
+from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool = False) -> dict:
+def main(
+    file_name: str, bucket_name: str | None = None, bypass_ddb_status_check: bool | None = False
+) -> dict:
     """Invoke BDA for a file.
 
     Args:
@@ -45,7 +47,7 @@ def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool 
 
             if process_status != ProcessStatus.NOT_STARTED.value:
                 logger.info(f"Skipping {file_name} - status: {process_status}")
-                return {"statusCode": 200, "skipped": True, "reason": f"Status is {process_status}"}
+                return
         except ValueError:
             logger.error(f"No DDB record found for {file_name}")
             raise
@@ -59,7 +61,7 @@ def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool 
         )
 
         logger.info(f"BDA job started for {file_name}, ARN: {invocation_arn}")
-        return {"statusCode": 200, "invocationArn": invocation_arn}
+        return {"invocationArn": invocation_arn}
 
     except Exception as e:
         logger.error(f"BDA invocation failed for {file_name}: {e}")
@@ -71,22 +73,20 @@ def main(file_name: str, bucket_name: str = None, bypass_ddb_status_check: bool 
         raise
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Invoke BDA for document processing")
-    parser.add_argument("--file", required=True, help="File name to process")
-    parser.add_argument("--bucket", help="S3 bucket name (defaults to DDE_INPUT_LOCATION)")
-    parser.add_argument(
-        "--bypass-ddb-status-check",
-        action="store_true",
-        help="Skip checking DDB record status before invoking BDA",
-    )
-
-    args = parser.parse_args()
-
+def cli(
+    file_name: str = typer.Option(..., help="Name of file to process"),
+    bucket_name: str | None = typer.Option(
+        None, help="S3 bucket name (defaults to DDE_INPUT_LOCATION env var)"
+    ),
+    bypass_ddb_status_check: bool = typer.Option(False, help="Skip checking DDB record status"),
+):
     try:
-        result = main(args.file, args.bucket, args.bypass_ddb_status_check)
-        print(json.dumps(result))
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Failed to invoke BDA: {e}", exc_info=True)
-        sys.exit(1)
+        result = main(file_name, bucket_name, bypass_ddb_status_check)
+        if result:
+            typer.echo(json.dumps(result))
+    except Exception:
+        raise typer.Exit(1) from None
+
+
+if __name__ == "__main__":
+    typer.run(cli)

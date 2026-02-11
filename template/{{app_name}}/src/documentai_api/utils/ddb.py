@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import random
 from datetime import UTC, datetime
@@ -14,6 +13,7 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
@@ -23,7 +23,7 @@ from documentai_api.utils.models import (
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -36,7 +36,6 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
         return None
     except Exception as e:
         msg = f"Failed to extract region from ARN {bda_invocation_arn}: {e}"
-        print(msg)
         logger.error(msg)
         return None
 
@@ -63,7 +62,6 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             total_processing_time_seconds = get_elapsed_time_seconds(created_at, completion_time)
             timing_data.total_processing_time_seconds = total_processing_time_seconds
             msg = f"Total processing time: {total_processing_time_seconds:.2f} seconds"
-            print(msg)
             logger.info(msg)
 
         if bda_started_at_str:
@@ -71,14 +69,12 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             bda_processing_time_seconds = get_elapsed_time_seconds(bda_started_at, completion_time)
             timing_data.bda_processing_time_seconds = bda_processing_time_seconds
             msg = f"BDA processing time: {bda_processing_time_seconds:.2f} seconds"
-            print(msg)
             logger.info(msg)
 
         return timing_data
 
     except Exception as e:
         msg = f"Failed to calculate completion timing: {e}"
-        print(msg)
         logger.error(msg)
         return ProcessingTimes()
 
@@ -170,7 +166,6 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
             msg = f"Failed to calculate bda wait time for {object_key}: {e}"
-            print(msg)
             logger.error(msg)
 
     elif status in PROCESSING_STATUS_COMPLETED:
@@ -293,7 +288,6 @@ def get_ddb_record(object_key: str) -> dict:
         return item
     except Exception as e:
         msg = f"Failed to get DDB record for {object_key}: {e}"
-        print(msg)
         logger.error(msg)
         raise
 
@@ -345,7 +339,6 @@ def update_ddb(
 
     except Exception as e:
         msg = f"Failed to update DDB status: {e}"
-        print(msg)
         logger.error(msg)
         raise
 
@@ -418,7 +411,6 @@ def insert_ddb(
 
     except Exception as e:
         msg = f"Failed to create DDB record for {object_key}: {e}"
-        print(msg)
         logger.error(msg)
         raise
 
@@ -436,18 +428,16 @@ def insert_initial_ddb_record(
     # has OpenCV/Poppler layers attached. including this import at the top of the
     # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from utils.document_detector import (
+    from documentai_api.utils.document_detector import (
         DocumentDetector,
         QualityMetricsNormalized,
         QualityMetricsRaw,
     )
 
-    print(
-        f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}"
-    )
-
     if not user_provided_document_category:
-        print(f"Warning: user_provided_document_category is None/empty for {source_object_key}")
+        logger.warning(
+            f"Warning: user_provided_document_category is None/empty for {source_object_key}"
+        )
         user_provided_document_category = "unknown"
 
     document_detector = DocumentDetector()
@@ -497,21 +487,21 @@ def insert_initial_ddb_record(
                 process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
-                print("=== Starting multi-page detection validation ===")
+                logger.info("=== Starting multi-page detection validation ===")
 
                 try:
                     if document_detector.is_multipage_document(file_bytes):
-                        print(f"{source_object_key} is a multipage doc")
+                        logger.info(f"{source_object_key} is a multipage doc")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
                     else:
-                        print(f"{source_object_key} is a single page doc")
+                        logger.info(f"{source_object_key} is a single page doc")
 
                 except Exception as e:
-                    print(f"=== Multipage detection failed: {e} ===")
+                    logger.error(f"=== Multipage detection failed: {e} ===")
 
-            print("=== Finished multi-page detection validation ===")
+            logger.info("=== Finished multi-page detection validation ===")
 
     else:
         process_status = ProcessStatus.NOT_SAMPLED

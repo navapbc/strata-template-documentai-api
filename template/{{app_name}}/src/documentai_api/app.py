@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -23,14 +22,10 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
+logger = get_logger(__name__)
 DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
 
 app = FastAPI(
@@ -117,9 +112,9 @@ async def upload_document_for_processing(
     job_id: str | None = None,
     trace_id: str | None = None,
 ):
-    print("=== S3 UPLOAD STARTED ===")
-    print(f"DEBUG S3: user_provided_document_category = {user_provided_document_category!r}")
-    print(f"DEBUG S3: type = {type(user_provided_document_category)}")
+    logger.info("=== S3 UPLOAD STARTED ===")
+    logger.info(f"DEBUG S3: user_provided_document_category = {user_provided_document_category!r}")
+    logger.info(f"DEBUG S3: type = {type(user_provided_document_category)}")
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
 
@@ -134,7 +129,6 @@ async def upload_document_for_processing(
                     f"Expected DocumentCategory, got {type(user_provided_document_category)}"
                 )
 
-            print(f"DEBUG S3: Converting to string: {user_provided_document_category!s}")
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
@@ -145,17 +139,17 @@ async def upload_document_for_processing(
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
 
-        print(f"DEBUG S3: About to upload with metadata: {metadata}")
-        print(f"DEBUG S3: file.file = {file.file}")
-        print(f"DEBUG S3: document_upload_bucket_name = {bucket_name!r}")
-        print(f"DEBUG S3: unique_file_name = {unique_file_name!r}")
+        logger.info(f"DEBUG S3: About to upload with metadata: {metadata}")
+        logger.info(f"DEBUG S3: file.file = {file.file}")
+        logger.info(f"DEBUG S3: document_upload_bucket_name = {bucket_name!r}")
+        logger.info(f"DEBUG S3: unique_file_name = {unique_file_name!r}")
 
         s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
-        print("=== S3 UPLOAD SUCCESS ===")
+        logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
-        logging.error(f"Error uploading file to S3: {e}")
-        print(f"=== S3 UPLOAD FAILED: {e} ===")
+        logger.error(f"Error uploading file to S3: {e}")
+        logger.info(f"=== S3 UPLOAD FAILED: {e} ===")
         raise HTTPException(
             status_code=500,
             detail="Document upload failed",
@@ -188,8 +182,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
 
         except Exception as e:
             msg = f"Error polling DynamoDB for job {job_id}: {e}"
-            logging.error(msg)
-            print(msg)
+            logger.error(msg)
 
             await asyncio.sleep(polling_interval)
             elapsed_time += polling_interval
@@ -246,7 +239,9 @@ async def create_document(
             ),
         )
 
-    print(f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}")
+    logger.info(
+        f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
+    )
 
     file.file.seek(0)
     file_extension = file.filename.split(".")[-1]
@@ -294,7 +289,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         # processing complete
         if include_extracted_data:
             # rebuild response with extracted data
-            from utils.response_builder import build_v1_api_response
+            from documentai_api.utils.response_builder import build_v1_api_response
 
             return build_v1_api_response(
                 object_key=job_status.object_key,
@@ -309,8 +304,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise
     except Exception as e:
         msg = f"Error retrieving results for job {job_id}: {e}"
-        logging.error(msg)
-        print(msg)
+        logger.error(msg)
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
