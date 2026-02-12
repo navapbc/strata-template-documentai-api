@@ -100,10 +100,6 @@ def build_v1_api_response(
         dict: Response data for DDB JSON storage
     """
     status = status.value if isinstance(status, ProcessStatus) else status
-    print(
-        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
-    )
-    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
 
     from documentai_api.utils.ddb import get_ddb_record
 

@@ -335,9 +335,7 @@ def update_ddb(
         _execute_ddb_update(object_key, update_expr, expr_values)
 
     except Exception as e:
-        msg = f"Failed to update DDB status: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to update DDB status: {e}")
         raise
 
 

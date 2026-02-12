@@ -112,9 +112,13 @@ async def upload_document_for_processing(
     job_id: str | None = None,
     trace_id: str | None = None,
 ):
-    logger.info("=== S3 UPLOAD STARTED ===")
-    logger.info(f"DEBUG S3: user_provided_document_category = {user_provided_document_category!r}")
-    logger.info(f"DEBUG S3: type = {type(user_provided_document_category)}")
+    logger.debug(
+        "S3 upload started",
+        extra={
+            "user_provided_document_category": user_provided_document_category,
+            "category_type": type(user_provided_document_category).__name__,
+        },
+    )
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
 
@@ -139,10 +143,15 @@ async def upload_document_for_processing(
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
 
-        logger.info(f"DEBUG S3: About to upload with metadata: {metadata}")
-        logger.info(f"DEBUG S3: file.file = {file.file}")
-        logger.info(f"DEBUG S3: document_upload_bucket_name = {bucket_name!r}")
-        logger.info(f"DEBUG S3: unique_file_name = {unique_file_name!r}")
+        logger.debug(
+            "S3: Starting actual upload",
+            extra={
+                "metadata": metadata,
+                "file": file.file,
+                "document_upload_bucket_name": bucket_name,
+                "unique_file_name": unique_file_name,
+            },
+        )
 
         s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
         logger.info("=== S3 UPLOAD SUCCESS ===")

@@ -29,9 +29,9 @@ dev = [
 
 [project.scripts]
 documentai_api = "documentai_api.main:main"
-bda-invoker = "documentai_api.scripts.bda_invoker:main"
-bda-output-processor = "documentai_api.scripts.bda_output_processor:main"
-ddb-insert-file-name = "documentai_api.scripts.ddb_insert_file_name:main"
+bda-invoker = "documentai_api.tasks.bda_invoker.cli:cli"
+bda-output-processor = "documentai_api.tasks.bda_output_processor.cli:cli"
+ddb-insert-file-name = "documentai_api.tasks.ddb_insert_file_name.cli:cli"
 
 [tool.ruff]
 line-length = 100
@@ -79,6 +79,9 @@ lint.ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"*/tasks/*/lambda.py" = ["N999"]
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Process BDA output from S3 and extract document data."""
 
-import json
-
 from documentai_api.config.constants import BDA_PROCESSED_FILE_PREFIX
 from documentai_api.utils.bda_output_processor import get_api_response_data
 from documentai_api.utils.logger import get_logger
@@ -47,23 +45,3 @@ def main(bucket_name: str, object_key: str) -> dict:
     logger.info(f"Successfully processed BDA output for {uploaded_filename}")
 
     return result
-
-
-# cli wrapper defined inside __main__ block to avoid importing typer at module level.
-# this script is used by both cli and lambda handlers. by defining the cli wrapper
-# here, Lambda handlers can import main() without requiring typer as a dependency.
-if __name__ == "__main__":
-    import typer
-
-    def cli(
-        bucket_name: str = typer.Option(..., help="S3 bucket containing BDA output"),
-        object_key: str = typer.Option(..., help="S3 object key of BDA output file"),
-    ):
-        try:
-            result = main(bucket_name, object_key)
-            if result:
-                typer.echo(json.dumps(result))
-        except Exception:
-            raise typer.Exit(1) from None
-
-    typer.run(cli)

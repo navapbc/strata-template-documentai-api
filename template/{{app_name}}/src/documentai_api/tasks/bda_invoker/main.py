@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Invoke Bedrock Data Automation for document processing."""
 
-import json
 import os
 
 from documentai_api.config.constants import ProcessStatus
@@ -69,26 +68,3 @@ def main(
             data=ClassificationData(additional_info=str(e)),
         )
         raise
-
-
-# cli wrapper defined inside __main__ block to avoid importing typer at module level.
-# this script is used by both cli and lambda handlers. by defining the cli wrapper
-# here, Lambda handlers can import main() without requiring typer as a dependency.
-if __name__ == "__main__":
-    import typer
-
-    def cli(
-        file_name: str = typer.Option(..., help="Name of file to process"),
-        bucket_name: str | None = typer.Option(
-            None, help="S3 bucket name (defaults to DDE_INPUT_LOCATION env var)"
-        ),
-        bypass_ddb_status_check: bool = typer.Option(False, help="Skip checking DDB record status"),
-    ):
-        try:
-            result = main(file_name, bucket_name, bypass_ddb_status_check)
-            if result:
-                typer.echo(json.dumps(result))
-        except Exception:
-            raise typer.Exit(1) from None
-
-    typer.run(cli)

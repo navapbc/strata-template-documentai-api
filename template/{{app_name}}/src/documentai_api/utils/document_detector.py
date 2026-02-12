@@ -8,6 +8,10 @@ import numpy as np
 from pdf2image import convert_from_bytes
 from PIL import Image
 
+from documentai_api.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 # increase PIL limit for large document processing
 Image.MAX_IMAGE_PIXELS = 250000000
 MULTIPAGE_DETECTION_MAX_PAGES = 5
@@ -158,7 +162,7 @@ class DocumentDetector:
             return file_type
 
         except Exception as e:
-            print("An error occurred: ", e)
+            logger.error(f"An error occurred: {e}")
             return None
 
     def is_pdf(self, image_file):
@@ -177,7 +181,7 @@ class DocumentDetector:
         images = []
 
         if self._is_password_protected(file_bytes):
-            print("DocumentDetector: Password-protected PDF - cannot process")
+            logger.warning("DocumentDetector: Password-protected PDF - cannot process")
             return images
 
         try:
@@ -201,7 +205,7 @@ class DocumentDetector:
                 images.append(img)
 
         except Exception as e:
-            print(f"Error processing PDF: {e}")
+            logger.error(f"Error processing PDF: {e}")
             raise e
 
         return images
@@ -400,7 +404,7 @@ class DocumentDetector:
             return self._pages_detected
 
         except Exception as e:
-            print("An error occurred: ", e)
+            logger.error("An error occurred: ", e)
             return None
 
     def _extract_document_regions_of_interest(self, gray_image, file_name):
@@ -431,7 +435,9 @@ class DocumentDetector:
                 if edge_ratio > 0.01:  # At least 0.1% edges
                     rois.append(roi)
 
-        print(f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total")
+        logger.info(
+            f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total"
+        )
         return rois
 
     def _calculate_edge_score(self, document_roi, file_name):
@@ -567,7 +573,7 @@ class DocumentDetector:
             return None
 
         except Exception as e:
-            print(f"Error calculating quality metrics for {file_name}: {e}")
+            logger.error(f"Error calculating quality metrics for {file_name}: {e}")
             return None
 
     def _get_quality_metrics(self, gray_image, file_name):
@@ -669,7 +675,7 @@ class DocumentDetector:
     def _calculate_laplacian_variance(self, file_bytes, file_name) -> float:
         """Returns the Laplacian variance for an image/document."""
         if not file_bytes:
-            print("No image bytes provided")
+            logger.warning("No image bytes provided")
             return np.nan
 
         file_type = self.detect_file_type(file_bytes)
@@ -691,7 +697,7 @@ class DocumentDetector:
 
     def fft_blur_score_normalized(self, document_roi, file):
         if document_roi.size == 0:
-            print("Empty image provided")
+            logger.warning("Empty image provided")
             return np.nan
 
         document_roi_f = np.float32(document_roi)
@@ -767,7 +773,7 @@ class DocumentDetector:
     def _is_multipage_document(self, file_bytes, file_name):
         """Returns True if document contains multiple pages/documents."""
         file_type = self.detect_file_type(file_bytes)
-        print(f"DocumentDetector: Processing {file_type} file")
+        logger.info(f"DocumentDetector: Processing {file_type} file")
 
         if file_type in IMAGE_FILE_TYPES:
             documents_in_image = self._process_image_bytes(

@@ -157,25 +157,4 @@ def main(
             convert_s3_object_to_grayscale(bucket_name, object_key)
             logger.info(f"Converted {object_key} to grayscale for BDA processing")
 
-
-# cli wrapper defined inside __main__ block to avoid importing typer at module level.
-# this script is used by both cli and lambda handlers. by defining the cli wrapper
-# here, Lambda handlers can import main() without requiring typer as a dependency.
-if __name__ == "__main__":
-    import typer
-
-    def cli(
-        bucket_name: str = typer.Option(..., help="S3 bucket name"),
-        object_key: str = typer.Option(..., help="S3 object key"),
-        user_provided_document_category: str | None = typer.Option(
-            None, help="User provided document category"
-        ),
-        job_id: str | None = typer.Option(None, help="Job ID"),
-        trace_id: str | None = typer.Option(None, help="Trace ID"),
-    ):
-        try:
-            main(bucket_name, object_key, user_provided_document_category, job_id, trace_id)
-        except Exception:
-            raise typer.Exit(1) from None
-
-    typer.run(cli)
+    logger.info(f"Successfully processed upload: {object_key}")

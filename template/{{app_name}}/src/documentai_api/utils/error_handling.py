@@ -1,4 +1,3 @@
-import traceback
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -17,10 +16,7 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
             return handler_func(event, context)
         except Exception as e:
             error_msg = f"Handler {handler_func.__name__} failed: {e}"
-            stack_trace = traceback.format_exc()
-
-            logger.error(f"ERROR: {error_msg}")
-            logger.error(f"STACK TRACE:\n{stack_trace}")
+            logger.exception(error_msg)
 
             # try to update DDB status to failed
             try:
