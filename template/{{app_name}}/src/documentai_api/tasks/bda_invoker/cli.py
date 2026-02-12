@@ -4,7 +4,10 @@ import typer
 
 from documentai_api.tasks.bda_invoker.main import main
 
+app = typer.Typer()
 
+
+@app.command()
 def cli(
     file_name: str = typer.Option(..., help="Name of file to process"),
     bucket_name: str | None = typer.Option(
@@ -21,4 +24,4 @@ def cli(
 
 
 if __name__ == "__main__":
-    typer.run(cli)
+    app()
