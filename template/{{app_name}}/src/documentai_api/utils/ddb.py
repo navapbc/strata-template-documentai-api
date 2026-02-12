@@ -14,6 +14,7 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
+from documentai_api.services import sqs as sqs_service
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
@@ -22,6 +23,7 @@ from documentai_api.utils.models import (
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
+
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +265,39 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
     ddb_service.update_item(table_name, key, update_expression, expression_values)
 
 
+def _send_to_sqs(object_key: str):
+    """Write object key to SQS queue"""
+    
+    try:
+        queue_url = os.getenv("DDE_METRICS_QUEUE_URL")
+
+        if not queue_url:
+            msg = "DDE_METRICS_QUEUE_URL environment variable not set, skipping metrics"
+            print(msg)
+            logger.warning(msg)
+            # do not raise an exception here. metrics are optional and shouldn't
+            # prevent process from completing successfully
+            return 
+
+
+        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        key = {"fileName": object_key}
+        ddb_record = ddb_service.get_item(table_name, key)
+        
+        if not ddb_record:
+            logger.warning(f"DDB record not found for {object_key}, skipping metrics")
+            # do not raise an exception here. metrics are optional and shouldn't
+            # prevent process from completing successfully
+            return
+
+        sqs_service.send_message(queue_url, json.dumps(ddb_record, default=str))
+        print(f"Successfully sent {object_key} to SQS queue")
+
+    except Exception as e:
+        logger.error(f"Failed to send {object_key} to SQS queue: {e}")
+
+
+
 def get_user_provided_document_category(object_key: str) -> str:
     """Get user specified document type for a file.
 
@@ -316,21 +351,16 @@ def update_ddb(
     internal_api_response: InternalApiResponse,
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
-    error_message: str | None = None,
+    error_message: str = None,
 ):
-    """Update DynamoDB processing status for a file."""
+    """Update DynamoDB processing status for a file"""
     try:
-        # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
-        # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
-        # stored in ddb and won't be in the stored v1ApiResponseJson.
-        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
-
-        # build base update expression
+        # build base update expression (without v1_response)
         update_expr, expr_values = _build_update_expression(
             status=status,
             data=data,
             internal_api_response=internal_api_response,
-            v1_api_response=v1_response,
+            v1_api_response=None,  # built after ddb update
             bda_invocation_arn=bda_invocation_arn,
             error_message=error_message,
         )
@@ -343,10 +373,19 @@ def update_ddb(
 
         _execute_ddb_update(object_key, update_expr, expr_values)
 
+        # build v1 response after ddb has been updated
+        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
+
+        # update ddb again with v1_response
+        update_expr = f"SET {DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson"
+        expr_values = {":v1ResponseJson": json.dumps(v1_response)}
+        _execute_ddb_update(object_key, update_expr, expr_values)
+
+        if status in PROCESSING_STATUS_COMPLETED:
+            _send_to_sqs(object_key)
+
     except Exception as e:
-        msg = f"Failed to update DDB status: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to update DDB status: {e}")
         raise
 
 
