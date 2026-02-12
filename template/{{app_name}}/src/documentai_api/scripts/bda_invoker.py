@@ -4,8 +4,6 @@
 import json
 import os
 
-import typer
-
 from documentai_api.config.constants import ProcessStatus
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
@@ -73,20 +71,24 @@ def main(
         raise
 
 
-def cli(
-    file_name: str = typer.Option(..., help="Name of file to process"),
-    bucket_name: str | None = typer.Option(
-        None, help="S3 bucket name (defaults to DDE_INPUT_LOCATION env var)"
-    ),
-    bypass_ddb_status_check: bool = typer.Option(False, help="Skip checking DDB record status"),
-):
-    try:
-        result = main(file_name, bucket_name, bypass_ddb_status_check)
-        if result:
-            typer.echo(json.dumps(result))
-    except Exception:
-        raise typer.Exit(1) from None
-
-
+# cli wrapper defined inside __main__ block to avoid importing typer at module level.
+# this script is used by both cli and lambda handlers. by defining the cli wrapper
+# here, Lambda handlers can import main() without requiring typer as a dependency.
 if __name__ == "__main__":
+    import typer
+
+    def cli(
+        file_name: str = typer.Option(..., help="Name of file to process"),
+        bucket_name: str | None = typer.Option(
+            None, help="S3 bucket name (defaults to DDE_INPUT_LOCATION env var)"
+        ),
+        bypass_ddb_status_check: bool = typer.Option(False, help="Skip checking DDB record status"),
+    ):
+        try:
+            result = main(file_name, bucket_name, bypass_ddb_status_check)
+            if result:
+                typer.echo(json.dumps(result))
+        except Exception:
+            raise typer.Exit(1) from None
+
     typer.run(cli)

@@ -25,13 +25,14 @@ def handler(event, _context):
 
     logger.info(f"Processing upload: s3://{upload_bucket_name}/{upload_object_key}")
 
-    result = process_upload_main(
+    process_upload_main(
         upload_bucket_name,
         upload_object_key,
         user_provided_document_category,
         job_id,
         trace_id,
     )
-    logger.info(f"Successfully processed upload: {result}")
 
-    return result
+    logger.info(f"Successfully processed upload: {upload_object_key}")
+
+    return {"statusCode": 200}

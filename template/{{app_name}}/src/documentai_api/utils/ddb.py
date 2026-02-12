@@ -35,8 +35,7 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
             return parts[3]  # Region is the 4th part
         return None
     except Exception as e:
-        msg = f"Failed to extract region from ARN {bda_invocation_arn}: {e}"
-        logger.error(msg)
+        logger.error(f"Failed to extract region from ARN {bda_invocation_arn}: {e}")
         return None
 
 
@@ -61,21 +60,18 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             created_at = datetime.fromisoformat(created_at_str)
             total_processing_time_seconds = get_elapsed_time_seconds(created_at, completion_time)
             timing_data.total_processing_time_seconds = total_processing_time_seconds
-            msg = f"Total processing time: {total_processing_time_seconds:.2f} seconds"
-            logger.info(msg)
+            logger.info(f"Total processing time: {total_processing_time_seconds:.2f} seconds")
 
         if bda_started_at_str:
             bda_started_at = datetime.fromisoformat(bda_started_at_str)
             bda_processing_time_seconds = get_elapsed_time_seconds(bda_started_at, completion_time)
             timing_data.bda_processing_time_seconds = bda_processing_time_seconds
-            msg = f"BDA processing time: {bda_processing_time_seconds:.2f} seconds"
-            logger.info(msg)
+            logger.info(f"BDA processing time: {bda_processing_time_seconds:.2f} seconds")
 
         return timing_data
 
     except Exception as e:
-        msg = f"Failed to calculate completion timing: {e}"
-        logger.error(msg)
+        logger.error(f"Failed to calculate completion timing: {e}")
         return ProcessingTimes()
 
 
@@ -165,8 +161,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
             updates.append(f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds")
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
-            msg = f"Failed to calculate bda wait time for {object_key}: {e}"
-            logger.error(msg)
+            logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
     elif status in PROCESSING_STATUS_COMPLETED:
         completion_updates, completion_values = _build_completion_timing(object_key)
@@ -238,7 +233,7 @@ def _build_update_expression(
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
-            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE
+            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
@@ -270,7 +265,7 @@ def get_user_provided_document_category(object_key: str) -> str:
     )
 
     if not user_provided_document_category:
-        raise ValueError(f"User specified document type not found for file: {object_key}")
+        logger.warning(f"User specified document type not found for file: {object_key}")
 
     return user_provided_document_category
 
@@ -287,8 +282,7 @@ def get_ddb_record(object_key: str) -> dict:
 
         return item
     except Exception as e:
-        msg = f"Failed to get DDB record for {object_key}: {e}"
-        logger.error(msg)
+        logger.error(f"Failed to get DDB record for {object_key}: {e}")
         raise
 
 
@@ -314,17 +308,12 @@ def update_ddb(
 ):
     """Update DynamoDB processing status for a file."""
     try:
-        # TODO: logical flaw here. build_v1_api_response() reads DDB to generate
-        # and store v1 api response. completedAt, totalProcessingTime, etc. not yet
-        # stored in ddb and won't be in the stored v1ApiResponseJson.
-        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
-
-        # build base update expression
+        # build base update expression (without v1_response)
         update_expr, expr_values = _build_update_expression(
             status=status,
             data=data,
             internal_api_response=internal_api_response,
-            v1_api_response=v1_response,
+            v1_api_response=None,  # built after ddb update
             bda_invocation_arn=bda_invocation_arn,
             error_message=error_message,
         )
@@ -337,8 +326,17 @@ def update_ddb(
 
         _execute_ddb_update(object_key, update_expr, expr_values)
 
+        # build v1 response after ddb has been updated
+        v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
+
+        # update ddb again with v1_response
+        update_expr = f"SET {DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson"
+        expr_values = {":v1ResponseJson": json.dumps(v1_response)}
+        _execute_ddb_update(object_key, update_expr, expr_values)
+
     except Exception as e:
         msg = f"Failed to update DDB status: {e}"
+        print(msg)
         logger.error(msg)
         raise
 
@@ -353,8 +351,8 @@ def insert_ddb(
     pages_detected: int | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-    is_password_protected: bool = False,
-    is_document_blurry: bool = False,
+    is_password_protected: bool | None = False,
+    is_document_blurry: bool | None = False,
     document_profile_raw_metrics=None,
     document_profile_normalized_metrics=None,
     overall_blur_score=None,
@@ -366,7 +364,8 @@ def insert_ddb(
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
+                user_provided_document_category
+                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
             DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
             DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
@@ -376,6 +375,7 @@ def insert_ddb(
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
+
         if pages_detected is not None:
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
@@ -410,8 +410,7 @@ def insert_ddb(
         ddb_service.put_item(table_name, item)
 
     except Exception as e:
-        msg = f"Failed to create DDB record for {object_key}: {e}"
-        logger.error(msg)
+        logger.error(f"Failed to create DDB record for {object_key}: {e}")
         raise
 
 
@@ -499,7 +498,7 @@ def insert_initial_ddb_record(
                         logger.info(f"{source_object_key} is a single page doc")
 
                 except Exception as e:
-                    logger.error(f"=== Multipage detection failed: {e} ===")
+                    logger.info(f"=== Multipage detection failed: {e} ===")
 
             logger.info("=== Finished multi-page detection validation ===")
 
