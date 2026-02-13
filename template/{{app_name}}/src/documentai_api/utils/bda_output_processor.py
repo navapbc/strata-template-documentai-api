@@ -71,7 +71,7 @@ def get_matched_blueprint(bda_result_json: dict) -> MatchedBlueprintInfo:
     return MatchedBlueprintInfo(matched_blueprint_name, matched_blueprint_confidence)
 
 
-def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_object_key):
+def process_bda_output(uploaded_filename, bda_output_bucket_name, bda_output_object_key):
     user_provided_document_category = get_user_provided_document_category(uploaded_filename)
 
     if not user_provided_document_category:
@@ -136,4 +136,4 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         )
 
 
-__all__ = ["get_api_response_data"]
+__all__ = ["process_bda_output"]

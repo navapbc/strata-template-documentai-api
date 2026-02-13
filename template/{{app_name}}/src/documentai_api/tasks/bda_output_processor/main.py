@@ -2,7 +2,7 @@
 """Process BDA output from S3 and extract document data."""
 
 from documentai_api.config.constants import BDA_PROCESSED_FILE_PREFIX
-from documentai_api.utils.bda_output_processor import get_api_response_data
+from documentai_api.utils.bda_output_processor import process_bda_output
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -41,7 +41,7 @@ def main(bucket_name: str, object_key: str) -> dict:
     uploaded_filename = extract_uploaded_filename(object_key)
     logger.info(f"Extracted original filename: {uploaded_filename}")
 
-    result = get_api_response_data(uploaded_filename, bucket_name, object_key)
+    result = process_bda_output(uploaded_filename, bucket_name, object_key)
     logger.info(f"Successfully processed BDA output for {uploaded_filename}")
 
     return result
