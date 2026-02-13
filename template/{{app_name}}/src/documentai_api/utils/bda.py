@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass
 
 from documentai_api.config.constants import (
@@ -7,6 +6,9 @@ from documentai_api.config.constants import (
     BDA_JOB_STATUS_RUNNING,
     BdaResponseFields,
 )
+from documentai_api.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -20,9 +22,6 @@ class BdaFieldProcessingData:
 class BdaFieldProcessingResult:
     confidence: float
     is_empty: bool
-
-
-logger = logging.getLogger(__name__)
 
 
 def is_bda_job_running(status: str) -> bool:
@@ -89,9 +88,7 @@ def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessi
     value = field_data.get(BdaResponseFields.FIELD_VALUE, "")
     is_empty = len(str(value)) == 0
 
-    msg = f"Extracted field name: {field_name}, confidence: {confidence}"
-    print(msg)
-    logger.info(msg)
+    logger.info(f"Extracted field name: {field_name}, confidence: {confidence}")
 
     return BdaFieldProcessingResult(confidence, is_empty)
 
