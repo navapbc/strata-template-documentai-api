@@ -162,7 +162,7 @@ class DocumentDetector:
             return file_type
 
         except Exception as e:
-            logger.info("An error occurred: ", e)
+            logger.error(f"An error occurred: {e}")
             return None
 
     def is_pdf(self, image_file):

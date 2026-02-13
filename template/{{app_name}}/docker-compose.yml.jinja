@@ -4,3 +4,6 @@ services:
       context: .
     ports:
       - {{ app_local_port }}:8000
+    volumes:
+      - .:/app
+      - /app/.venv/
