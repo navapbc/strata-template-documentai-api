@@ -12,6 +12,7 @@ def get_logger(name: str) -> logging.Logger:
         Configured logger instance
     """
     logger = logging.getLogger(name)
+    logger.propagate = False
 
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
