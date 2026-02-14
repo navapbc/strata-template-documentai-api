@@ -83,7 +83,7 @@ def test_handle_lambda_errors_on_failure(s3_event, s3_key, expected_filename, mo
     assert mock_classify_as_failed.call_args.kwargs["object_key"] == expected_filename
 
     # verify error was logged
-    assert any(error_message in str(call) for call in mock_logger.error.call_args_list)
+    assert any(error_message in str(call) for call in mock_logger.exception.call_args_list)
 
 
 def test_handle_lambda_errors_when_ddb_update_fails(s3_event, mock_context):

@@ -48,7 +48,7 @@ def test_get_matched_blueprint(bda_result, expected_name, expected_confidence):
     assert result.confidence == expected_confidence
 
 
-def test_get_api_response_data_no_user_category():
+def test_process_bda_output_no_user_category():
     with (
         patch(
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
@@ -60,13 +60,13 @@ def test_get_api_response_data_no_user_category():
         mock_get_category.return_value = None
         mock_classify_as_not_implemented.return_value = {"status": "not_implemented"}
 
-        result = bda_output_processor_util.get_api_response_data("test.pdf", "bucket", "key")
+        result = bda_output_processor_util.process_bda_output("test.pdf", "bucket", "key")
 
         mock_classify_as_not_implemented.assert_called_once()
         assert result == {"status": "not_implemented"}
 
 
-def test_get_api_response_data_blueprint_matched():
+def test_process_bda_output_blueprint_matched():
     with (
         patch(
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
@@ -88,7 +88,7 @@ def test_get_api_response_data_blueprint_matched():
         }
         mock_classify_as_success.return_value = {"status": "success"}
 
-        result = bda_output_processor_util.get_api_response_data("test.pdf", "bucket", "key")
+        result = bda_output_processor_util.process_bda_output("test.pdf", "bucket", "key")
 
         mock_classify_as_success.assert_called_once()
         assert result == {"status": "success"}
@@ -101,9 +101,7 @@ def test_get_api_response_data_blueprint_matched():
         ("abc", "failure", "classify_as_no_document_detected"),
     ],
 )
-def test_get_api_response_data_no_matching_blueprint(
-    text, expected_status, expected_classify_method
-):
+def test_process_bda_output_no_matching_blueprint(text, expected_status, expected_classify_method):
     with (
         patch(
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
@@ -128,7 +126,7 @@ def test_get_api_response_data_no_matching_blueprint(
         mock_get_text.return_value = text
         mock_classify_method.return_value = expected_status
 
-        result = bda_output_processor_util.get_api_response_data("test.pdf", "bucket", "key")
+        result = bda_output_processor_util.process_bda_output("test.pdf", "bucket", "key")
 
         mock_classify_method.assert_called_once()
         assert result == expected_status

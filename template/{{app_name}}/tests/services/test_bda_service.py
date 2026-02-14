@@ -1,42 +1,36 @@
 """Tests for services/bda.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from moto import mock_aws
 
 from documentai_api.services import bda as bda_service
 
 
-@pytest.fixture(autouse=True)
-def mock_aws_clients():
-    """Mock all AWS clients used by BDA service."""
+@pytest.fixture
+def mock_bda_clients():
+    """Mock BDA clients (not supported by moto yet)."""
     with (
         patch("documentai_api.services.bda.AWSClientFactory.get_bda_client") as mock_bda,
         patch(
             "documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client"
         ) as mock_bda_runtime,
-        patch("documentai_api.services.bda.AWSClientFactory.get_s3_client") as mock_s3,
     ):
         yield {
             "bda": mock_bda.return_value,
             "bda_runtime": mock_bda_runtime.return_value,
-            "s3": mock_s3.return_value,
         }
 
 
 @pytest.fixture
-def mock_bda_client(mock_aws_clients):
-    return mock_aws_clients["bda"]
+def mock_bda_client(mock_bda_clients):
+    return mock_bda_clients["bda"]
 
 
 @pytest.fixture
-def mock_bda_runtime_client(mock_aws_clients):
-    return mock_aws_clients["bda_runtime"]
-
-
-@pytest.fixture
-def mock_s3_client(mock_aws_clients):
-    return mock_aws_clients["s3"]
+def mock_bda_runtime_client(mock_bda_clients):
+    return mock_bda_clients["bda_runtime"]
 
 
 def test_get_data_automation_project(mock_bda_client):
@@ -96,30 +90,30 @@ def test_get_data_automation_job(mock_bda_runtime_client):
     mock_bda_runtime_client.get_data_automation_job.assert_called_once_with(jobArn=job_arn)
 
 
-def test_get_bda_result_json_success(mock_s3_client):
+@mock_aws
+def test_get_bda_result_json_success(aws_credentials):
     """Read BDA result JSON from S3."""
-    mock_body = MagicMock()
-    mock_body.read.return_value = b'{"result": "success"}'
-    mock_s3_client.get_object.return_value = {"Body": mock_body}
+    import boto3
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="my-bucket")
+    s3.put_object(Bucket="my-bucket", Key="path/to/result.json", Body=b'{"result": "success"}')
 
     result = bda_service.get_bda_result_json("s3://my-bucket/path/to/result.json")
 
     assert result == {"result": "success"}
-    mock_s3_client.get_object.assert_called_once_with(Bucket="my-bucket", Key="path/to/result.json")
 
 
-def test_get_bda_result_json_empty_uri(mock_s3_client):
+def test_get_bda_result_json_empty_uri():
     """Return None for empty URI."""
     result = bda_service.get_bda_result_json("")
     assert result is None
 
 
-def test_get_bda_result_json_exception(mock_s3_client):
+@mock_aws
+def test_get_bda_result_json_exception(aws_credentials):
     """Return None when S3 read fails."""
-    mock_s3_client.get_object.side_effect = Exception("S3 error")
-
-    result = bda_service.get_bda_result_json("s3://bucket/key")
-
+    result = bda_service.get_bda_result_json("s3://nonexistent-bucket/key")
     assert result is None
 
 
@@ -141,56 +135,64 @@ def test_get_bda_job_response_exception(mock_bda_runtime_client):
     assert result is None
 
 
-def test_extract_bda_output_s3_uri_custom_path(mock_s3_client):
+@mock_aws
+def test_extract_bda_output_s3_uri_custom_path(aws_credentials):
     """Extract custom output path from job metadata."""
-    mock_body = MagicMock()
-    mock_body.read.return_value = b"""{
-        "output_metadata": [{
-            "segment_metadata": [{
-                "custom_output_path": "s3://bucket/custom/output.json"
-            }]
-        }]
-    }"""
-    mock_s3_client.get_object.return_value = {"Body": mock_body}
+    import boto3
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="bucket")
+    s3.put_object(
+        Bucket="bucket",
+        Key="metadata.json",
+        Body=b"""{"output_metadata": [{"segment_metadata": [{"custom_output_path": "s3://bucket/custom/output.json"}]}]}""",
+    )
 
     result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
 
     assert result == "s3://bucket/custom/output.json"
 
 
-def test_extract_bda_output_s3_uri_standard_path(mock_s3_client):
+@mock_aws
+def test_extract_bda_output_s3_uri_standard_path(aws_credentials):
     """Extract standard output path from job metadata."""
-    mock_body = MagicMock()
-    mock_body.read.return_value = b"""{
-        "output_metadata": [{
-            "segment_metadata": [{
-                "standard_output_path": "s3://bucket/standard/output.json"
-            }]
-        }]
-    }"""
-    mock_s3_client.get_object.return_value = {"Body": mock_body}
+    import boto3
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="bucket")
+    s3.put_object(
+        Bucket="bucket",
+        Key="metadata.json",
+        Body=b"""{"output_metadata": [{"segment_metadata": [{"standard_output_path": "s3://bucket/standard/output.json"}]}]}""",
+    )
 
     result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
 
     assert result == "s3://bucket/standard/output.json"
 
 
-def test_extract_bda_output_s3_uri_no_path(mock_s3_client):
+@mock_aws
+def test_extract_bda_output_s3_uri_no_path(aws_credentials):
     """Return None when no output path found."""
-    mock_body = MagicMock()
-    mock_body.read.return_value = b'{"output_metadata": []}'
-    mock_s3_client.get_object.return_value = {"Body": mock_body}
+    import boto3
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="bucket")
+    s3.put_object(Bucket="bucket", Key="metadata.json", Body=b'{"output_metadata": []}')
 
     result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
 
     assert result is None
 
 
-def test_extract_bda_output_s3_uri_malformed(mock_s3_client):
+@mock_aws
+def test_extract_bda_output_s3_uri_malformed(aws_credentials):
     """Return None when metadata is malformed."""
-    mock_body = MagicMock()
-    mock_body.read.return_value = b'{"output_metadata": "not a list"}'
-    mock_s3_client.get_object.return_value = {"Body": mock_body}
+    import boto3
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="bucket")
+    s3.put_object(Bucket="bucket", Key="metadata.json", Body=b'{"output_metadata": "not a list"}')
 
     result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
 

@@ -69,10 +69,10 @@ stop: ## Stop development server
 ##################################################
 
 test: ## Run test suite
-	uv run pytest -n auto -v
+	uv run pytest -v
 
 test-coverage: ## Run tests with coverage report
-	uv run pytest -n auto -v --cov-report=html --cov-report=term
+	uv run pytest -v --cov-report=html --cov-report=term
 
 
 ##################################################

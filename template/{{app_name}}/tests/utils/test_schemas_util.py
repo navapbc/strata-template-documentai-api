@@ -8,12 +8,9 @@ from documentai_api.utils import schemas
 
 
 @pytest.fixture(autouse=True)
-def mock_env():
+def mock_env(monkeypatch):
     """Mock environment variables."""
-    with patch.dict(
-        "os.environ", {"DDE_PROJECT_ARN": "arn:aws:bedrock:us-east-1:123:project/test"}
-    ):
-        yield
+    monkeypatch.setenv("DDE_PROJECT_ARN", "arn:aws:bedrock:us-east-1:123:project/test")
 
 
 @pytest.fixture
@@ -70,11 +67,11 @@ def test_fetch_schemas_from_bda_success(mock_bda_project, mock_bda_blueprint):
     assert result["Invoice"]["fields"][0]["name"] == "total"
 
 
-def test_fetch_schemas_from_bda_no_project_arn():
+def test_fetch_schemas_from_bda_no_project_arn(monkeypatch):
     """Return empty dict when DDE_PROJECT_ARN not set."""
-    with patch.dict("os.environ", {}, clear=True):
-        result = schemas._fetch_schemas_from_bda()
-        assert result == {}
+    monkeypatch.delenv("DDE_PROJECT_ARN", raising=False)
+    result = schemas._fetch_schemas_from_bda()
+    assert result == {}
 
 
 def test_fetch_schemas_from_bda_exception(mock_bda_project):

@@ -44,7 +44,10 @@ def main(
 
             if process_status != ProcessStatus.NOT_STARTED.value:
                 logger.info(f"Skipping {file_name} - status: {process_status}")
-                return
+                return {
+                    "skipped": True,
+                    "reason": f"File already has status: {process_status}",
+                }
         except ValueError:
             logger.error(f"No DDB record found for {file_name}")
             raise

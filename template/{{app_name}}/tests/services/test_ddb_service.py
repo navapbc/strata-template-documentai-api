@@ -1,87 +1,99 @@
 """Tests for services/ddb.py."""
 
-from unittest.mock import MagicMock, patch
-
 import pytest
+from moto import mock_aws
 
 from documentai_api.services import ddb as ddb_service
 
 
-@pytest.fixture(autouse=True)
-def mock_ddb_table():
-    with patch("documentai_api.services.ddb.AWSClientFactory.get_ddb_table") as mock_get_table:
-        mock_table = MagicMock()
-        mock_get_table.return_value = mock_table
-        yield mock_table
+@pytest.fixture
+def ddb_table(aws_credentials):
+    """Create a test DynamoDB table."""
+    import boto3
+
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+        table = dynamodb.create_table(
+            TableName="test-table",
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "id", "AttributeType": "S"},
+                {"AttributeName": "userId", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "test-index",
+                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield table
 
 
-def test_get_item(mock_ddb_table):
+@mock_aws
+def test_get_item(ddb_table):
     """Get item from DynamoDB table."""
-    mock_ddb_table.get_item.return_value = {"Item": {"id": "123", "name": "test"}}
+    ddb_table.put_item(Item={"id": "123", "name": "test"})
     result = ddb_service.get_item("test-table", {"id": "123"})
-    mock_ddb_table.get_item.assert_called_once_with(Key={"id": "123"}, ConsistentRead=True)
     assert result == {"id": "123", "name": "test"}
 
 
-def test_get_item_not_found(mock_ddb_table):
+@mock_aws
+def test_get_item_not_found(ddb_table):
     """Get item returns None when not found."""
-    mock_ddb_table.get_item.return_value = {}
     result = ddb_service.get_item("test-table", {"id": "123"})
     assert result is None
 
 
-def test_get_item_eventual_consistency(mock_ddb_table):
+@mock_aws
+def test_get_item_eventual_consistency(ddb_table):
     """Get item with eventual consistency."""
-    mock_ddb_table.get_item.return_value = {"Item": {"id": "123"}}
-    ddb_service.get_item("test-table", {"id": "123"}, consistent_read=False)
-    mock_ddb_table.get_item.assert_called_once_with(Key={"id": "123"}, ConsistentRead=False)
+    ddb_table.put_item(Item={"id": "123"})
+    result = ddb_service.get_item("test-table", {"id": "123"}, consistent_read=False)
+    assert result == {"id": "123"}
 
 
-def test_put_item(mock_ddb_table):
+@mock_aws
+def test_put_item(ddb_table):
     """Put item to DynamoDB table."""
     item = {"id": "123", "name": "test"}
     ddb_service.put_item("test-table", item)
-    mock_ddb_table.put_item.assert_called_once_with(Item=item)
+
+    response = ddb_table.get_item(Key={"id": "123"})
+    assert response["Item"] == item
 
 
-def test_update_item(mock_ddb_table):
+@mock_aws
+def test_update_item(ddb_table):
     """Update item in DynamoDB table."""
+    ddb_table.put_item(Item={"id": "123", "description": "old"})
+
     key = {"id": "123"}
-    update_expr = "SET #name = :name"
-    expr_values = {":name": "updated"}
+    update_expr = "SET description = :description"
+    expr_values = {":description": "updated"}
 
     ddb_service.update_item("test-table", key, update_expr, expr_values)
 
-    mock_ddb_table.update_item.assert_called_once_with(
-        Key=key, UpdateExpression=update_expr, ExpressionAttributeValues=expr_values
-    )
+    response = ddb_table.get_item(Key={"id": "123"})
+    assert response["Item"]["description"] == "updated"
 
 
-def test_query_by_key(mock_ddb_table):
+@mock_aws
+def test_query_by_key(ddb_table):
     """Query DynamoDB table by key using GSI."""
-    mock_ddb_table.query.return_value = {"Items": [{"id": "123"}, {"id": "456"}]}
+    ddb_table.put_item(Item={"id": "123", "userId": "user-123"})
+    ddb_table.put_item(Item={"id": "456", "userId": "user-123"})
 
-    with patch("boto3.dynamodb.conditions.Key") as mock_key_class:
-        mock_key = MagicMock()
-        mock_key_class.return_value = mock_key
-        mock_key.eq.return_value = "mocked"
+    result = ddb_service.query_by_key("test-table", "test-index", "userId", "user-123")
 
-        result = ddb_service.query_by_key("test-table", "test-index", "userId", "user-123")
-
-        assert len(result) == 2
-        assert result[0]["id"] == "123"
-        mock_ddb_table.query.assert_called_once()
+    assert len(result) == 2
+    assert {item["id"] for item in result} == {"123", "456"}
 
 
-def test_query_by_key_no_results(mock_ddb_table):
+@mock_aws
+def test_query_by_key_no_results(ddb_table):
     """Query returns empty list when no items found."""
-    mock_ddb_table.query.return_value = {}
-
-    with patch("boto3.dynamodb.conditions.Key") as mock_key_class:
-        mock_key = MagicMock()
-        mock_key_class.return_value = mock_key
-        mock_key.eq.return_value = "mocked"
-
-        result = ddb_service.query_by_key("test-table", "test-index", "userId", "user-123")
-
-        assert result == []
+    result = ddb_service.query_by_key("test-table", "test-index", "userId", "user-999")
+    assert result == []

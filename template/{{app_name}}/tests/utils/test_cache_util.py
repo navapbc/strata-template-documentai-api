@@ -1,5 +1,4 @@
-from datetime import datetime
-from unittest.mock import patch
+from freezegun import freeze_time
 
 from documentai_api.utils.cache import Cache, CacheItem, get_cache
 
@@ -23,16 +22,14 @@ def test_cache_get_missing_key():
 
 def test_cache_get_expired_item():
     cache = Cache()
-    year = datetime.now().year
 
-    with patch("documentai_api.utils.cache.datetime") as mock_datetime:
+    with freeze_time("2026-01-01 12:00:00"):
         # add item with 5 minute time-to-live
-        mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0)
         cache.add("key1", "value1", ttl_minutes=5)
 
         # try to get at 6 minutes later
-        mock_datetime.now.return_value = datetime(year, 1, 1, 12, 6)
-        assert cache.get("key1") is None
+        with freeze_time("2026-01-01 12:06:00"):
+            assert cache.get("key1") is None
 
         # verify item was removed from cache
         assert "key1" not in cache._cache

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from documentai_api.config.constants import ConfigDefaults
-from documentai_api.scripts.ddb_insert_file_name import (
+from documentai_api.tasks.ddb_insert_file_name import (
     convert_s3_object_to_grayscale,
     convert_to_grayscale,
     is_file_too_large_for_bda,
@@ -55,10 +55,14 @@ def test_convert_to_grayscale_non_image():
 def test_convert_s3_object_to_grayscale_success():
     """Test successful S3 object grayscale conversion."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get,
-        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.put_object") as mock_s3_put,
         patch(
-            "documentai_api.scripts.ddb_insert_file_name.convert_to_grayscale"
+            "documentai_api.tasks.ddb_insert_file_name.main.s3_service.get_object"
+        ) as mock_s3_get,
+        patch(
+            "documentai_api.tasks.ddb_insert_file_name.main.s3_service.put_object"
+        ) as mock_s3_put,
+        patch(
+            "documentai_api.tasks.ddb_insert_file_name.main.convert_to_grayscale"
         ) as mock_convert_to_grayscale,
     ):
         mock_s3_get.return_value = {
@@ -76,8 +80,8 @@ def test_convert_s3_object_to_grayscale_success():
 def test_main_first_time_processing_not_started():
     """Test first time processing file that goes to not_started status."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-        patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
+        patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.insert_initial_ddb_record"),
     ):
         mock_ddb_get.side_effect = [
             ValueError("Record not found"),
@@ -86,16 +90,16 @@ def test_main_first_time_processing_not_started():
 
         result = main("test-bucket", "test.pdf")
 
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_main_first_time_processing_pending_grayscale():
     """Test first time processing file that needs grayscale conversion."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-        patch("documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"),
+        patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.insert_initial_ddb_record"),
         patch(
-            "documentai_api.scripts.ddb_insert_file_name.convert_s3_object_to_grayscale"
+            "documentai_api.tasks.ddb_insert_file_name.main.convert_s3_object_to_grayscale"
         ) as mock_convert,
     ):
         mock_ddb_get.side_effect = [
@@ -106,16 +110,16 @@ def test_main_first_time_processing_pending_grayscale():
         result = main("test-bucket", "test.jpg")
 
     mock_convert.assert_called_once_with("test-bucket", "test.jpg")
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_main_second_event_grayscale_file_not_too_large():
     """Test processing grayscale file that is not too large."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.s3_service.head_object") as mock_head,
         patch(
-            "documentai_api.scripts.ddb_insert_file_name.set_bda_processing_status_not_started"
+            "documentai_api.tasks.ddb_insert_file_name.main.set_bda_processing_status_not_started"
         ) as mock_set_status,
     ):
         mock_ddb_get.return_value = {
@@ -130,16 +134,16 @@ def test_main_second_event_grayscale_file_not_too_large():
         result = main("test-bucket", "test.jpg")
 
     mock_set_status.assert_called_once_with("test.jpg")
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_main_second_event_grayscale_file_too_large():
     """Test processing grayscale file that exceeds BDA limits."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
-        patch("documentai_api.scripts.ddb_insert_file_name.s3_service.head_object") as mock_head,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.s3_service.head_object") as mock_head,
         patch(
-            "documentai_api.scripts.ddb_insert_file_name.classify_as_not_implemented"
+            "documentai_api.tasks.ddb_insert_file_name.main.classify_as_not_implemented"
         ) as mock_classify_as_not_implemented,
     ):
         mock_ddb_get.return_value = {
@@ -154,25 +158,25 @@ def test_main_second_event_grayscale_file_too_large():
         result = main("test-bucket", "test.jpg")
 
     mock_classify_as_not_implemented.assert_called_once()
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_main_already_processed():
     """Test that already processed files are skipped."""
-    with patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get:
+    with patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get:
         mock_ddb_get.return_value = {"processStatus": "success"}
 
         result = main("test-bucket", "test.pdf")
 
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_main_with_metadata():
     """Test processing with optional metadata parameters."""
     with (
-        patch("documentai_api.scripts.ddb_insert_file_name.get_ddb_record") as mock_ddb_get,
+        patch("documentai_api.tasks.ddb_insert_file_name.main.get_ddb_record") as mock_ddb_get,
         patch(
-            "documentai_api.scripts.ddb_insert_file_name.insert_initial_ddb_record"
+            "documentai_api.tasks.ddb_insert_file_name.main.insert_initial_ddb_record"
         ) as mock_insert_ddb,
     ):
         mock_ddb_get.side_effect = [
@@ -195,7 +199,7 @@ def test_main_with_metadata():
         job_id="job-123",
         trace_id="trace-456",
     )
-    assert result == {"statusCode": 200}
+    assert result is None
 
 
 def test_convert_to_grayscale_invalid_image():
@@ -256,7 +260,9 @@ def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_depende
 
 def test_convert_s3_object_to_grayscale_error():
     """Test S3 grayscale conversion handles errors gracefully."""
-    with patch("documentai_api.scripts.ddb_insert_file_name.s3_service.get_object") as mock_s3_get:
+    with patch(
+        "documentai_api.tasks.ddb_insert_file_name.main.s3_service.get_object"
+    ) as mock_s3_get:
         mock_s3_get.side_effect = Exception("S3 error")
 
         # should not raise, just log error

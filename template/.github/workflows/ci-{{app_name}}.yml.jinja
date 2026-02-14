@@ -46,6 +46,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      PYTEST_ADDOPTS: "-n auto"
     steps:
       - uses: actions/checkout@v4
 

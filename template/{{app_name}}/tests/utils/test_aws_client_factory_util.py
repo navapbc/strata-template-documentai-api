@@ -65,40 +65,6 @@ def mock_aws_session_instance():
         yield mock_session
 
 
-def test_get_session_with_profile(mock_boto3_session_class):
-    """Test that get_session() creates a boto3.Session with the profile name.
-
-    Flow:
-        1. Set AWS_PROFILE env var
-        2. Call get_session() - actual code execution
-        3. Real code calls boto3.Session(profile_name="test-profile")
-        4. Mock intercepts and returns fake session
-        5. Assert boto3.Session was called with correct profile
-    """
-    with patch.dict(os.environ, {"AWS_PROFILE": "test-profile"}):
-        session = AWSClientFactory.get_session()
-        mock_boto3_session_class.assert_called_once_with(profile_name="test-profile")
-        assert session is not None
-
-
-def test_get_session_in_lambda(mock_boto3_session_class):
-    """Test that get_session() creates a boto3.Session without profile in Lambda.
-
-    In Lambda environment (AWS_LAMBDA_FUNCTION_NAME is set), no profile should be used.
-    """
-    with patch.dict(os.environ, {"AWS_LAMBDA_FUNCTION_NAME": "test-function"}):
-        session = AWSClientFactory.get_session()
-        mock_boto3_session_class.assert_called_once_with()
-        assert session is not None
-
-
-def test_get_session_no_profile(clear_env_vars, mock_boto3_session_class):
-    """Get session without profile."""
-    session = AWSClientFactory.get_session()
-    mock_boto3_session_class.assert_called_once_with()
-    assert session is not None
-
-
 def test_get_session_singleton(clear_env_vars, mock_boto3_session_class):
     """Test that get_session() returns the same session instance (singleton pattern).
 

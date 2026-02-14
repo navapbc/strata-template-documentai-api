@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from documentai_api.scripts.bda_output_processor import extract_uploaded_filename, main
+from documentai_api.tasks.bda_output_processor import extract_uploaded_filename, main
 
 
 @pytest.mark.parametrize(
@@ -40,7 +40,7 @@ def test_extract_uploaded_filename_invalid_path(invalid_key):
 def test_main_success():
     """Test successful BDA output processing."""
     with patch(
-        "documentai_api.scripts.bda_output_processor.get_api_response_data"
+        "documentai_api.tasks.bda_output_processor.main.process_bda_output"
     ) as mock_get_data:
         mock_get_data.return_value = {"status": "success", "data": {"field1": "value1"}}
         result = main("test-bucket", "processed/test-file.pdf/output.json")
@@ -54,7 +54,7 @@ def test_main_success():
 def test_main_with_truncated_filename():
     """Test processing BDA output with truncated filename."""
     with patch(
-        "documentai_api.scripts.bda_output_processor.get_api_response_data"
+        "documentai_api.tasks.bda_output_processor.main.process_bda_output"
     ) as mock_get_data:
         mock_get_data.return_value = {"status": "success"}
         main("test-bucket", "processed/long_truncated.pdf/output.json")
