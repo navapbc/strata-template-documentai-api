@@ -69,7 +69,7 @@ def get_internal_api_response(
         InternalApiResponse: Response object for API endpoints
     """
     # import here to avoid circular dependency
-    from utils.ddb import get_user_provided_document_category
+    from documentai_api.utils.ddb import get_user_provided_document_category
 
     user_provided_document_category = get_user_provided_document_category(object_key)
 
@@ -100,12 +100,8 @@ def build_v1_api_response(
         dict: Response data for DDB JSON storage
     """
     status = status.value if isinstance(status, ProcessStatus) else status
-    print(
-        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
-    )
-    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
 
-    from utils.ddb import get_ddb_record
+    from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
     job_id = ddb_record.get(DocumentMetadata.JOB_ID)

@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import random
 from datetime import UTC, datetime
@@ -15,6 +14,7 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.services import sqs as sqs_service
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
@@ -24,8 +24,7 @@ from documentai_api.utils.models import (
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -37,9 +36,7 @@ def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
             return parts[3]  # Region is the 4th part
         return None
     except Exception as e:
-        msg = f"Failed to extract region from ARN {bda_invocation_arn}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to extract region from ARN {bda_invocation_arn}: {e}")
         return None
 
 
@@ -64,24 +61,18 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
             created_at = datetime.fromisoformat(created_at_str)
             total_processing_time_seconds = get_elapsed_time_seconds(created_at, completion_time)
             timing_data.total_processing_time_seconds = total_processing_time_seconds
-            msg = f"Total processing time: {total_processing_time_seconds:.2f} seconds"
-            print(msg)
-            logger.info(msg)
+            logger.info(f"Total processing time: {total_processing_time_seconds:.2f} seconds")
 
         if bda_started_at_str:
             bda_started_at = datetime.fromisoformat(bda_started_at_str)
             bda_processing_time_seconds = get_elapsed_time_seconds(bda_started_at, completion_time)
             timing_data.bda_processing_time_seconds = bda_processing_time_seconds
-            msg = f"BDA processing time: {bda_processing_time_seconds:.2f} seconds"
-            print(msg)
-            logger.info(msg)
+            logger.info(f"BDA processing time: {bda_processing_time_seconds:.2f} seconds")
 
         return timing_data
 
     except Exception as e:
-        msg = f"Failed to calculate completion timing: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to calculate completion timing: {e}")
         return ProcessingTimes()
 
 
@@ -171,9 +162,7 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
             updates.append(f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds")
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
-            msg = f"Failed to calculate bda wait time for {object_key}: {e}"
-            print(msg)
-            logger.error(msg)
+            logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
     elif status in PROCESSING_STATUS_COMPLETED:
         completion_updates, completion_values = _build_completion_timing(object_key)
@@ -245,7 +234,7 @@ def _build_update_expression(
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
-            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE
+            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
@@ -310,7 +299,7 @@ def get_user_provided_document_category(object_key: str) -> str:
     )
 
     if not user_provided_document_category:
-        raise ValueError(f"User specified document type not found for file: {object_key}")
+        logger.warning(f"User specified document type not found for file: {object_key}")
 
     return user_provided_document_category
 
@@ -327,9 +316,7 @@ def get_ddb_record(object_key: str) -> dict:
 
         return item
     except Exception as e:
-        msg = f"Failed to get DDB record for {object_key}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to get DDB record for {object_key}: {e}")
         raise
 
 
@@ -399,8 +386,8 @@ def insert_ddb(
     pages_detected: int | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-    is_password_protected: bool = False,
-    is_document_blurry: bool = False,
+    is_password_protected: bool | None = False,
+    is_document_blurry: bool | None = False,
     document_profile_raw_metrics=None,
     document_profile_normalized_metrics=None,
     overall_blur_score=None,
@@ -412,7 +399,8 @@ def insert_ddb(
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
+                user_provided_document_category
+                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
             ),
             DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
             DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
@@ -422,6 +410,7 @@ def insert_ddb(
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
+
         if pages_detected is not None:
             item[DocumentMetadata.PAGES_DETECTED] = pages_detected
 
@@ -456,9 +445,7 @@ def insert_ddb(
         ddb_service.put_item(table_name, item)
 
     except Exception as e:
-        msg = f"Failed to create DDB record for {object_key}: {e}"
-        print(msg)
-        logger.error(msg)
+        logger.error(f"Failed to create DDB record for {object_key}: {e}")
         raise
 
 
@@ -475,18 +462,16 @@ def insert_initial_ddb_record(
     # has OpenCV/Poppler layers attached. including this import at the top of the
     # file will cause the  container deployment to fail with a ModuleNotFoundError:
     # No module named 'cv2' error
-    from utils.document_detector import (
+    from documentai_api.utils.document_detector import (
         DocumentDetector,
         QualityMetricsNormalized,
         QualityMetricsRaw,
     )
 
-    print(
-        f"DEBUG: About to call insert_initial_ddb_record with job_id={job_id}, trace_id={trace_id}"
-    )
-
     if not user_provided_document_category:
-        print(f"Warning: user_provided_document_category is None/empty for {source_object_key}")
+        logger.warning(
+            f"Warning: user_provided_document_category is None/empty for {source_object_key}"
+        )
         user_provided_document_category = "unknown"
 
     document_detector = DocumentDetector()
@@ -536,21 +521,21 @@ def insert_initial_ddb_record(
                 process_status = ProcessStatus.NOT_STARTED
 
             if is_multipage_detection_enabled and file_bytes:
-                print("=== Starting multi-page detection validation ===")
+                logger.info("=== Starting multi-page detection validation ===")
 
                 try:
                     if document_detector.is_multipage_document(file_bytes):
-                        print(f"{source_object_key} is a multipage doc")
+                        logger.info(f"{source_object_key} is a multipage doc")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
                     else:
-                        print(f"{source_object_key} is a single page doc")
+                        logger.info(f"{source_object_key} is a single page doc")
 
                 except Exception as e:
-                    print(f"=== Multipage detection failed: {e} ===")
+                    logger.info(f"=== Multipage detection failed: {e} ===")
 
-            print("=== Finished multi-page detection validation ===")
+            logger.info("=== Finished multi-page detection validation ===")
 
     else:
         process_status = ProcessStatus.NOT_SAMPLED
