@@ -13,16 +13,6 @@ from documentai_api.tasks.ddb_insert_file_name import (
 )
 
 
-@pytest.fixture
-def mock_grayscale_dependencies():
-    with (
-        patch("cv2.imdecode") as mock_cv2_imdecode,
-        patch("cv2.cvtColor") as mock_cv2_cvtcolor,
-        patch("PIL.Image.fromarray") as mock_pil_fromarray,
-    ):
-        yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
-
-
 @pytest.mark.parametrize(
     ("content_type", "file_size", "expected"),
     [

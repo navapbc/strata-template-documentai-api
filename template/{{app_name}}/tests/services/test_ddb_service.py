@@ -1,35 +1,8 @@
 """Tests for services/ddb.py."""
 
-import pytest
 from moto import mock_aws
 
 from documentai_api.services import ddb as ddb_service
-
-
-@pytest.fixture
-def ddb_table(aws_credentials):
-    """Create a test DynamoDB table."""
-    import boto3
-
-    with mock_aws():
-        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-        table = dynamodb.create_table(
-            TableName="test-table",
-            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-            AttributeDefinitions=[
-                {"AttributeName": "id", "AttributeType": "S"},
-                {"AttributeName": "userId", "AttributeType": "S"},
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    "IndexName": "test-index",
-                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
-                    "Projection": {"ProjectionType": "ALL"},
-                }
-            ],
-            BillingMode="PAY_PER_REQUEST",
-        )
-        yield table
 
 
 @mock_aws

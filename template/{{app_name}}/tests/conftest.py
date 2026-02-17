@@ -1,6 +1,9 @@
 """Shared test fixtures."""
 
+from unittest.mock import patch
+
 import pytest
+from moto import mock_aws
 
 
 @pytest.fixture
@@ -11,3 +14,75 @@ def aws_credentials(monkeypatch):
     monkeypatch.setenv("AWS_SECURITY_TOKEN", "testing")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+
+
+@pytest.fixture
+def s3_bucket(aws_credentials):
+    """Create a test S3 bucket."""
+    import boto3
+
+    with mock_aws():
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket="test-bucket")
+        yield s3
+
+
+@pytest.fixture
+def ddb_table(aws_credentials):
+    """Create a test DynamoDB table."""
+    import boto3
+
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+        table = dynamodb.create_table(
+            TableName="test-table",
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "id", "AttributeType": "S"},
+                {"AttributeName": "userId", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "test-index",
+                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield table
+
+
+@pytest.fixture
+def mock_bda_clients():
+    """Mock BDA clients (not supported by moto yet)."""
+    with (
+        patch("documentai_api.services.bda.AWSClientFactory.get_bda_client") as mock_bda,
+        patch(
+            "documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client"
+        ) as mock_bda_runtime,
+    ):
+        yield {
+            "bda": mock_bda.return_value,
+            "bda_runtime": mock_bda_runtime.return_value,
+        }
+
+
+@pytest.fixture
+def mock_bda_client(mock_bda_clients):
+    return mock_bda_clients["bda"]
+
+
+@pytest.fixture
+def mock_bda_runtime_client(mock_bda_clients):
+    return mock_bda_clients["bda_runtime"]
+
+
+@pytest.fixture
+def mock_grayscale_dependencies():
+    with (
+        patch("cv2.imdecode") as mock_cv2_imdecode,
+        patch("cv2.cvtColor") as mock_cv2_cvtcolor,
+        patch("PIL.Image.fromarray") as mock_pil_fromarray,
+    ):
+        yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray

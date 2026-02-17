@@ -74,6 +74,11 @@ test: ## Run test suite
 test-coverage: ## Run tests with coverage report
 	uv run pytest -v --cov-report=html --cov-report=term
 
+test-parallel: ## Run test suite in parallel
+	PYTEST_ADDOPTS="-n auto" $(MAKE) test
+
+test-coverage-parallel: ## Run test suite in parallel with coverage report
+	PYTEST_ADDOPTS="-n auto" $(MAKE) test-coverage
 
 ##################################################
 # Lint / Format

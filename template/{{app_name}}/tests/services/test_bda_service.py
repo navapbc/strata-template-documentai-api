@@ -1,36 +1,8 @@
 """Tests for services/bda.py."""
 
-from unittest.mock import patch
-
-import pytest
 from moto import mock_aws
 
 from documentai_api.services import bda as bda_service
-
-
-@pytest.fixture
-def mock_bda_clients():
-    """Mock BDA clients (not supported by moto yet)."""
-    with (
-        patch("documentai_api.services.bda.AWSClientFactory.get_bda_client") as mock_bda,
-        patch(
-            "documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client"
-        ) as mock_bda_runtime,
-    ):
-        yield {
-            "bda": mock_bda.return_value,
-            "bda_runtime": mock_bda_runtime.return_value,
-        }
-
-
-@pytest.fixture
-def mock_bda_client(mock_bda_clients):
-    return mock_bda_clients["bda"]
-
-
-@pytest.fixture
-def mock_bda_runtime_client(mock_bda_clients):
-    return mock_bda_clients["bda_runtime"]
 
 
 def test_get_data_automation_project(mock_bda_client):
@@ -91,15 +63,13 @@ def test_get_data_automation_job(mock_bda_runtime_client):
 
 
 @mock_aws
-def test_get_bda_result_json_success(aws_credentials):
+def test_get_bda_result_json_success(s3_bucket):
     """Read BDA result JSON from S3."""
-    import boto3
+    s3_bucket.put_object(
+        Bucket="test-bucket", Key="path/to/result.json", Body=b'{"result": "success"}'
+    )
 
-    s3 = boto3.client("s3", region_name="us-east-1")
-    s3.create_bucket(Bucket="my-bucket")
-    s3.put_object(Bucket="my-bucket", Key="path/to/result.json", Body=b'{"result": "success"}')
-
-    result = bda_service.get_bda_result_json("s3://my-bucket/path/to/result.json")
+    result = bda_service.get_bda_result_json("s3://test-bucket/path/to/result.json")
 
     assert result == {"result": "success"}
 
@@ -136,64 +106,50 @@ def test_get_bda_job_response_exception(mock_bda_runtime_client):
 
 
 @mock_aws
-def test_extract_bda_output_s3_uri_custom_path(aws_credentials):
+def test_extract_bda_output_s3_uri_custom_path(s3_bucket):
     """Extract custom output path from job metadata."""
-    import boto3
-
-    s3 = boto3.client("s3", region_name="us-east-1")
-    s3.create_bucket(Bucket="bucket")
-    s3.put_object(
-        Bucket="bucket",
+    s3_bucket.put_object(
+        Bucket="test-bucket",
         Key="metadata.json",
-        Body=b"""{"output_metadata": [{"segment_metadata": [{"custom_output_path": "s3://bucket/custom/output.json"}]}]}""",
+        Body=b"""{"output_metadata": [{"segment_metadata": [{"custom_output_path": "s3://test-bucket/custom/output.json"}]}]}""",
     )
 
-    result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 
-    assert result == "s3://bucket/custom/output.json"
+    assert result == "s3://test-bucket/custom/output.json"
 
 
 @mock_aws
-def test_extract_bda_output_s3_uri_standard_path(aws_credentials):
+def test_extract_bda_output_s3_uri_standard_path(s3_bucket):
     """Extract standard output path from job metadata."""
-    import boto3
-
-    s3 = boto3.client("s3", region_name="us-east-1")
-    s3.create_bucket(Bucket="bucket")
-    s3.put_object(
-        Bucket="bucket",
+    s3_bucket.put_object(
+        Bucket="test-bucket",
         Key="metadata.json",
-        Body=b"""{"output_metadata": [{"segment_metadata": [{"standard_output_path": "s3://bucket/standard/output.json"}]}]}""",
+        Body=b"""{"output_metadata": [{"segment_metadata": [{"standard_output_path": "s3://test-bucket/standard/output.json"}]}]}""",
     )
 
-    result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 
-    assert result == "s3://bucket/standard/output.json"
+    assert result == "s3://test-bucket/standard/output.json"
 
 
 @mock_aws
-def test_extract_bda_output_s3_uri_no_path(aws_credentials):
+def test_extract_bda_output_s3_uri_no_path(s3_bucket):
     """Return None when no output path found."""
-    import boto3
+    s3_bucket.put_object(Bucket="test-bucket", Key="metadata.json", Body=b'{"output_metadata": []}')
 
-    s3 = boto3.client("s3", region_name="us-east-1")
-    s3.create_bucket(Bucket="bucket")
-    s3.put_object(Bucket="bucket", Key="metadata.json", Body=b'{"output_metadata": []}')
-
-    result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 
     assert result is None
 
 
 @mock_aws
-def test_extract_bda_output_s3_uri_malformed(aws_credentials):
+def test_extract_bda_output_s3_uri_malformed(s3_bucket):
     """Return None when metadata is malformed."""
-    import boto3
+    s3_bucket.put_object(
+        Bucket="test-bucket", Key="metadata.json", Body=b'{"output_metadata": "not a list"}'
+    )
 
-    s3 = boto3.client("s3", region_name="us-east-1")
-    s3.create_bucket(Bucket="bucket")
-    s3.put_object(Bucket="bucket", Key="metadata.json", Body=b'{"output_metadata": "not a list"}')
-
-    result = bda_service.extract_bda_output_s3_uri("bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 
     assert result is None

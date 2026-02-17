@@ -1,20 +1,8 @@
 """Tests for S3 Service methods."""
 
-import pytest
 from moto import mock_aws
 
 from documentai_api.services import s3 as s3_service
-
-
-@pytest.fixture
-def s3_bucket(aws_credentials):
-    """Create a test S3 bucket."""
-    import boto3
-
-    with mock_aws():
-        s3 = boto3.client("s3", region_name="us-east-1")
-        s3.create_bucket(Bucket="test-bucket")
-        yield s3
 
 
 @mock_aws
