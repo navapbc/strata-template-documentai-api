@@ -5,14 +5,16 @@ import logging
 import os
 
 from documentai_api.tasks.metrics_processor.main import process_batch
+from documentai_api.utils.error_handling import handle_lambda_errors
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+@handle_lambda_errors
 def handler(event, context):
-    """
-    Lambda handler triggered by EventBridge schedule.
+    """Lambda handler triggered by EventBridge schedule.
+
     Processes metrics from SQS queue and writes to S3.
     """
     queue_url = os.environ["DDE_METRICS_QUEUE_URL"]
@@ -26,7 +28,7 @@ def handler(event, context):
     for batch_num in range(max_batches):
         logger.info(f"Processing batch {batch_num + 1}/{max_batches}")
 
-        processed = process_batch(queue_url, bucket_name, max_messages, logger)
+        processed = process_batch(queue_url, bucket_name, max_messages)
         total_processed += processed
 
         if processed == 0:

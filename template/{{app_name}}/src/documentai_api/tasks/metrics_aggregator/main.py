@@ -1,0 +1,236 @@
+"""Daily metrics aggregation job.
+
+Aggregates previous day's metrics data from S3 via Athena queries.
+Writes aggregated stats to S3 for historical analysis.
+"""
+
+import json
+import os
+import re
+import time
+from datetime import datetime
+
+from botocore.exceptions import ClientError
+
+from documentai_api.utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _validate_agg_date_format(date_str: str) -> datetime:
+    """Validate date format is YYYY-MM-DD."""
+    # strict regex check to prevent invalid formats '%Y-%m-%d is lienent and
+    # parses "2026-2-20" as valid, use regex to enforce leading zeros
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+        raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD.")
+
+    return datetime.strptime(date_str, "%Y-%m-%d")
+
+
+def _build_deduplication_query(database_name: str, table_name: str, target_date: str) -> str:
+    """Build Athena query to deduplicate records for the target date."""
+    # use row_number window function to get latest record per file_name, in the
+    # off chance there are duplicate record by file name and created_at. this is
+    # a safeguard to ensure we don't double count records in the aggregation if
+    # duplicates exist.
+    #
+    # note: do not cast created_at to a string. it will prevent athena from partition
+    # pruning and cause full table scan, which can lead to timeouts and higher costs
+    query = f"""
+    WITH ranked_records AS (
+        SELECT
+            *,
+            ROW_NUMBER() OVER (
+                PARTITION BY file_name
+                ORDER BY updated_at DESC
+            ) AS rn
+        FROM {database_name}.{table_name}
+        WHERE created_at = '{target_date}'
+    )
+    SELECT *
+    FROM ranked_records
+    WHERE rn = 1
+    """
+    return query
+
+
+def _aggregate_records(records: list[dict], target_date: str) -> dict:
+    """Aggregate records into stats. Pure function for easy testing."""
+    stats = _initialize_stats(target_date)
+
+    for record in records:
+        _process_record(record, stats)
+
+    return stats
+
+
+def _execute_athena_query(query: str, database_name: str, output_location: str) -> str:
+    """Execute Athena query and return execution ID."""
+    athena = AWSClientFactory.get_athena_client()
+
+    response = athena.start_query_execution(
+        QueryString=query,
+        QueryExecutionContext={"Database": database_name},
+        ResultConfiguration={"OutputLocation": output_location},
+    )
+
+    return response["QueryExecutionId"]
+
+
+def _get_athena_results(execution_id: str) -> list[dict]:
+    """Get results from completed Athena query."""
+    athena = AWSClientFactory.get_athena_client()
+
+    # wait for query completion
+    while True:
+        response = athena.get_query_execution(QueryExecutionId=execution_id)
+        status = response["QueryExecution"]["Status"]["State"]
+
+        if status in ["SUCCEEDED", "FAILED", "CANCELLED"]:
+            break
+        time.sleep(1)
+
+    if status != "SUCCEEDED":
+        raise Exception(f"Query failed with status: {status}")
+
+    # get results
+    results = []
+    paginator = athena.get_paginator("get_query_results")
+
+    for page in paginator.paginate(QueryExecutionId=execution_id):
+        for row in page["ResultSet"]["Rows"][1:]:  # Skip header
+            record = {}
+            for i, col in enumerate(page["ResultSet"]["ResultSetMetadata"]["ColumnInfo"]):
+                record[col["Name"]] = row["Data"][i].get("VarCharValue", "")
+            results.append(record)
+
+    return results
+
+
+def _check_if_previously_aggregated(bucket: str, target_date: str) -> bool:
+    """Check if stats already exist for the given date."""
+    s3 = AWSClientFactory.get_s3_client()
+    s3_key = f"aggregated/date={target_date}/stats.json"
+
+    try:
+        s3.head_object(Bucket=bucket, Key=s3_key)
+        return True
+    except ClientError:
+        return False
+
+
+def _initialize_stats(target_date: str) -> dict:
+    """Initialize empty stats structure."""
+    return {
+        "date": target_date,
+        "total_records": 0,
+        "by_status": {},
+        "by_hour": {},
+        "by_document_type": {},
+        "processing_times": {
+            "total_processing_time_sum": 0,
+            "total_processing_time_count": 0,
+            "bda_processing_time_sum": 0,
+            "bda_processing_time_count": 0,
+        },
+    }
+
+
+def _process_record(record: dict, stats: dict):
+    """Process a single record into aggregation stats."""
+    stats["total_records"] += 1
+
+    # count by status
+    status = record.get("process_status", "unknown")
+    stats["by_status"][status] = stats["by_status"].get(status, 0) + 1
+
+    # count by hour
+    created_at = record.get("created_at")
+    if created_at:
+        try:
+            dt = datetime.fromisoformat(created_at)
+            hour = dt.hour
+            stats["by_hour"][hour] = stats["by_hour"].get(hour, 0) + 1
+        except (ValueError, TypeError):
+            pass
+
+    # count by document type
+    doc_type = record.get("bda_matched_blueprint_name", "unclassified")
+    stats["by_document_type"][doc_type] = stats["by_document_type"].get(doc_type, 0) + 1
+
+    # processing times
+    total_time = record.get("total_processing_time_seconds")
+    if total_time:
+        try:
+            stats["processing_times"]["total_processing_time_sum"] += float(total_time)
+            stats["processing_times"]["total_processing_time_count"] += 1
+        except (ValueError, TypeError):
+            pass
+
+    bda_time = record.get("bda_processing_time_seconds")
+    if bda_time:
+        try:
+            stats["processing_times"]["bda_processing_time_sum"] += float(bda_time)
+            stats["processing_times"]["bda_processing_time_count"] += 1
+        except (ValueError, TypeError):
+            pass
+
+
+def _write_aggregated_stats(bucket: str, stats: dict, target_date: str):
+    """Write aggregated stats to S3."""
+    s3 = AWSClientFactory.get_s3_client()
+
+    s3_key = f"aggregated/date={target_date}/stats.json"
+
+    s3.put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=json.dumps(stats, default=str),
+        ContentType="application/json",
+    )
+
+    logger.info(f"Aggregated stats written to s3://{bucket}/{s3_key}")
+    return s3_key
+
+
+def main(target_date: str, overwrite: bool = False) -> dict:
+    """Aggregate metrics for a specific date.
+
+    Args:
+        target_date: Date to aggregate in YYYY-MM-DD format (required).
+
+    Returns:
+        Dict with statusCode, date, recordsProcessed, and outputLocation.
+    """
+    # validate YYYY-MM-DD format, will raise ValueError if invalid
+    _validate_agg_date_format(target_date)
+
+    database_name = os.getenv("DDE_GLUE_DATABASE_NAME")
+    table_name = os.getenv("DDE_METRICS_RAW_TABLE_NAME")
+    athena_results_bucket = os.getenv("DDE_ATHENA_RESULTS_BUCKET_NAME")
+    metrics_bucket = os.getenv("DDE_METRICS_BUCKET_NAME")
+
+    if not overwrite and _check_if_previously_aggregated(metrics_bucket, target_date):
+        s3_key = f"aggregated/date={target_date}/stats.json"
+        logger.info(f"Stats for {target_date} already exist, skipping")
+        return {
+            "statusCode": 200,
+            "date": target_date,
+            "message": "Already aggregated",
+            "outputLocation": f"s3://{metrics_bucket}/{s3_key}",
+        }
+
+    query = _build_deduplication_query(database_name, table_name, target_date)
+    output_location = f"s3://{athena_results_bucket}/daily_aggregate_results/"
+    execution_id = _execute_athena_query(query, database_name, output_location)
+    records = _get_athena_results(execution_id)
+    stats = _aggregate_records(records, target_date)
+    s3_key = _write_aggregated_stats(metrics_bucket, stats, target_date)
+
+    return {
+        "statusCode": 200,
+        "date": target_date,
+        "recordsProcessed": stats["total_records"],
+        "outputLocation": f"s3://{metrics_bucket}/{s3_key}",
+    }

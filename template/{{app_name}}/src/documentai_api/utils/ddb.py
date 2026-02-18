@@ -255,8 +255,7 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
 
 
 def _send_to_sqs(object_key: str):
-    """Write object key to SQS queue"""
-    
+    """Write object key to SQS queue."""
     try:
         queue_url = os.getenv("DDE_METRICS_QUEUE_URL")
 
@@ -266,13 +265,12 @@ def _send_to_sqs(object_key: str):
             logger.warning(msg)
             # do not raise an exception here. metrics are optional and shouldn't
             # prevent process from completing successfully
-            return 
-
+            return
 
         table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
         key = {"fileName": object_key}
         ddb_record = ddb_service.get_item(table_name, key)
-        
+
         if not ddb_record:
             logger.warning(f"DDB record not found for {object_key}, skipping metrics")
             # do not raise an exception here. metrics are optional and shouldn't
@@ -284,7 +282,6 @@ def _send_to_sqs(object_key: str):
 
     except Exception as e:
         logger.error(f"Failed to send {object_key} to SQS queue: {e}")
-
 
 
 def get_user_provided_document_category(object_key: str) -> str:
@@ -338,9 +335,9 @@ def update_ddb(
     internal_api_response: InternalApiResponse,
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
-    error_message: str = None,
+    error_message: str | None = None,
 ):
-    """Update DynamoDB processing status for a file"""
+    """Update DynamoDB processing status for a file."""
     try:
         # build base update expression (without v1_response)
         update_expr, expr_values = _build_update_expression(
