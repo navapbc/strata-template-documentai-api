@@ -3,6 +3,7 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Annotated
 
 import magic
@@ -21,6 +22,7 @@ from documentai_api.config.constants import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils.dates import validate_yyyymmdd_format
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
@@ -335,6 +337,47 @@ async def get_schema(document_type: str):
         )
 
     return schema
+
+
+@app.get("/v1/metrics/")
+async def get_metrics(start_date: str, end_date: str | None = None):
+    """Get aggregated metrics for date range.
+
+    Args:
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD), defaults to start_date + 30 days if not provided
+    """
+    try:
+        validate_yyyymmdd_format(start_date)
+
+        if end_date:
+            validate_yyyymmdd_format(end_date)
+        else:
+            # end date defaults to 30 days if no end date provided
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date = (start_dt + timedelta(days=30)).strftime("%Y-%m-%d")
+
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=400, detail="start_date must be before or equal to end_date"
+            )
+
+        metrics_bucket = os.getenv("DDE_METRICS_BUCKET_NAME")
+
+        if not metrics_bucket:
+            raise HTTPException(status_code=500, detail="Metrics bucket not configured")
+
+        from documentai_api.services.metrics import get_aggregated_metrics
+
+        return get_aggregated_metrics(metrics_bucket, start_date, end_date)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve metrics") from e
 
 
 if __name__ == "__main__":

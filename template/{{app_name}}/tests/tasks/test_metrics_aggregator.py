@@ -9,7 +9,6 @@ from documentai_api.tasks.metrics_aggregator.main import (
     _aggregate_records,
     _build_deduplication_query,
     _check_if_previously_aggregated,
-    _validate_agg_date_format,
     _write_aggregated_stats,
     main,
 )
@@ -18,7 +17,7 @@ from documentai_api.tasks.metrics_aggregator.main import (
 def create_record(
     status="success",
     created_at="2026-02-20T10:00:00Z",
-    doc_type="W2",
+    blueprint_name="W2",
     total_time=None,
     bda_time=None,
 ):
@@ -27,36 +26,13 @@ def create_record(
         "file_name": "test.pdf",
         "process_status": status,
         "created_at": created_at,
-        "bda_matched_blueprint_name": doc_type,
+        "bda_matched_blueprint_name": blueprint_name,
     }
     if total_time:
         record["total_processing_time_seconds"] = str(total_time)
     if bda_time:
         record["bda_processing_time_seconds"] = str(bda_time)
     return record
-
-
-def test_validate_agg_date_format_valid():
-    """Test valid date formats."""
-    _validate_agg_date_format("2026-02-20")  # should not raise
-
-
-@pytest.mark.parametrize(
-    "invalid_date",
-    [
-        "2026-2-20",  # missing leading zero
-        "2026/02/20",  # incorrect separator
-        "20-02-2026",  # incorrect order
-        "2026-13-01",  # invalid month
-        "2026-02-30",  # invalid day
-        "not-a-date",  # invalid
-        "",  # empty string
-    ],
-)
-def test_validate_agg_date_format_invalid(invalid_date):
-    """Test invalid date formats raise ValueError."""
-    with pytest.raises(ValueError):  # noqa: PT011
-        _validate_agg_date_format(invalid_date)
 
 
 def test_build_deduplication_query():
@@ -79,6 +55,16 @@ def test_aggregate_records_empty():
     assert stats["total_records"] == 0
     assert stats["by_status"] == {}
     assert stats["by_hour"] == {}
+    assert stats["by_classification"] == {}
+    assert stats["by_response_code"] == {}
+    assert stats["timing_stats"] == {
+        "total_processing_time_sum": 0,
+        "total_processing_time_count": 0,
+        "bda_processing_time_sum": 0,
+        "bda_processing_time_count": 0,
+        "bda_wait_time_sum": 0,
+        "bda_wait_time_count": 0,
+    }
 
 
 def test_aggregate_records_single_record():
@@ -86,7 +72,7 @@ def test_aggregate_records_single_record():
     record = create_record(
         status="success",
         created_at="2026-02-20T10:30:00Z",
-        doc_type="W2",
+        blueprint_name="W2",
         total_time=5.5,
         bda_time=3.2,
     )
@@ -95,12 +81,12 @@ def test_aggregate_records_single_record():
 
     assert stats["total_records"] == 1
     assert stats["by_status"]["success"] == 1
-    assert stats["by_hour"][10] == 1
-    assert stats["by_document_type"]["W2"] == 1
-    assert stats["processing_times"]["total_processing_time_sum"] == 5.5
-    assert stats["processing_times"]["total_processing_time_count"] == 1
-    assert stats["processing_times"]["bda_processing_time_sum"] == 3.2
-    assert stats["processing_times"]["bda_processing_time_count"] == 1
+    assert stats["by_hour"]["10"] == 1
+    assert stats["by_classification"]["W2"] == 1
+    assert stats["timing_stats"]["total_processing_time_sum"] == 5.5
+    assert stats["timing_stats"]["total_processing_time_count"] == 1
+    assert stats["timing_stats"]["bda_processing_time_sum"] == 3.2
+    assert stats["timing_stats"]["bda_processing_time_count"] == 1
 
 
 def test_aggregate_records_multiple_records():
@@ -108,7 +94,7 @@ def test_aggregate_records_multiple_records():
     records = [
         create_record(status="success", created_at="2026-02-20T10:00:00Z", total_time=5.0),
         create_record(status="success", created_at="2026-02-20T10:30:00Z", total_time=3.0),
-        create_record(status="failed", created_at="2026-02-20T11:00:00Z", doc_type="1099"),
+        create_record(status="failed", created_at="2026-02-20T11:00:00Z", blueprint_name="1099"),
     ]
 
     stats = _aggregate_records(records, "2026-02-20")
@@ -116,12 +102,12 @@ def test_aggregate_records_multiple_records():
     assert stats["total_records"] == 3
     assert stats["by_status"]["success"] == 2
     assert stats["by_status"]["failed"] == 1
-    assert stats["by_hour"][10] == 2
-    assert stats["by_hour"][11] == 1
-    assert stats["by_document_type"]["W2"] == 2
-    assert stats["by_document_type"]["1099"] == 1
-    assert stats["processing_times"]["total_processing_time_sum"] == 8.0
-    assert stats["processing_times"]["total_processing_time_count"] == 2
+    assert stats["by_hour"]["10"] == 2
+    assert stats["by_hour"]["11"] == 1
+    assert stats["by_classification"]["W2"] == 2
+    assert stats["by_classification"]["1099"] == 1
+    assert stats["timing_stats"]["total_processing_time_sum"] == 8.0
+    assert stats["timing_stats"]["total_processing_time_count"] == 2
 
 
 @mock_aws

@@ -6,26 +6,16 @@ Writes aggregated stats to S3 for historical analysis.
 
 import json
 import os
-import re
 import time
 from datetime import datetime
 
 from botocore.exceptions import ClientError
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
+from documentai_api.utils.dates import validate_yyyymmdd_format
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-def _validate_agg_date_format(date_str: str) -> datetime:
-    """Validate date format is YYYY-MM-DD."""
-    # strict regex check to prevent invalid formats '%Y-%m-%d is lienent and
-    # parses "2026-2-20" as valid, use regex to enforce leading zeros
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
-        raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD.")
-
-    return datetime.strptime(date_str, "%Y-%m-%d")
 
 
 def _build_deduplication_query(database_name: str, table_name: str, target_date: str) -> str:
@@ -125,14 +115,18 @@ def _initialize_stats(target_date: str) -> dict:
     return {
         "date": target_date,
         "total_records": 0,
+        "total_bda_invocations": 0,
         "by_status": {},
+        "by_classification": {},
+        "by_response_code": {},
         "by_hour": {},
-        "by_document_type": {},
-        "processing_times": {
+        "timing_stats": {
             "total_processing_time_sum": 0,
             "total_processing_time_count": 0,
             "bda_processing_time_sum": 0,
             "bda_processing_time_count": 0,
+            "bda_wait_time_sum": 0,
+            "bda_wait_time_count": 0,
         },
     }
 
@@ -145,34 +139,52 @@ def _process_record(record: dict, stats: dict):
     status = record.get("process_status", "unknown")
     stats["by_status"][status] = stats["by_status"].get(status, 0) + 1
 
+    # count by classification (blueprint name)
+    classification = record.get("bda_matched_blueprint_name") or "null"
+    stats["by_classification"][classification] = (
+        stats["by_classification"].get(classification, 0) + 1
+    )
+
+    # count by response code
+    response_code = record.get("response_code") or "null"
+    stats["by_response_code"][response_code] = stats["by_response_code"].get(response_code, 0) + 1
+
+    # count BDA invocations
+    if record.get("bda_invocation_arn"):
+        stats["total_bda_invocations"] += 1
+
     # count by hour
     created_at = record.get("created_at")
     if created_at:
         try:
             dt = datetime.fromisoformat(created_at)
-            hour = dt.hour
+            hour = str(dt.hour)  # store as string to match production
             stats["by_hour"][hour] = stats["by_hour"].get(hour, 0) + 1
         except (ValueError, TypeError):
             pass
 
-    # count by document type
-    doc_type = record.get("bda_matched_blueprint_name", "unclassified")
-    stats["by_document_type"][doc_type] = stats["by_document_type"].get(doc_type, 0) + 1
-
-    # processing times
+    # timing stats
     total_time = record.get("total_processing_time_seconds")
     if total_time:
         try:
-            stats["processing_times"]["total_processing_time_sum"] += float(total_time)
-            stats["processing_times"]["total_processing_time_count"] += 1
+            stats["timing_stats"]["total_processing_time_sum"] += float(total_time)
+            stats["timing_stats"]["total_processing_time_count"] += 1
         except (ValueError, TypeError):
             pass
 
     bda_time = record.get("bda_processing_time_seconds")
     if bda_time:
         try:
-            stats["processing_times"]["bda_processing_time_sum"] += float(bda_time)
-            stats["processing_times"]["bda_processing_time_count"] += 1
+            stats["timing_stats"]["bda_processing_time_sum"] += float(bda_time)
+            stats["timing_stats"]["bda_processing_time_count"] += 1
+        except (ValueError, TypeError):
+            pass
+
+    bda_wait = record.get("bda_wait_time_seconds")
+    if bda_wait:
+        try:
+            stats["timing_stats"]["bda_wait_time_sum"] += float(bda_wait)
+            stats["timing_stats"]["bda_wait_time_count"] += 1
         except (ValueError, TypeError):
             pass
 
@@ -204,7 +216,7 @@ def main(target_date: str, overwrite: bool = False) -> dict:
         Dict with statusCode, date, recordsProcessed, and outputLocation.
     """
     # validate YYYY-MM-DD format, will raise ValueError if invalid
-    _validate_agg_date_format(target_date)
+    validate_yyyymmdd_format(target_date)
 
     database_name = os.getenv("DDE_GLUE_DATABASE_NAME")
     table_name = os.getenv("DDE_METRICS_RAW_TABLE_NAME")
