@@ -1,11 +1,8 @@
 """Tests for services/ddb.py."""
 
-from moto import mock_aws
-
 from documentai_api.services import ddb as ddb_service
 
 
-@mock_aws
 def test_get_item(ddb_table):
     """Get item from DynamoDB table."""
     ddb_table.put_item(Item={"id": "123", "name": "test"})
@@ -13,14 +10,12 @@ def test_get_item(ddb_table):
     assert result == {"id": "123", "name": "test"}
 
 
-@mock_aws
 def test_get_item_not_found(ddb_table):
     """Get item returns None when not found."""
     result = ddb_service.get_item("test-table", {"id": "123"})
     assert result is None
 
 
-@mock_aws
 def test_get_item_eventual_consistency(ddb_table):
     """Get item with eventual consistency."""
     ddb_table.put_item(Item={"id": "123"})
@@ -28,7 +23,6 @@ def test_get_item_eventual_consistency(ddb_table):
     assert result == {"id": "123"}
 
 
-@mock_aws
 def test_put_item(ddb_table):
     """Put item to DynamoDB table."""
     item = {"id": "123", "name": "test"}
@@ -38,7 +32,6 @@ def test_put_item(ddb_table):
     assert response["Item"] == item
 
 
-@mock_aws
 def test_update_item(ddb_table):
     """Update item in DynamoDB table."""
     ddb_table.put_item(Item={"id": "123", "description": "old"})
@@ -53,7 +46,6 @@ def test_update_item(ddb_table):
     assert response["Item"]["description"] == "updated"
 
 
-@mock_aws
 def test_query_by_key(ddb_table):
     """Query DynamoDB table by key using GSI."""
     ddb_table.put_item(Item={"id": "123", "userId": "user-123"})
@@ -65,7 +57,6 @@ def test_query_by_key(ddb_table):
     assert {item["id"] for item in result} == {"123", "456"}
 
 
-@mock_aws
 def test_query_by_key_no_results(ddb_table):
     """Query returns empty list when no items found."""
     result = ddb_service.query_by_key("test-table", "test-index", "userId", "user-999")

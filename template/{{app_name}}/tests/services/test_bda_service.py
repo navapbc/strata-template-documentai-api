@@ -1,7 +1,5 @@
 """Tests for services/bda.py."""
 
-from moto import mock_aws
-
 from documentai_api.services import bda as bda_service
 
 
@@ -62,12 +60,9 @@ def test_get_data_automation_job(mock_bda_runtime_client):
     mock_bda_runtime_client.get_data_automation_job.assert_called_once_with(jobArn=job_arn)
 
 
-@mock_aws
 def test_get_bda_result_json_success(s3_bucket):
     """Read BDA result JSON from S3."""
-    s3_bucket.put_object(
-        Bucket="test-bucket", Key="path/to/result.json", Body=b'{"result": "success"}'
-    )
+    s3_bucket.put_object(Key="path/to/result.json", Body=b'{"result": "success"}')
 
     result = bda_service.get_bda_result_json("s3://test-bucket/path/to/result.json")
 
@@ -80,7 +75,6 @@ def test_get_bda_result_json_empty_uri():
     assert result is None
 
 
-@mock_aws
 def test_get_bda_result_json_exception(aws_credentials):
     """Return None when S3 read fails."""
     result = bda_service.get_bda_result_json("s3://nonexistent-bucket/key")
@@ -105,11 +99,9 @@ def test_get_bda_job_response_exception(mock_bda_runtime_client):
     assert result is None
 
 
-@mock_aws
 def test_extract_bda_output_s3_uri_custom_path(s3_bucket):
     """Extract custom output path from job metadata."""
     s3_bucket.put_object(
-        Bucket="test-bucket",
         Key="metadata.json",
         Body=b"""{"output_metadata": [{"segment_metadata": [{"custom_output_path": "s3://test-bucket/custom/output.json"}]}]}""",
     )
@@ -119,11 +111,9 @@ def test_extract_bda_output_s3_uri_custom_path(s3_bucket):
     assert result == "s3://test-bucket/custom/output.json"
 
 
-@mock_aws
 def test_extract_bda_output_s3_uri_standard_path(s3_bucket):
     """Extract standard output path from job metadata."""
     s3_bucket.put_object(
-        Bucket="test-bucket",
         Key="metadata.json",
         Body=b"""{"output_metadata": [{"segment_metadata": [{"standard_output_path": "s3://test-bucket/standard/output.json"}]}]}""",
     )
@@ -133,22 +123,18 @@ def test_extract_bda_output_s3_uri_standard_path(s3_bucket):
     assert result == "s3://test-bucket/standard/output.json"
 
 
-@mock_aws
 def test_extract_bda_output_s3_uri_no_path(s3_bucket):
     """Return None when no output path found."""
-    s3_bucket.put_object(Bucket="test-bucket", Key="metadata.json", Body=b'{"output_metadata": []}')
+    s3_bucket.put_object(Key="metadata.json", Body=b'{"output_metadata": []}')
 
     result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 
     assert result is None
 
 
-@mock_aws
 def test_extract_bda_output_s3_uri_malformed(s3_bucket):
     """Return None when metadata is malformed."""
-    s3_bucket.put_object(
-        Bucket="test-bucket", Key="metadata.json", Body=b'{"output_metadata": "not a list"}'
-    )
+    s3_bucket.put_object(Key="metadata.json", Body=b'{"output_metadata": "not a list"}')
 
     result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
 

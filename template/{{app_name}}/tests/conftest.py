@@ -17,14 +17,24 @@ def aws_credentials(monkeypatch):
 
 
 @pytest.fixture
-def s3_bucket(aws_credentials):
-    """Create a test S3 bucket."""
+def s3_client(aws_credentials):
+    """Create a test S3 client."""
     import boto3
 
     with mock_aws():
-        s3 = boto3.client("s3", region_name="us-east-1")
-        s3.create_bucket(Bucket="test-bucket")
-        yield s3
+        yield boto3.client("s3", region_name="us-east-1")
+
+
+@pytest.fixture
+def s3_bucket(aws_credentials):
+    """Create a test S3 bucket resource."""
+    import boto3
+
+    with mock_aws():
+        s3 = boto3.resource("s3", region_name="us-east-1")
+        bucket = s3.Bucket("test-bucket")
+        bucket.create()
+        yield bucket
 
 
 @pytest.fixture
