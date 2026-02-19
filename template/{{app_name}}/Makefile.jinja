@@ -77,9 +77,6 @@ test-coverage: ## Run tests with coverage report
 test-parallel: ## Run test suite in parallel
 	uv run pytest -n auto $(args)
 
-test-coverage-parallel: ## Run test suite in parallel with coverage report
-	uv run pytest -n auto --cov=src/documentai_api --cov-branch --cov-report=html:.coverage_report --cov-report=term-missing --cov-fail-under=90 $(args)
-
 ##################################################
 # Lint / Format
 ##################################################

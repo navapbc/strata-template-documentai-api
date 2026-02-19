@@ -60,6 +60,7 @@ def ddb_table(aws_credentials):
             ],
             BillingMode="PAY_PER_REQUEST",
         )
+        table.test_index_name = "test-index"
         yield table
 
 
