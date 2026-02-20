@@ -2,8 +2,12 @@ services:
   {{app_name}}:
     build:
       context: .
+      target: dev
     ports:
       - {{ app_local_port }}:8000
     volumes:
       - .:/app
-      - /app/.venv/
+      - {{app_name}}_venv:/app/.venv
+
+volumes:
+  {{app_name}}_venv:

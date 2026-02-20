@@ -25,8 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: make build
+      
+      - name: Check formatting
+        run: make format-check
 
-      # Add Python linting commands here
+      - name: Lint
+        run: make lint-ci
 
   test:
     name: Test
@@ -34,8 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Add Python setup here
-      # Add Python build here
+      - name: Build Docker image
+        run: make build
 
-      - name: Start tests
-        run: # Add Python tests here
+      - name: Run tests
+        run: make test
+        # TODO: Change to 'make test-coverage' once PR #14 is merged

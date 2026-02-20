@@ -7,13 +7,15 @@
 	format-check \
 	help \
 	init \
+	init-clean \
 	init-local \
 	lint \
 	lint-ci \
+	login \
 	release-build \
 	run-logs \
-	setup-local \
 	start \
+	start-local \
 	stop \
 	test
 
@@ -51,12 +53,6 @@ else
 PY_RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME) uv run
 endif
 
-##################################################
-# Local Development Environment Setup
-##################################################
-
-setup-local: ## Setup for local/native development
-	uv sync
 
 ##################################################
 # Build & Run
@@ -68,14 +64,21 @@ build: ## Build Docker containers
 start: ## Start containers in detached mode
 	docker compose up --detach
 
+start-local: ## Run the application server natively
+	uv run documentai_api
+
 run-logs: start ## Start containers and follow logs
 	docker compose logs --follow --no-color $(APP_NAME)
 
 init: ## Initialize project (container-based)
 	docker compose build
 
+init-clean: ## Initialize project with fresh volumes
+	docker compose down -v
+	docker compose build
+
 init-local: ## Initialize project for native development
-	uv sync
+	uv sync --all-extras
 
 clean-volumes: ## Remove project docker volumes
 	docker compose down --volumes
@@ -97,6 +100,10 @@ release-build: ## Build production Docker image
 
 test: ## Run test suite
 	$(PY_RUN_CMD) pytest
+
+# TODO: Enable coverage enforcement once PR #14 is merged
+# test-coverage: ## Run test suite with coverage report
+# 	$(PY_RUN_CMD) pytest --cov=documentai_api --cov-report=term --cov-report=html --cov-fail-under=90
 
 ##################################################
 # Lint / Format
