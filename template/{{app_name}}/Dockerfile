@@ -35,7 +35,7 @@ COPY src/ /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --all-extras
 
-# Add project's virtual env to the PATH
+# Add project's virtual env to the PATH so we can directly run scripts defined
 ENV PATH="/app/.venv/bin:$PATH"
 
 CMD ["documentai_api"]
@@ -52,7 +52,7 @@ COPY src/ /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Add project's virtual env to the PATH
+# Add project's virtual env to the PATH so we can directly run scripts defined
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Set the host to 0.0.0.0 to make the server available external to the container

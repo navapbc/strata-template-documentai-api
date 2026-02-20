@@ -4,13 +4,11 @@
 	clean \
 	clean-volumes \
 	format \
-	format-check \
 	help \
 	init \
-	init-clean \
 	init-local \
 	lint \
-	lint-ci \
+	lint-uv \
 	login \
 	release-build \
 	run-logs \
@@ -48,11 +46,18 @@ APP_NAME := {{app_name}}
 # You can set this by either running `export PY_RUN_APPROACH=local` in your shell or add
 # it to your ~/.zshrc file (and run `source ~/.zshrc`)
 ifeq "$(PY_RUN_APPROACH)" "local"
-PY_RUN_CMD := uv run
+PY_RUN_CMD := uv run --frozen
 else
-PY_RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME) uv run
+PY_RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME) uv run --frozen
 endif
 
+ifdef CI
+FMT_ARGS := --check
+LINT_ARGS :=
+else
+FMT_ARGS :=
+LINT_ARGS := --fix
+endif
 
 ##################################################
 # Build & Run
@@ -62,10 +67,10 @@ build: ## Build Docker containers
 	docker compose build
 
 start: ## Start containers in detached mode
-	docker compose up --detach
+	docker compose up --renew-anon-volumes --detach
 
 start-local: ## Run the application server natively
-	uv run documentai_api
+	$(PY_RUN_CMD) documentai_api
 
 run-logs: start ## Start containers and follow logs
 	docker compose logs --follow --no-color $(APP_NAME)
@@ -73,12 +78,8 @@ run-logs: start ## Start containers and follow logs
 init: ## Initialize project (container-based)
 	docker compose build
 
-init-clean: ## Initialize project with fresh volumes
-	docker compose down -v
-	docker compose build
-
 init-local: ## Initialize project for native development
-	uv sync --all-extras
+	uv sync --all-extras --frozen
 
 clean-volumes: ## Remove project docker volumes
 	docker compose down --volumes
@@ -86,7 +87,8 @@ clean-volumes: ## Remove project docker volumes
 stop: ## Stop containers
 	docker compose down
 
-check: format-check lint test ## Run all checks
+check: ## Run all checks
+check: format lint lint-uv test
 
 release-build: ## Build production Docker image
 	docker buildx build \
@@ -110,17 +112,13 @@ test: ## Run test suite
 ##################################################
 
 format: ## Format code
-	$(PY_RUN_CMD) ruff format .
-
-format-check: ## check format without modifying
-	$(PY_RUN_CMD) ruff format --check
+	$(PY_RUN_CMD) ruff format $(FMT_ARGS) .
 
 lint: ## Lint code
-	$(PY_RUN_CMD) ruff check --fix .
+	$(PY_RUN_CMD) ruff check $(LINT_ARGS) .
 
-lint-ci: ## Lint code (CI mode, no fixes)
-	$(PY_RUN_CMD) ruff check --no-fix .
-
+lint-uv: ## Check uv lockfile is up-to-date
+	uv lock --check
 
 ##################################################
 # Miscellaneous Utilities
