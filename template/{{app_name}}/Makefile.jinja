@@ -8,6 +8,7 @@
 	init \
 	init-local \
 	lint \
+	lint-ruff \
 	lint-uv \
 	login \
 	release-build \
@@ -46,10 +47,12 @@ APP_NAME := {{app_name}}
 # You can set this by either running `export PY_RUN_APPROACH=local` in your shell or add
 # it to your ~/.zshrc file (and run `source ~/.zshrc`)
 ifeq "$(PY_RUN_APPROACH)" "local"
-PY_RUN_CMD := uv run --frozen
+RUN_CMD :=
 else
-PY_RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME) uv run --frozen
+RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME)
 endif
+
+PY_RUN_CMD := $(RUN_CMD) uv run --frozen
 
 ifdef CI
 FMT_ARGS := --check
@@ -88,7 +91,7 @@ stop: ## Stop containers
 	docker compose down
 
 check: ## Run all checks
-check: format lint lint-uv test
+check: format lint test
 
 release-build: ## Build production Docker image
 	docker buildx build \
@@ -114,11 +117,14 @@ test: ## Run test suite
 format: ## Format code
 	$(PY_RUN_CMD) ruff format $(FMT_ARGS) .
 
-lint: ## Lint code
+lint: ## Run all linters
+lint: lint-ruff lint-uv
+
+lint-ruff: ## Lint Python code with ruff
 	$(PY_RUN_CMD) ruff check $(LINT_ARGS) .
 
 lint-uv: ## Check uv lockfile is up-to-date
-	uv lock --check
+	$(RUN_CMD) uv lock --check
 
 ##################################################
 # Miscellaneous Utilities
