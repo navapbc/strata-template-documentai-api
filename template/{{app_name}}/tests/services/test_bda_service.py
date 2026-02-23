@@ -64,7 +64,7 @@ def test_get_bda_result_json_success(s3_bucket):
     """Read BDA result JSON from S3."""
     s3_bucket.put_object(Key="path/to/result.json", Body=b'{"result": "success"}')
 
-    result = bda_service.get_bda_result_json("s3://test-bucket/path/to/result.json")
+    result = bda_service.get_bda_result_json(f"s3://{s3_bucket.name}/path/to/result.json")
 
     assert result == {"result": "success"}
 
@@ -103,32 +103,31 @@ def test_extract_bda_output_s3_uri_custom_path(s3_bucket):
     """Extract custom output path from job metadata."""
     s3_bucket.put_object(
         Key="metadata.json",
-        Body=b"""{"output_metadata": [{"segment_metadata": [{"custom_output_path": "s3://test-bucket/custom/output.json"}]}]}""",
+        Body=f'{{"output_metadata": [{{"segment_metadata": [{{"custom_output_path": "s3://{s3_bucket.name}/custom/output.json"}}]}}]}}'.encode(),
     )
 
-    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri(s3_bucket.name, "metadata.json")
 
-    assert result == "s3://test-bucket/custom/output.json"
+    assert result == f"s3://{s3_bucket.name}/custom/output.json"
 
 
 def test_extract_bda_output_s3_uri_standard_path(s3_bucket):
     """Extract standard output path from job metadata."""
     s3_bucket.put_object(
         Key="metadata.json",
-        Body=b"""{"output_metadata": [{"segment_metadata": [{"standard_output_path": "s3://test-bucket/standard/output.json"}]}]}""",
+        Body=f'{{"output_metadata": [{{"segment_metadata": [{{"standard_output_path": "s3://{s3_bucket.name}/standard/output.json"}}]}}]}}'.encode(),
     )
 
-    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri(s3_bucket.name, "metadata.json")
 
-    assert result == "s3://test-bucket/standard/output.json"
+    assert result == f"s3://{s3_bucket.name}/standard/output.json"
 
 
 def test_extract_bda_output_s3_uri_no_path(s3_bucket):
     """Return None when no output path found."""
     s3_bucket.put_object(Key="metadata.json", Body=b'{"output_metadata": []}')
 
-    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
-
+    result = bda_service.extract_bda_output_s3_uri(s3_bucket.name, "metadata.json")
     assert result is None
 
 
@@ -136,6 +135,6 @@ def test_extract_bda_output_s3_uri_malformed(s3_bucket):
     """Return None when metadata is malformed."""
     s3_bucket.put_object(Key="metadata.json", Body=b'{"output_metadata": "not a list"}')
 
-    result = bda_service.extract_bda_output_s3_uri("test-bucket", "metadata.json")
+    result = bda_service.extract_bda_output_s3_uri(s3_bucket.name, "metadata.json")
 
     assert result is None

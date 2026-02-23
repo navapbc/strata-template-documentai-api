@@ -204,3 +204,44 @@ def test_truncate_to_pages(detector, generator, is_image, max_pages, expected_co
         assert detector.get_page_count(truncated) == expected_count
     else:
         assert truncated == bytes  # should return unchanged
+
+
+def test_get_document_profile_with_document(detector):
+    """Test get_document_profile with actual document bytes."""
+    pdf_bytes = generate_blank_pdf()
+    profile = detector.get_document_profile(pdf_bytes, "test.pdf")
+
+    # basic properties should be populated
+    assert profile.page_count == 1
+    assert profile.is_password_protected is False
+
+    # quality metrics should be calculated (not None)
+    assert profile.raw_metrics is not None
+    assert profile.normalized_metrics is not None
+    assert profile.normalization_ranges is not None
+    assert profile.overall_blur_score is not None
+
+    # blur detection should work (blank white page is not blurry)
+    assert isinstance(profile.is_blurry, bool)
+    assert isinstance(profile.is_multipage, bool)
+
+
+def test_get_document_profile_password_protected(detector):
+    """Test get_document_profile with password-protected PDF."""
+    # create a fake password-protected PDF (has /Encrypt in header)
+    pdf_with_encrypt = b"%PDF-1.4\n" + b"/Encrypt" + b"\x00" * 4000
+    profile = detector.get_document_profile(pdf_with_encrypt, "protected.pdf")
+
+    # should detect as password protected
+    assert profile.is_password_protected is True
+
+    # should still get page count (returns 1 on error)
+    assert profile.page_count == 1
+
+    # quality metrics should be None (can't analyze encrypted PDF)
+    assert profile.raw_metrics is None
+    assert profile.normalized_metrics is None
+
+    # should not be marked as blurry or multipage (can't analyze)
+    assert profile.is_blurry is False
+    assert profile.is_multipage is False
