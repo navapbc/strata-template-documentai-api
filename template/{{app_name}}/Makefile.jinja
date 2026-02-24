@@ -69,7 +69,13 @@ stop: ## Stop development server
 ##################################################
 
 test: ## Run test suite
-	uv run pytest
+	uv run pytest $(args)
+
+test-coverage: ## Run tests with coverage report
+	uv run pytest --cov=src/documentai_api --cov-branch --cov-report=html:.coverage_report --cov-report=term-missing $(args)
+
+test-parallel: ## Run test suite in parallel
+	uv run pytest -n auto $(args)
 
 ##################################################
 # Lint / Format
@@ -90,7 +96,7 @@ lint-ci: ## Lint code (CI mode, no fixes)
 ##################################################
 
 clean: ## Clean build artifacts
-	rm -rf .pytest_cache htmlcov .coverage __pycache__
+	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 help: ## Show help
