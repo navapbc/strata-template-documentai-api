@@ -95,16 +95,16 @@ def test_is_tiff(detector):
 
 def test_is_password_protected_true(detector):
     pdf_with_encrypt = b"%PDF-1.4\n" + b"/Encrypt" + b"\x00" * 4000
-    assert detector._is_password_protected(pdf_with_encrypt) is True
+    assert detector.is_password_protected(pdf_with_encrypt) is True
 
 
 def test_is_password_protected_false(detector):
     pdf_without_encrypt = b"%PDF-1.4\n" + b"\x00" * 4000
-    assert detector._is_password_protected(pdf_without_encrypt) is False
+    assert detector.is_password_protected(pdf_without_encrypt) is False
 
 
 def test_is_password_protected_non_pdf(detector):
-    assert detector._is_password_protected(b"\xff\xd8") is False
+    assert detector.is_password_protected(b"\xff\xd8") is False
 
 
 @pytest.mark.parametrize(
@@ -124,20 +124,6 @@ def test_is_password_protected_non_pdf(detector):
 )
 def test_get_page_count(detector, generator, expected_page_count):
     assert detector.get_page_count(generator()) == expected_page_count
-
-
-@pytest.mark.parametrize(
-    ("value", "min_val", "max_val", "expected"),
-    [
-        (50, 0, 100, 0.5),
-        (0, 0, 100, 0.0),
-        (100, 0, 100, 1.0),
-        (-10, 0, 100, 0.0),  # resolves to 0
-        (150, 0, 100, 1.0),  # resolves to 1
-    ],
-)
-def test_normalize(detector, value, min_val, max_val, expected):
-    assert detector._normalize(value, min_val, max_val) == expected
 
 
 def test_quality_metrics_raw_to_json_dict_with_nan():

@@ -13,26 +13,16 @@ from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
 
 
-@pytest.mark.parametrize(
-    ("snake_case", "expected_camel"),
-    [
-        ("user_provided_document_category", "userProvidedDocumentCategory"),
-        ("job_id", "jobId"),
-        ("trace_id", "traceId"),
-        ("single", "single"),
-        ("already_camelCase", "alreadyCamelcase"),
-    ],
-)
-def test_to_camel_case(snake_case, expected_camel):
-    assert response_builder_util._to_camel_case(snake_case) == expected_camel
-
-
+# TODO: Remove private method test. Refactor _extract_field_values to be more testable
+# and test through public API (build_v1_api_response) rather than mocking
 def test_extract_field_values_empty_record():
     """Test with empty ddb_record."""
     result = response_builder_util._extract_field_values({}, False)
     assert result == {}
 
 
+# TODO: Remove private method test. Refactor _extract_field_values to be more testable
+# and test through public API (build_v1_api_response) rather than mocking
 @pytest.mark.parametrize("include_extracted_data", [True, False])
 def test_extract_field_values(include_extracted_data):
     with (

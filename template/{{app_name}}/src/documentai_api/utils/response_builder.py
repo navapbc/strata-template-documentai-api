@@ -14,16 +14,13 @@ from documentai_api.utils.bda import extract_field_values_from_bda_results
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
+from documentai_api.utils.strings import snake_to_camel
 
 logger = get_logger(__name__)
 
 
-def _to_camel_case(snake_str: str) -> str:
-    """Convert snake_case to camelCase."""
-    components = snake_str.split("_")
-    return components[0].lower() + "".join(word.capitalize() for word in components[1:])
-
-
+# TODO: Refactor to improve testability - consider making public along with
+# restructuring to reduce mocking in tests
 def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
     """Extract field data for API response."""
     if not ddb_record:
@@ -47,7 +44,7 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     fields = {}
     for field_item in field_confidence_map_list:
         for field_name, confidence in field_item.items():
-            camel_field = _to_camel_case(field_name)
+            camel_field = snake_to_camel(field_name)
             fields[camel_field] = {
                 "confidence": round(confidence, 2),
                 "value": field_values.get(field_name) if include_extracted_data else "<redacted>",

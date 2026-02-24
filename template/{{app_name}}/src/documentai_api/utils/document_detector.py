@@ -9,6 +9,7 @@ from pdf2image import convert_from_bytes
 from PIL import Image
 
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.numbers import normalize
 
 logger = get_logger(__name__)
 
@@ -180,7 +181,7 @@ class DocumentDetector:
         """Convert PDF pages to grayscale OpenCV images."""
         images = []
 
-        if self._is_password_protected(file_bytes):
+        if self.is_password_protected(file_bytes):
             logger.warning("DocumentDetector: Password-protected PDF - cannot process")
             return images
 
@@ -528,10 +529,6 @@ class DocumentDetector:
         score = median_std / ideal_std
         return score
 
-    def _normalize(self, value, min_val, max_val):
-        """Scale a metric to 0-1 range."""
-        return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
-
     def _calculate_motion_blur_score(self, document_roi, file_name):
         """Return a motion blur severity score (0 = sharp, 1 = strong motion blur)."""
         kernel_h = np.array([[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=np.float32)
@@ -624,14 +621,14 @@ class DocumentDetector:
 
         ranges = NormalizationRanges()
         normalized_metrics = QualityMetricsNormalized(
-            fft_score=self._normalize(raw_metrics.fft_score, *ranges.fft_score),
-            edge_score=self._normalize(raw_metrics.edge_score, *ranges.edge_score),
-            laplacian_variance=self._normalize(
+            fft_score=normalize(raw_metrics.fft_score, *ranges.fft_score),
+            edge_score=normalize(raw_metrics.edge_score, *ranges.edge_score),
+            laplacian_variance=normalize(
                 raw_metrics.laplacian_variance, *ranges.laplacian_variance
             ),
-            local_contrast=self._normalize(raw_metrics.local_contrast, *ranges.local_contrast),
-            sobel_score=self._normalize(raw_metrics.sobel_score, *ranges.sobel_score),
-            noise_stddev=self._normalize(raw_metrics.noise_stddev, *ranges.noise_stddev),
+            local_contrast=normalize(raw_metrics.local_contrast, *ranges.local_contrast),
+            sobel_score=normalize(raw_metrics.sobel_score, *ranges.sobel_score),
+            noise_stddev=normalize(raw_metrics.noise_stddev, *ranges.noise_stddev),
         )
 
         overall_blur_score = 1.0 - (
@@ -780,7 +777,7 @@ class DocumentDetector:
         else:
             return 1  # Single page for JPEG/PNG/etc.
 
-    def _is_password_protected(self, file_bytes):
+    def is_password_protected(self, file_bytes):
         """Detect if PDF is password protected."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -880,7 +877,7 @@ class DocumentDetector:
             )
 
         page_count = self.get_page_count(file_bytes)
-        is_password_protected = self._is_password_protected(file_bytes)
+        is_password_protected = self.is_password_protected(file_bytes)
         quality_metrics = self._calculate_quality_metrics(file_bytes, file_name)
 
         raw_metrics = quality_metrics[0] if quality_metrics else None

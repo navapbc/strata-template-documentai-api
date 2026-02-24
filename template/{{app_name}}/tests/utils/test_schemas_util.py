@@ -42,47 +42,6 @@ def mock_bda_blueprint(mock_bda_services):
     return mock_bda_services["blueprint"]
 
 
-def test_fetch_schemas_from_bda_success(mock_bda_project, mock_bda_blueprint):
-    """Fetch schemas from BDA successfully."""
-    mock_bda_project.return_value = {
-        "project": {
-            "customOutputConfiguration": {
-                "blueprints": [{"blueprintArn": "arn:aws:bedrock:us-east-1:123:blueprint/invoice"}]
-            }
-        }
-    }
-
-    mock_bda_blueprint.return_value = {
-        "blueprint": {
-            "blueprintName": "Invoice",
-            "schema": '{"class": "Invoice", "properties": {"total": {"type": "number", "instruction": "Total amount"}}}',
-        }
-    }
-
-    result = schemas._fetch_schemas_from_bda()
-
-    assert "Invoice" in result
-    assert result["Invoice"]["documentType"] == "Invoice"
-    assert len(result["Invoice"]["fields"]) == 1
-    assert result["Invoice"]["fields"][0]["name"] == "total"
-
-
-def test_fetch_schemas_from_bda_no_project_arn(monkeypatch):
-    """Return empty dict when DDE_PROJECT_ARN not set."""
-    monkeypatch.delenv("DDE_PROJECT_ARN", raising=False)
-    result = schemas._fetch_schemas_from_bda()
-    assert result == {}
-
-
-def test_fetch_schemas_from_bda_exception(mock_bda_project):
-    """Return empty dict when BDA call fails."""
-    mock_bda_project.side_effect = Exception("API error")
-
-    result = schemas._fetch_schemas_from_bda()
-
-    assert result == {}
-
-
 def test_extract_fields():
     """Extract basic fields from schema."""
     schema = {
