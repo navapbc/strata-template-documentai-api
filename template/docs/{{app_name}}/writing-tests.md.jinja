@@ -74,10 +74,17 @@ def test_document_processing(sample_pdf_bytes):
 
 ## Coverage Requirements
 
-- Minimum coverage: 90% (enforced in CI)
+- Target coverage: 85-95% (focus on testing important functionality through public APIs)
 - Run `make test-coverage` to see coverage report
-- Generate HTML report: `uv run pytest --cov-report=html`
+- Generate HTML report: `make test-coverage` (opens `.coverage_report/index.html`)
 
 ## Running Tests
 
-See the [Testing section in the README](../../{{app_name}}/README.md#testing) for available commands.
+- `make test` - Run all tests
+- `make test-coverage` - Run tests with coverage report
+- `make test-parallel` - Run tests in parallel
+- `uv run pytest tests/path/test_file.py` - Run specific test file
+- `uv run pytest tests/path/test_file.py::test_name` - Run specific test
+
+See the [Testing section in the README](../../{{app_name}}/README.md#testing) for more details.
+

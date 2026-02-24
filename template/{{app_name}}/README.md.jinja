@@ -12,7 +12,7 @@ A serverless document processing system built on AWS that uses Amazon Bedrock Da
 - **Intelligent Document Detection** - Quality analysis, blur detection, and document validation
 - **Multi-format Support** - Process PDF, JPEG, PNG, TIFF, and BMP documents
 - **Event-driven Processing** - S3-triggered Lambda pipeline for scalable document processing
-- **Comprehensive Testing** - 95% test coverage with 306+ unit and integration tests
+- **Testing** - 87% test coverage with unit and integration tests
 - **Local Development** - Docker Compose environment for testing without AWS deployment
 - **Structured Logging** - Standardized logging across all components
 - **DynamoDB Tracking** - Complete processing history and metadata storage
@@ -49,7 +49,7 @@ _This installs all dependencies defined in pyproject.toml including development 
 make test
 ```
 
-_All 306 tests should pass with 95%+ coverage._
+_All tests should pass._
 
 
 ## Configuration
@@ -148,9 +148,19 @@ make type-check    # Run mypy type checking
 
 Tests use pytest with FastAPI's TestClient and run without requiring actual AWS infrastructure.
 
-**Run all tests with coverage:**
+**Run all tests:**
 ```bash
 make test
+```
+
+**Run tests with coverage report:**
+```bash
+make test-coverage
+```
+
+**Run tests in parallel:**
+```bash
+make test-parallel
 ```
 
 **Run specific test file:**
@@ -163,18 +173,8 @@ uv run pytest tests/test_document_detector.py
 uv run pytest tests/test_document_detector.py::test_detect_multipage_document
 ```
 
-**Run tests in parallel:**
-```bash
-uv run pytest -n auto
-```
-
-**Generate HTML coverage report:**
-```bash
-uv run pytest --cov-report=html
-open htmlcov/index.html
-```
-
 For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writing-tests.md).
+
 
 ## 🏗️ Project Structure
 
