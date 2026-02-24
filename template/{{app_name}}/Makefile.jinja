@@ -43,10 +43,10 @@ __check_defined = \
 APP_NAME := {{app_name}}
 
 # By default, all python/uv commands will run inside of the docker container
-# if you wish to run this natively, add PY_RUN_APPROACH=local to your environment vars
-# You can set this by either running `export PY_RUN_APPROACH=local` in your shell or add
+# if you wish to run this natively, add RUN_CMD_APPROACH=local to your environment vars
+# You can set this by either running `export RUN_CMD_APPROACH=local` in your shell or add
 # it to your ~/.zshrc file (and run `source ~/.zshrc`)
-ifeq "$(PY_RUN_APPROACH)" "local"
+ifeq "$(RUN_CMD_APPROACH)" "local"
 RUN_CMD :=
 else
 RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME)
