@@ -104,11 +104,13 @@ release-build: ## Build production Docker image
 ##################################################
 
 test: ## Run test suite
-	$(PY_RUN_CMD) pytest
+	$(PY_RUN_CMD) pytest $(args)
 
-# TODO: Enable coverage enforcement once PR #14 is merged
-# test-coverage: ## Run test suite with coverage report
-# 	$(PY_RUN_CMD) pytest --cov=documentai_api --cov-report=term --cov-report=html --cov-fail-under=90
+test-coverage: ## Run tests with coverage report
+	$(PY_RUN_CMD) pytest --cov=src/documentai_api --cov-branch --cov-report=html:.coverage_report --cov-report=term-missing $(args)
+
+test-parallel: ## Run test suite in parallel
+	$(PY_RUN_CMD) pytest -n auto $(args)
 
 ##################################################
 # Lint / Format
@@ -134,7 +136,7 @@ login: start ## Start shell in running container
 	docker exec -it $(APP_NAME) bash
 
 clean: ## Clean build artifacts
-	rm -rf .pytest_cache htmlcov .coverage __pycache__
+	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 help: ## Show help

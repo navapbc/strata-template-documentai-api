@@ -19,12 +19,12 @@ logger = get_logger(__name__)
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
     """Check if file exceeds BDA size limits based on content type."""
     if content_type in ["image/jpeg", "image/png"]:
-        return file_size_bytes > ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value)
     elif content_type in ["application/pdf", "image/tiff"]:
-        return file_size_bytes > ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value)
     else:
         # unknown file type, assume document limit
-        return file_size_bytes > ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value)
 
 
 def convert_to_grayscale(
@@ -57,7 +57,7 @@ def convert_to_grayscale(
         pil_image.save(jpeg_output, format="JPEG", quality=100)
         jpeg_bytes = jpeg_output.getvalue()
 
-        if len(jpeg_bytes) > ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES:
+        if len(jpeg_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value):
             logger.info(f"{object_key} too large for BDA, converting to PDF")
             pdf_output = io.BytesIO()
             pil_image.save(pdf_output, format="PDF")
