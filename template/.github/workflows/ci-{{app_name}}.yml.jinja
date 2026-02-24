@@ -31,13 +31,9 @@ jobs:
       
       - name: Check formatting
         run: make format
-        env:
-          CI: true
 
       - name: Lint
         run: make lint
-        env:
-          CI: true
 
   test:
     name: Test
@@ -49,5 +45,4 @@ jobs:
         run: make build
 
       - name: Run tests
-        run: make test
-        # TODO: Change to 'make test-coverage' once PR #14 is merged
+        run: make test-coverage
