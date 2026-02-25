@@ -38,8 +38,7 @@ def test_convert_keys_to_snake_case():
     assert result["created_at"] == "2026-02-20T10:00:00Z"
 
 
-@mock_aws
-def test_write_to_s3(s3_bucket):
+def test_write_to_s3(s3_client, s3_bucket):
     """Test writing record to S3 with partitioning."""
     record = {
         "fileName": "test.pdf",
@@ -50,20 +49,19 @@ def test_write_to_s3(s3_bucket):
     write_to_s3("test-bucket", record)
 
     # verify file was written with correct partitioning
-    objects = s3_bucket.list_objects_v2(Bucket="test-bucket", Prefix="date=2026-02-20/hour=10/")
+    objects = s3_client.list_objects_v2(Bucket="test-bucket", Prefix="date=2026-02-20/hour=10/")
     assert objects["KeyCount"] == 1
 
     # verify content
     key = objects["Contents"][0]["Key"]
-    obj = s3_bucket.get_object(Bucket="test-bucket", Key=key)
+    obj = s3_client.get_object(Bucket="test-bucket", Key=key)
     content = json.loads(obj["Body"].read().decode())
 
     assert content["file_name"] == "test.pdf"
     assert content["process_status"] == "success"
 
 
-@mock_aws
-def test_write_to_s3_default_timestamp(s3_bucket):
+def test_write_to_s3_default_timestamp(s3_client, s3_bucket):
     """Test writing record without createdAt uses current time."""
     record = {
         "fileName": "test.pdf",
@@ -73,7 +71,7 @@ def test_write_to_s3_default_timestamp(s3_bucket):
     write_to_s3("test-bucket", record)
 
     # should create partition with current date
-    objects = s3_bucket.list_objects_v2(Bucket="test-bucket")
+    objects = s3_client.list_objects_v2(Bucket="test-bucket")
     assert objects["KeyCount"] == 1
 
 
@@ -89,8 +87,7 @@ def test_process_batch_empty_queue():
         assert result == 0
 
 
-@mock_aws
-def test_process_batch_success(s3_bucket):
+def test_process_batch_success(s3_client, s3_bucket):
     """Test successful batch processing."""
     messages = [
         {
@@ -131,12 +128,11 @@ def test_process_batch_success(s3_bucket):
         assert mock_delete.call_count == 2
 
         # verify both files were written
-        objects = s3_bucket.list_objects_v2(Bucket="test-bucket")
+        objects = s3_client.list_objects_v2(Bucket="test-bucket")
         assert objects["KeyCount"] == 2
 
 
-@mock_aws
-def test_process_batch_partial_failure(s3_bucket):
+def test_process_batch_partial_failure(s3_client, s3_bucket):
     """Test batch processing with one message failing."""
     messages = [
         {
@@ -163,8 +159,7 @@ def test_process_batch_partial_failure(s3_bucket):
         assert mock_delete.call_count == 1
 
 
-@mock_aws
-def test_main_processes_multiple_batches(s3_bucket):
+def test_main_processes_multiple_batches(s3_client, s3_bucket):
     """Test main processes multiple batches until queue is empty."""
     batch_1 = [
         {
@@ -194,8 +189,7 @@ def test_main_processes_multiple_batches(s3_bucket):
         assert mock_receive.call_count == 3  # called 3 times (stopped when empty)
 
 
-@mock_aws
-def test_main_respects_max_batches(s3_bucket):
+def test_main_respects_max_batches(s3_client, s3_bucket):
     """Test main stops after max_batches even if queue has more."""
     messages = [
         {

@@ -3,7 +3,7 @@
 # - https://github.com/navapbc/platform-cli/blob/main/Dockerfile
 # - https://docs.astral.sh/uv/guides/integration/docker/
 
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS base
 
 # install runtime dependencies
 RUN apt-get update -qq \
@@ -22,21 +22,40 @@ WORKDIR /app
 
 RUN touch README.md
 COPY pyproject.toml uv.lock* /app/
-# install project dependencies
+
+# Development stage with dev dependencies
+FROM base AS dev
+
+# Install project dependencies including dev dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --all-extras
+
+# Copy application code
+COPY src/ /app/src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --all-extras
+
+# Add project's virtual env to the PATH so we can directly run scripts defined in pyproject.toml
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["documentai_api"]
+
+# Production stage without dev dependencies
+FROM base AS release
+
+# Install project dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
-# copy application code
+# Copy application code
 COPY src/ /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Add project's virtual env to the PATH so we can directly run scripts defined
-# in pyproject.toml
+# Add project's virtual env to the PATH so we can directly run scripts defined in pyproject.toml
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Set the host to 0.0.0.0 to make the server available external to the container
-# that it's running in.
 ENV HOST=0.0.0.0
 
 CMD ["documentai_api"]

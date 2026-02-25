@@ -87,19 +87,6 @@ lint.ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-[tool.isort]
-profile = "black"
-line_length = 100
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-addopts = [
-  "--cov=src/documentai_api",
-  "--cov-report=html",
-  "--cov-report=term-missing",
-  "--cov-fail-under=90"
-]
-
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",

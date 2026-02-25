@@ -2,8 +2,15 @@ services:
   {{app_name}}:
     build:
       context: .
+      target: dev
     ports:
       - {{ app_local_port }}:8000
     volumes:
       - .:/app
-      - /app/.venv/
+      # Use named volumes for directories that the container should use the guest
+      # machine's dir instead of the host machine's dir, which may be divergent.
+      # This is especially true for any dependency or temp directories.
+      - {{app_name}}_venv:/app/.venv
+
+volumes:
+  {{app_name}}_venv:

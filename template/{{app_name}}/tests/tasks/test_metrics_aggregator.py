@@ -111,10 +111,10 @@ def test_aggregate_records_multiple_records():
 
 
 @mock_aws
-def test_check_if_previously_aggregated(s3_bucket):
+def test_check_if_previously_aggregated(s3_client, s3_bucket):
     """Test checking for existing aggregation."""
     # create the aggregated stats file
-    s3_bucket.put_object(
+    s3_client.put_object(
         Bucket="test-bucket",
         Key="aggregated/date=2026-02-20/stats.json",
         Body=b'{"date": "2026-02-20"}',
@@ -126,7 +126,7 @@ def test_check_if_previously_aggregated(s3_bucket):
 
 
 @mock_aws
-def test_check_if_previously_aggregated_not_exists(s3_bucket):
+def test_check_if_previously_aggregated_not_exists(s3_client, s3_bucket):
     """Test checking for non-existent aggregation."""
     result = _check_if_previously_aggregated("test-bucket", "2026-02-20")
 
@@ -134,7 +134,7 @@ def test_check_if_previously_aggregated_not_exists(s3_bucket):
 
 
 @mock_aws
-def test_write_aggregated_stats(s3_bucket):
+def test_write_aggregated_stats(s3_client, s3_bucket):
     """Test writing aggregated stats to S3."""
     stats = {"date": "2026-02-20", "total_records": 10, "by_status": {"success": 8, "failed": 2}}
 
@@ -143,17 +143,17 @@ def test_write_aggregated_stats(s3_bucket):
     assert s3_key == "aggregated/date=2026-02-20/stats.json"
 
     # verify file was written
-    obj = s3_bucket.get_object(Bucket="test-bucket", Key=s3_key)
+    obj = s3_client.get_object(Bucket="test-bucket", Key=s3_key)
     content = obj["Body"].read().decode()
     assert "2026-02-20" in content
     assert "total_records" in content
 
 
 @mock_aws
-def test_main_already_aggregated(s3_bucket):
+def test_main_already_aggregated(s3_client, s3_bucket):
     """Test main skips when already aggregated."""
     # create existing aggregation
-    s3_bucket.put_object(
+    s3_client.put_object(
         Bucket="test-bucket",
         Key="aggregated/date=2026-02-20/stats.json",
         Body=b'{"date": "2026-02-20"}',
@@ -175,10 +175,10 @@ def test_main_already_aggregated(s3_bucket):
         (True, False),  # overwrite - processes aggregation even if exists
     ],
 )
-def test_main_success(s3_bucket, overwrite, should_skip):
+def test_main_success(s3_client, s3_bucket, overwrite, should_skip):
     """Test successful aggregation with and without overwrite."""
     # create existing aggregation
-    s3_bucket.put_object(
+    s3_client.put_object(
         Bucket="test-bucket",
         Key="aggregated/date=2026-02-20/stats.json",
         Body=b'{"date": "2026-02-20"}',
