@@ -10,7 +10,7 @@ from documentai_api.tasks.bda_invoker import main
 @pytest.fixture(autouse=True)
 def mock_env(monkeypatch):
     """Mock environment variables for all tests."""
-    monkeypatch.setenv("DDE_INPUT_LOCATION", "s3://test-bucket")
+    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket")
 
 
 def test_main_success():

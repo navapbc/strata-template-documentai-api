@@ -3,6 +3,7 @@ import json
 import typer
 
 from documentai_api.tasks.bda_invoker.main import main
+from documentai_api.utils import env
 
 app = typer.Typer()
 
@@ -11,7 +12,7 @@ app = typer.Typer()
 def cli(
     file_name: str = typer.Option(..., help="Name of file to process"),
     bucket_name: str | None = typer.Option(
-        None, help="S3 bucket name (defaults to DDE_INPUT_LOCATION env var)"
+        None, help=f"S3 bucket name (defaults to {env.DOCUMENTAI_INPUT_BUCKET_NAME} env var)"
     ),
     bypass_ddb_status_check: bool = typer.Option(False, help="Skip checking DDB record status"),
 ):

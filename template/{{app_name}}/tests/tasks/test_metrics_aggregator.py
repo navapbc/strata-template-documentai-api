@@ -12,7 +12,7 @@ from documentai_api.tasks.metrics_aggregator.main import (
     _write_aggregated_stats,
     main,
 )
-
+from documentai_api.utils import env
 
 def create_record(
     status="success",
@@ -159,7 +159,7 @@ def test_main_already_aggregated(s3_client, s3_bucket):
         Body=b'{"date": "2026-02-20"}',
     )
 
-    with patch.dict("os.environ", {"DDE_METRICS_BUCKET_NAME": "test-bucket"}):
+    with patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket"}):
         result = main("2026-02-20", overwrite=False)
 
     assert result["statusCode"] == 200
@@ -190,10 +190,10 @@ def test_main_success(s3_client, s3_bucket, overwrite, should_skip):
         patch.dict(
             "os.environ",
             {
-                "DDE_GLUE_DATABASE_NAME": "test_db",
-                "DDE_METRICS_RAW_TABLE_NAME": "test_table",
-                "DDE_ATHENA_RESULTS_BUCKET_NAME": "athena-bucket",
-                "DDE_METRICS_BUCKET_NAME": "test-bucket",
+                env.DOCUMENTAI_GLUE_DATABASE_NAME: "test_db",
+                env.DOCUMENTAI_METRICS_RAW_TABLE_NAME: "test_table",
+                env.DOCUMENTAI_ATHENA_RESULTS_BUCKET_NAME: "athena-bucket",
+                env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket",
             },
         ),
     ):

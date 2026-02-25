@@ -45,7 +45,7 @@ def write_to_s3(bucket_name: str, record: dict[str, Any]) -> None:
 
     # generate unique filename
     file_id = str(uuid.uuid4())
-    key = f"date={date_str}/hour={hour_str}/{file_id}.json"
+    key = f"raw/date={date_str}/hour={hour_str}/{file_id}.json"
 
     # write to S3
     s3_service.put_object(

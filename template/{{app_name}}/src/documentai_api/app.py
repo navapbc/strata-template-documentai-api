@@ -24,11 +24,12 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.dates import validate_yyyymmdd_format
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
-DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
 
 app = FastAPI(
     title=API_TITLE,
@@ -121,10 +122,10 @@ async def upload_document_for_processing(
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    if not DDE_INPUT_LOCATION:
-        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+    if not DOCUMENTAI_INPUT_LOCATION:
+        raise ValueError(f"{env.DOCUMENTAI_INPUT_LOCATION} environment variable not set")
 
-    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    bucket_name = DOCUMENTAI_INPUT_LOCATION.replace("s3://", "")
 
     try:
         metadata = {}
@@ -362,7 +363,7 @@ async def get_metrics(start_date: str, end_date: str | None = None):
                 status_code=400, detail="start_date must be before or equal to end_date"
             )
 
-        metrics_bucket = os.getenv("DDE_METRICS_BUCKET_NAME")
+        metrics_bucket = os.getenv(env.DOCUMENTAI_METRICS_BUCKET_NAME)
 
         if not metrics_bucket:
             raise HTTPException(status_code=500, detail="Metrics bucket not configured")

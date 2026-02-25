@@ -13,6 +13,7 @@ from documentai_api.app import (
     get_v1_document_processing_results,
     upload_document_for_processing,
 )
+from documentai_api.utils import env
 
 client = TestClient(app)
 
@@ -74,7 +75,7 @@ def test_metrics_endpoint_success(s3_bucket, query_params, expected_start, expec
         Body=json.dumps(STATS_2026_02_17),
     )
     
-    with patch.dict("os.environ", {"DDE_METRICS_BUCKET_NAME": "test-bucket"}):
+    with patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket"}):
         response = client.get(f"/v1/metrics/?{query_params}")
     
     assert response.status_code == 200
@@ -106,7 +107,7 @@ def test_metrics_endpoint_start_after_end():
 
 def test_metrics_endpoint_missing_bucket_config():
     """Test metrics endpoint handles missing bucket configuration."""
-    with patch.dict("os.environ", {"DDE_METRICS_BUCKET_NAME": ""}, clear=True):
+    with patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: ""}, clear=True):
         response = client.get("/v1/metrics/?start_date=2026-02-16")
     
     assert response.status_code == 500
@@ -117,7 +118,7 @@ def test_metrics_endpoint_missing_bucket_config():
 def test_metrics_endpoint_service_error(s3_bucket):
     """Test metrics endpoint handles service errors."""
     with (
-        patch.dict("os.environ", {"DDE_METRICS_BUCKET_NAME": "test-bucket"}),
+        patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket"}),
         patch("documentai_api.services.metrics.get_aggregated_metrics", side_effect=Exception("S3 error")),
     ):
         response = client.get("/v1/metrics/?start_date=2026-02-16")
@@ -162,7 +163,7 @@ async def test_upload_document_for_processing_success():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
     ):
         from documentai_api.config.constants import DocumentCategory
@@ -181,12 +182,12 @@ async def test_upload_document_for_processing_success():
 
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_no_env():
-    """Test upload fails when DDE_INPUT_LOCATION not set."""
+    """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
     mock_file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", None),
-        pytest.raises(ValueError, match="DDE_INPUT_LOCATION"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", None),
+        pytest.raises(ValueError, match="DOCUMENTAI_INPUT_LOCATION"),
     ):
         await upload_document_for_processing(
             file=mock_file,
@@ -331,7 +332,7 @@ async def test_upload_document_for_processing_s3_failure():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
     ):
         mock_upload.side_effect = Exception("S3 error")
@@ -354,7 +355,7 @@ async def test_upload_document_for_processing_invalid_category_type():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         pytest.raises(HTTPException),
     ):
         await upload_document_for_processing(

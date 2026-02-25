@@ -13,6 +13,7 @@ from botocore.exceptions import ClientError
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils.dates import validate_yyyymmdd_format
+from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,7 +37,7 @@ def _build_deduplication_query(database_name: str, table_name: str, target_date:
                 ORDER BY updated_at DESC
             ) AS rn
         FROM {database_name}.{table_name}
-        WHERE created_at = '{target_date}'
+        WHERE date = '{target_date}'
     )
     SELECT *
     FROM ranked_records
@@ -55,14 +56,14 @@ def _aggregate_records(records: list[dict], target_date: str) -> dict:
     return stats
 
 
-def _execute_athena_query(query: str, database_name: str, output_location: str) -> str:
+def _execute_athena_query(query: str, database_name: str, workgroup_name: str) -> str:
     """Execute Athena query and return execution ID."""
     athena = AWSClientFactory.get_athena_client()
 
     response = athena.start_query_execution(
         QueryString=query,
         QueryExecutionContext={"Database": database_name},
-        ResultConfiguration={"OutputLocation": output_location},
+        WorkGroup=workgroup_name,
     )
 
     return response["QueryExecutionId"]
@@ -218,10 +219,10 @@ def main(target_date: str, overwrite: bool = False) -> dict:
     # validate YYYY-MM-DD format, will raise ValueError if invalid
     validate_yyyymmdd_format(target_date)
 
-    database_name = os.getenv("DDE_GLUE_DATABASE_NAME")
-    table_name = os.getenv("DDE_METRICS_RAW_TABLE_NAME")
-    athena_results_bucket = os.getenv("DDE_ATHENA_RESULTS_BUCKET_NAME")
-    metrics_bucket = os.getenv("DDE_METRICS_BUCKET_NAME")
+    database_name = os.getenv(env.DOCUMENTAI_GLUE_DATABASE_NAME)
+    table_name = os.getenv(env.DOCUMENTAI_METRICS_RAW_TABLE_NAME)
+    workgroup_name = os.getenv(env.DOCUMENTAI_ATHENA_WORKGROUP_NAME)
+    metrics_bucket = os.getenv(env.DOCUMENTAI_METRICS_BUCKET_NAME)
 
     if not overwrite and _check_if_previously_aggregated(metrics_bucket, target_date):
         s3_key = f"aggregated/date={target_date}/stats.json"
@@ -234,8 +235,7 @@ def main(target_date: str, overwrite: bool = False) -> dict:
         }
 
     query = _build_deduplication_query(database_name, table_name, target_date)
-    output_location = f"s3://{athena_results_bucket}/daily_aggregate_results/"
-    execution_id = _execute_athena_query(query, database_name, output_location)
+    execution_id = _execute_athena_query(query, database_name, workgroup_name)
     records = _get_athena_results(execution_id)
     stats = _aggregate_records(records, target_date)
     s3_key = _write_aggregated_stats(metrics_bucket, stats, target_date)

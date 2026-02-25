@@ -292,7 +292,7 @@ def test_build_update_expression(
 def test_execute_ddb_update(mock_ddb_service):
     table_name = "test-table"
 
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": table_name}):
+    with patch.dict(os.environ, {"DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME": table_name}):
         object_key = "table-key"
         update_expression = "SET #status = :status"
         expression_values = {":status": "test"}
@@ -315,7 +315,7 @@ def test_get_user_provided_document_category(user_provided_document_category) ->
 
 
 def test_get_ddb_record(mock_ddb_service):
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
+    with patch.dict(os.environ, {"DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
         mock_ddb_service.get_item.return_value = {
             DocumentMetadata.FILE_NAME: "test-file",
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
@@ -333,8 +333,8 @@ def test_get_ddb_by_job_id(mock_ddb_service):
     with patch.dict(
         os.environ,
         {
-            "DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table",
-            "DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME": "job-id-index",
+            "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME": "test-table",
+            "DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME": "job-id-index",
         },
     ):
         job_id = "job-123"
@@ -391,7 +391,7 @@ def test_update_ddb(status, has_timing):
 
 def test_insert_ddb(mock_ddb_service):
     """Test DDB insert with all fields."""
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
+    with patch.dict(os.environ, {"DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
         mock_raw_metrics = MagicMock()
         mock_raw_metrics.to_json_dict.return_value = {"raw": "data"}
         mock_normalized_metrics = MagicMock()

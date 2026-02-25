@@ -14,6 +14,7 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.services import sqs as sqs_service
+from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -248,7 +249,7 @@ def _build_update_expression(
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
@@ -257,17 +258,17 @@ def _execute_ddb_update(object_key: str, update_expression: str, expression_valu
 def _send_to_sqs(object_key: str):
     """Write object key to SQS queue."""
     try:
-        queue_url = os.getenv("DDE_METRICS_QUEUE_URL")
+        queue_url = os.getenv(env.DOCUMENTAI_METRICS_QUEUE_URL)
 
         if not queue_url:
-            msg = "DDE_METRICS_QUEUE_URL environment variable not set, skipping metrics"
+            msg = f"{env.DOCUMENTAI_METRICS_QUEUE_URL} environment variable not set, skipping metrics"
             print(msg)
             logger.warning(msg)
             # do not raise an exception here. metrics are optional and shouldn't
             # prevent process from completing successfully
             return
 
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
         key = {"fileName": object_key}
         ddb_record = ddb_service.get_item(table_name, key)
 
@@ -304,7 +305,7 @@ def get_user_provided_document_category(object_key: str) -> str:
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -319,11 +320,11 @@ def get_ddb_record(object_key: str) -> dict:
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
-    index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     if not index_name:
-        raise ValueError("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME environment variable not set")
+        raise ValueError(f"{env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME} environment variable not set")
 
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None
@@ -390,7 +391,7 @@ def insert_ddb(
     overall_blur_score=None,
 ):
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
 
         item = {
             DocumentMetadata.FILE_NAME: object_key,

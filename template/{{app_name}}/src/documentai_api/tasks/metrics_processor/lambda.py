@@ -5,6 +5,7 @@ import logging
 import os
 
 from documentai_api.tasks.metrics_processor.main import process_batch
+from documentai_api.utils import env
 from documentai_api.utils.error_handling import handle_lambda_errors
 
 logger = logging.getLogger()
@@ -17,10 +18,10 @@ def handler(event, context):
 
     Processes metrics from SQS queue and writes to S3.
     """
-    queue_url = os.environ["DDE_METRICS_QUEUE_URL"]
-    bucket_name = os.environ["DDE_METRICS_BUCKET_NAME"]
-    max_messages = int(os.environ.get("DDE_METRICS_QUEUE_MAX_MESSAGES", "10"))
-    max_batches = int(os.environ.get("DDE_METRICS_QUEUE_MAX_BATCHES", "10"))
+    queue_url = os.environ[env.DOCUMENTAI_METRICS_QUEUE_URL]
+    bucket_name = os.environ[env.DOCUMENTAI_METRICS_BUCKET_NAME]
+    max_messages = int(os.environ.get(env.DOCUMENTAI_METRICS_QUEUE_MAX_MESSAGES, "10"))
+    max_batches = int(os.environ.get(env.DOCUMENTAI_METRICS_QUEUE_MAX_BATCHES, "10"))
 
     logger.info(f"Processing metrics from queue: {queue_url}")
 

@@ -12,7 +12,7 @@ from documentai_api.utils.ddb import (
     get_ddb_record,
     set_bda_processing_status_started,
 )
-from documentai_api.utils.env import DDE_INPUT_LOCATION
+from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,14 +25,14 @@ def main(
 
     Args:
         file_name: Name of file to process
-        bucket_name: Optional S3 bucket name (defaults to DDE_INPUT_LOCATION env var)
+        bucket_name: Optional S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var) 
         bypass_ddb_status_check: Skip checking DDB record status (default: False)
 
     Returns:
         Status dictionary
     """
     if bucket_name is None:
-        bucket_name = os.getenv(DDE_INPUT_LOCATION).replace("s3://", "")
+        bucket_name = os.getenv(DOCUMENTAI_INPUT_LOCATION).replace("s3://", "")
 
     logger.info(f"Invoking BDA for file: {file_name} in bucket: {bucket_name}")
 
