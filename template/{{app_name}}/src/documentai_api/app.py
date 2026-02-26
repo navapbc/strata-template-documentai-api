@@ -17,6 +17,7 @@ from documentai_api.config.constants import (
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
+    MetricsGranularity,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -67,7 +68,7 @@ def get_config(request: Request):
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
             "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
-            "metrics": "/v1/metrics?start_date={YYYY-MM-DD}[&end_date={YYYY-MM-DD}]",
+            "metrics": "/v1/metrics?start_date={YYYY-MM-DD}[&end_date={YYYY-MM-DD}][&granularity=daily|monthly]",
             "schemas": "/v1/schemas",
             "schemaDetail": "/v1/schemas/{document_type}",
             "health": "/health",
@@ -341,12 +342,17 @@ async def get_schema(document_type: str):
 
 
 @app.get("/v1/metrics/")
-async def get_metrics(start_date: str, end_date: str | None = None):
+async def get_metrics(
+    start_date: str,
+    end_date: str | None = None,
+    granularity: MetricsGranularity = MetricsGranularity.DAILY,
+):
     """Get aggregated metrics for date range.
 
     Args:
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD), defaults to start_date
+        granularity: 'daily' or 'monthly' (default: 'daily')
     """
     try:
         validate_yyyymmdd_format(start_date)
@@ -368,7 +374,7 @@ async def get_metrics(start_date: str, end_date: str | None = None):
 
         from documentai_api.services.metrics import get_aggregated_metrics
 
-        return get_aggregated_metrics(metrics_bucket, start_date, end_date)
+        return get_aggregated_metrics(metrics_bucket, start_date, end_date, granularity)
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
