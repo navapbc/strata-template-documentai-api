@@ -5,7 +5,7 @@ import os
 from documentai_api.config.constants import ProcessStatus
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.tasks.bda_invoker.main import main as invoke_bda_main
-from documentai_api.utils.env import DDE_INPUT_LOCATION
+from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION
 from documentai_api.utils.error_handling import handle_lambda_errors
 from documentai_api.utils.logger import get_logger
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 @handle_lambda_errors
 def handler(event, _context):
     """Lambda handler for DDB stream events to invoke BDA."""
-    bucket_name = os.getenv(DDE_INPUT_LOCATION).replace("s3://", "")
+    bucket_name = os.getenv(DOCUMENTAI_INPUT_LOCATION).replace("s3://", "")
 
     for record in event["Records"]:
         logger.info(f"Processing record: {record['eventName']}")

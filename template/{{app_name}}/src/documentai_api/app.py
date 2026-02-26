@@ -17,16 +17,19 @@ from documentai_api.config.constants import (
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
+    MetricsGranularity,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
+from documentai_api.utils.dates import validate_yyyymmdd_format
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
-DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
 
 app = FastAPI(
     title=API_TITLE,
@@ -65,6 +68,7 @@ def get_config(request: Request):
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
             "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
+            "metrics": "/v1/metrics?start_date={YYYY-MM-DD}[&end_date={YYYY-MM-DD}][&granularity=daily|monthly]",
             "schemas": "/v1/schemas",
             "schemaDetail": "/v1/schemas/{document_type}",
             "health": "/health",
@@ -119,10 +123,10 @@ async def upload_document_for_processing(
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    if not DDE_INPUT_LOCATION:
-        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+    if not DOCUMENTAI_INPUT_LOCATION:
+        raise ValueError(f"{env.DOCUMENTAI_INPUT_LOCATION} environment variable not set")
 
-    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    bucket_name = DOCUMENTAI_INPUT_LOCATION.replace("s3://", "")
 
     try:
         metadata = {}
@@ -335,6 +339,50 @@ async def get_schema(document_type: str):
         )
 
     return schema
+
+
+@app.get("/v1/metrics/")
+async def get_metrics(
+    start_date: str,
+    end_date: str | None = None,
+    granularity: MetricsGranularity = MetricsGranularity.DAILY,
+):
+    """Get aggregated metrics for date range.
+
+    Args:
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD), defaults to start_date
+        granularity: 'daily' or 'monthly' (default: 'daily')
+    """
+    try:
+        validate_yyyymmdd_format(start_date)
+
+        if end_date:
+            validate_yyyymmdd_format(end_date)
+        else:
+            end_date = start_date
+
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=400, detail="start_date must be before or equal to end_date"
+            )
+
+        metrics_bucket = os.getenv(env.DOCUMENTAI_METRICS_BUCKET_NAME)
+
+        if not metrics_bucket:
+            raise HTTPException(status_code=500, detail="Metrics bucket not configured")
+
+        from documentai_api.services.metrics import get_aggregated_metrics
+
+        return get_aggregated_metrics(metrics_bucket, start_date, end_date, granularity)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve metrics") from e
 
 
 if __name__ == "__main__":
