@@ -3,7 +3,6 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Annotated
 
 import magic
@@ -22,9 +21,9 @@ from documentai_api.config.constants import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
 from documentai_api.utils.dates import validate_yyyymmdd_format
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
-from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
@@ -68,6 +67,7 @@ def get_config(request: Request):
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
             "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
+            "metrics": "/v1/metrics?start_date={YYYY-MM-DD}[&end_date={YYYY-MM-DD}]",
             "schemas": "/v1/schemas",
             "schemaDetail": "/v1/schemas/{document_type}",
             "health": "/health",
@@ -346,7 +346,7 @@ async def get_metrics(start_date: str, end_date: str | None = None):
 
     Args:
         start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD), defaults to start_date + 30 days if not provided
+        end_date: End date (YYYY-MM-DD), defaults to start_date
     """
     try:
         validate_yyyymmdd_format(start_date)
@@ -354,9 +354,7 @@ async def get_metrics(start_date: str, end_date: str | None = None):
         if end_date:
             validate_yyyymmdd_format(end_date)
         else:
-            # end date defaults to 30 days if no end date provided
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            end_date = (start_dt + timedelta(days=30)).strftime("%Y-%m-%d")
+            end_date = start_date
 
         if start_date > end_date:
             raise HTTPException(

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils import env
+from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 @pytest.fixture(autouse=True)

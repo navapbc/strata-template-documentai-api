@@ -56,14 +56,16 @@ def test_document_status_not_found():
     [
         ("start_date=2026-02-16&end_date=2026-02-17", "2026-02-16", "2026-02-17", 2, 34112),
         ("start_date=2026-02-16&end_date=2026-02-18", "2026-02-16", "2026-02-18", 2, 34112),
-        ("start_date=2026-02-16", "2026-02-16", "2026-03-18", 2, 34112),
+        ("start_date=2026-02-16", "2026-02-16", "2026-02-16", 1, 13901),
         ("start_date=2026-01-01&end_date=2026-01-02", "2026-01-01", "2026-01-02", 0, 0),  # no data
     ],
 )
-def test_metrics_endpoint_success(s3_bucket, query_params, expected_start, expected_end, expected_daily_count, expected_total):
+def test_metrics_endpoint_success(
+    s3_bucket, query_params, expected_start, expected_end, expected_daily_count, expected_total
+):
     """Test metrics endpoint with various date ranges."""
     from tests.services.test_metrics import STATS_2026_02_16, STATS_2026_02_17
-    
+
     s3_bucket.put_object(
         Bucket="test-bucket",
         Key="aggregated/date=2026-02-16/stats.json",
@@ -74,10 +76,10 @@ def test_metrics_endpoint_success(s3_bucket, query_params, expected_start, expec
         Key="aggregated/date=2026-02-17/stats.json",
         Body=json.dumps(STATS_2026_02_17),
     )
-    
+
     with patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket"}):
         response = client.get(f"/v1/metrics/?{query_params}")
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["start_date"] == expected_start
@@ -109,7 +111,7 @@ def test_metrics_endpoint_missing_bucket_config():
     """Test metrics endpoint handles missing bucket configuration."""
     with patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: ""}, clear=True):
         response = client.get("/v1/metrics/?start_date=2026-02-16")
-    
+
     assert response.status_code == 500
     assert "Metrics bucket not configured" in response.json()["detail"]
 
@@ -119,10 +121,13 @@ def test_metrics_endpoint_service_error(s3_bucket):
     """Test metrics endpoint handles service errors."""
     with (
         patch.dict("os.environ", {env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket"}),
-        patch("documentai_api.services.metrics.get_aggregated_metrics", side_effect=Exception("S3 error")),
+        patch(
+            "documentai_api.services.metrics.get_aggregated_metrics",
+            side_effect=Exception("S3 error"),
+        ),
     ):
         response = client.get("/v1/metrics/?start_date=2026-02-16")
-    
+
     assert response.status_code == 500
     assert "Failed to retrieve metrics" in response.json()["detail"]
 

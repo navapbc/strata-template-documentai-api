@@ -15,7 +15,10 @@ def process(
         ..., "--queue-url", envvar=env.DOCUMENTAI_METRICS_QUEUE_URL, help="SQS queue URL"
     ),
     bucket_name: str = typer.Option(
-        ..., "--bucket-name", envvar=env.DOCUMENTAI_METRICS_BUCKET_NAME, help="S3 bucket for metrics"
+        ...,
+        "--bucket-name",
+        envvar=env.DOCUMENTAI_METRICS_BUCKET_NAME,
+        help="S3 bucket for metrics",
     ),
     max_messages: int = typer.Option(10, "--max-messages", help="Max messages per batch"),
     max_batches: int = typer.Option(10, "--max-batches", help="Max batches to process"),

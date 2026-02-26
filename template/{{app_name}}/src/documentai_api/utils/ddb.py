@@ -261,7 +261,9 @@ def _send_to_sqs(object_key: str):
         queue_url = os.getenv(env.DOCUMENTAI_METRICS_QUEUE_URL)
 
         if not queue_url:
-            msg = f"{env.DOCUMENTAI_METRICS_QUEUE_URL} environment variable not set, skipping metrics"
+            msg = (
+                f"{env.DOCUMENTAI_METRICS_QUEUE_URL} environment variable not set, skipping metrics"
+            )
             print(msg)
             logger.warning(msg)
             # do not raise an exception here. metrics are optional and shouldn't
@@ -324,7 +326,9 @@ def get_ddb_by_job_id(job_id: str) -> dict | None:
     index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     if not index_name:
-        raise ValueError(f"{env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME} environment variable not set")
+        raise ValueError(
+            f"{env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME} environment variable not set"
+        )
 
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None

@@ -1,4 +1,5 @@
 """Lambda handler for daily metrics aggregator."""
+
 from datetime import datetime, timedelta
 
 from documentai_api.tasks.metrics_aggregator.main import main

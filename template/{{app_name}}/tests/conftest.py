@@ -97,3 +97,28 @@ def mock_grayscale_dependencies():
         patch("PIL.Image.fromarray") as mock_pil_fromarray,
     ):
         yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
+
+
+@pytest.fixture
+def mock_metrics_aggregator_env():
+    """Mock environment and Athena dependencies for metrics aggregator tests."""
+    from documentai_api.utils import env
+
+    with (
+        patch("documentai_api.tasks.metrics_aggregator.main._execute_athena_query") as mock_athena,
+        patch("documentai_api.tasks.metrics_aggregator.main._get_athena_results") as mock_results,
+        patch.dict(
+            "os.environ",
+            {
+                env.DOCUMENTAI_GLUE_DATABASE_NAME: "test_db",
+                env.DOCUMENTAI_METRICS_RAW_TABLE_NAME: "test_table",
+                env.DOCUMENTAI_ATHENA_WORKGROUP_NAME: "test_workgroup",
+                env.DOCUMENTAI_METRICS_BUCKET_NAME: "test-bucket",
+            },
+        ),
+    ):
+        mock_athena.return_value = "test-query-execution-id"
+        mock_results.return_value = [
+            {"process_status": "success", "created_at": "2026-02-20T10:00:00Z"}
+        ]
+        yield {"mock_athena": mock_athena, "mock_results": mock_results}

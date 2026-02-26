@@ -3,8 +3,6 @@
 import json
 from unittest.mock import patch
 
-from moto import mock_aws
-
 from documentai_api.tasks.metrics_processor.main import (
     camel_to_snake,
     convert_keys_to_snake_case,
@@ -49,7 +47,7 @@ def test_write_to_s3(s3_client, s3_bucket):
     write_to_s3("test-bucket", record)
 
     # verify file was written with correct partitioning
-    objects = s3_client.list_objects_v2(Bucket="test-bucket", Prefix="date=2026-02-20/hour=10/")
+    objects = s3_client.list_objects_v2(Bucket="test-bucket", Prefix="raw/date=2026-02-20/hour=10/")
     assert objects["KeyCount"] == 1
 
     # verify content

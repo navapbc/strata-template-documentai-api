@@ -25,7 +25,7 @@ def main(
 
     Args:
         file_name: Name of file to process
-        bucket_name: Optional S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var) 
+        bucket_name: Optional S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)
         bypass_ddb_status_check: Skip checking DDB record status (default: False)
 
     Returns:
