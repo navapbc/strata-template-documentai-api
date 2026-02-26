@@ -1,8 +1,152 @@
 # {{app_name}} API
 
-A FastAPI-based Document AI API.
+## Overview
 
-## Getting Started
+This is a [FastAPI](https://fastapi.tiangolo.com/) application for document processing using AWS Bedrock Data Automation. It includes:
 
-[Add setup instructions here]
+- Document upload and processing via AWS Bedrock Data Automation
+- Asynchronous processing with status tracking via DynamoDB
+- Metrics collection and aggregation (daily/monthly) stored in S3
+- RESTful API with automatic OpenAPI documentation
+- Lambda functions for background processing
+- Integration with AWS services (S3, DynamoDB, SQS, Athena, Bedrock Data Automation, EventBridge)
 
+## 📂 Directory structure
+
+```bash
+├── src/
+│   └── documentai_api/
+│       ├── config/          # Configuration and constants
+│       ├── schemas/         # DynamoDB field name constants
+│       ├── services/        # Business logic
+│       ├── tasks/           # Lambda function handlers
+│       │   ├── bda_invoker/
+│       │   ├── bda_output_processor/
+│       │   ├── ddb_insert_file_name/
+│       │   ├── metrics_processor/
+│       │   └── metrics_aggregator/
+│       ├── utils/           # Shared utilities
+│       └── app.py           # FastAPI application
+├── tests/                   # Test files
+├── docs/                    # Additional documentation
+└── Dockerfile
+```
+
+## 💻 Getting started with local development
+
+### Prerequisites
+
+- Python 3.11+
+- Docker (optional)
+- AWS credentials with access to:
+  - Bedrock Data Automation
+  - S3
+  - DynamoDB
+  - SQS
+  - Athena
+  - EventBridge
+
+### 💾 Setup
+
+You can run the app within a container or natively.
+
+#### Environment variables
+
+1. Run `cp local.env.example .env` to create a `.env` file
+2. Variables marked with `<FILL ME IN>` need to be manually set
+
+#### Running in a container
+
+1. `make init`
+2. `make start`
+
+Then visit http://localhost:8000/docs
+
+#### Running natively
+
+1. `make init-local`
+2. `make start-local`
+
+Then visit http://localhost:8000/docs
+
+### 🛠️ Development
+
+#### API Documentation
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+#### Key Endpoints
+
+Document Processing:
+- `POST /v1/documents/upload` - Upload a document for processing
+- `GET /v1/documents/{document_id}` - Get document status and results
+
+Schemas:
+- `GET /v1/schemas` - List all supported document types
+- `GET /v1/schemas/{document_type}` - Get field schema for a document type
+
+Metrics:
+- `GET /v1/metrics` - Get aggregated metrics with daily or monthly granularity
+
+    ```bash
+    # Daily metrics for a single date
+    GET /v1/metrics?start_date=2024-02-25&granularity=daily
+
+    # Daily metrics for a date range
+    GET /v1/metrics?start_date=2024-02-01&end_date=2024-02-28&granularity=daily
+
+    # Monthly metrics
+    GET /v1/metrics?start_date=2024-01-01&end_date=2024-03-31&granularity=monthly
+    ```
+
+    _Parameters:_
+    - `start_date` (required): Start date in YYYY-MM-DD format
+    - `end_date` (optional): End date in YYYY-MM-DD format (defaults to start_date)
+    - `granularity` (optional): `daily` or `monthly` (defaults to `daily`)
+
+    _Response includes:_
+    - Total records processed
+    - Processing status breakdown
+    - Document classification counts
+    - Response code distribution
+    - Timing statistics (processing time, BDA wait time)
+
+#### Testing
+
+- Run tests: `make test`
+- Run tests parallel: `make test-parallel`
+- Run with coverage report: `make test-coverage`
+- Run specific test files: `make test args="tests/services/test_metrics.py -v"`
+
+#### Code Quality
+
+- Format: `make format`
+- Lint: `make lint`
+
+
+
+## 🏗️ Architecture
+
+### Components
+
+- **FastAPI Application**: REST API server (ECS)
+- **Lambda Functions**:
+  - `ddb_insert_file_name`: Inserts file metadata into DynamoDB
+  - `bda_invoker`: Invokes Bedrock Data Automation
+  - `bda_output_processor`: Processes BDA results
+  - `metrics_processor`: Processes raw metrics data
+  - `metrics_aggregator`: Aggregates metrics daily/monthly
+
+### Metrics Pipeline
+
+1. Raw metrics stored in S3 as Parquet files
+2. Daily aggregation via EventBridge schedule (Lambda)
+3. Monthly aggregation from daily stats (Lambda)
+4. API serves pre-aggregated data from S3
+
+## 📇 Additional reading
+
+Refer to the `docs/test_documentai_api` directory for more detailed information:
+
+- [Accessing AWS Resources from Docker](../docs/test_documentai_api/accessing-real-aws-resources-from-docker.md)
