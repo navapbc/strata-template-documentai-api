@@ -11,8 +11,69 @@ from documentai_api.app import (
     get_v1_document_processing_results,
     upload_document_for_processing,
 )
+from documentai_api.utils.models import PageMetadata
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def mock_multipage_upload(monkeypatch):
+    """Mock common multipage upload dependencies."""
+    monkeypatch.setenv("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME", "test-multipage-table")
+
+    with (
+        patch("documentai_api.app.magic.from_buffer") as mock_magic,
+        patch("documentai_api.app.multipage_page_exists") as mock_page_exists,
+        patch("documentai_api.app.upload_document_for_processing") as mock_upload,
+        patch("documentai_api.app.upsert_multipage_session") as mock_upsert,
+    ):
+        mock_magic.return_value = "application/pdf"
+        mock_page_exists.return_value = False
+
+        yield {
+            "magic": mock_magic,
+            "page_exists": mock_page_exists,
+            "upload": mock_upload,
+            "upsert": mock_upsert,
+        }
+
+
+@pytest.fixture
+def mock_multipage_submit(monkeypatch):
+    """Mock common multipage submit dependencies."""
+    monkeypatch.setenv("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME", "test-multipage-table")
+
+    with (
+        patch("documentai_api.utils.ddb.is_multipage_session_submitted") as mock_is_submitted,
+        patch("documentai_api.utils.ddb.get_multipage_session_pages") as mock_get_pages,
+        patch("documentai_api.utils.pdf.merge_pages_to_pdf") as mock_merge,
+        patch("documentai_api.app.upload_document_for_processing") as mock_upload,
+        patch("documentai_api.utils.files.create_upload_file_from_bytes") as mock_create_file,
+        patch("documentai_api.utils.ddb.mark_multipage_session_submitted") as mock_mark_submitted,
+    ):
+        mock_merge.return_value = b"merged pdf bytes"
+        mock_is_submitted.return_value = False  # default to not submitted
+
+        yield {
+            "is_submitted": mock_is_submitted,
+            "get_pages": mock_get_pages,
+            "merge": mock_merge,
+            "upload": mock_upload,
+            "create_file": mock_create_file,
+            "mark_submitted": mock_mark_submitted,
+        }
+
+
+def create_page_metadata(
+    page_number: int, session_id: str = "session-123", category: str | None = None
+) -> PageMetadata:
+    """Helper to create PageMetadata for tests."""
+    return PageMetadata(
+        page_number=page_number,
+        s3_key=f"pending_merge/{session_id}/page-{page_number}.pdf",
+        s3_bucket_name="test-bucket",
+        category=category,
+    )
 
 
 def test_health():
@@ -362,3 +423,203 @@ def test_get_document_results_error_handling():
 
     assert response.status_code == 500
     assert "Failed to retrieve results" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("session_id", "page_number", "expected_session"),
+    [
+        (None, 1, None),  # new session - sessionId will be generated
+        ("session-123", 2, "session-123"),  # existing session
+    ],
+)
+def test_upload_multipage_page_sessions(
+    multipage_ddb_table, mock_multipage_upload, session_id, page_number, expected_session
+):
+    """Test uploading pages to new and existing sessions."""
+    files = {"file": ("page.pdf", b"fake pdf", "application/pdf")}
+    data = {"page_number": page_number}
+    if session_id:
+        data["session_id"] = session_id
+
+    response = client.post("/v1/multipage/pages", files=files, data=data)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "sessionId" in result
+    if expected_session:
+        assert result["sessionId"] == expected_session
+    assert result["pageNumber"] == page_number
+    assert "uploaded successfully" in result["message"].lower()
+
+
+@pytest.mark.parametrize(
+    ("file_type", "file_name"),
+    [
+        ("application/zip", "test.zip"),
+        ("text/plain", "test.txt"),
+        ("image/gif", "test.gif"),
+    ],
+)
+def test_upload_multipage_page_invalid_file_type(
+    multipage_ddb_table, mock_multipage_upload, file_type, file_name
+):
+    """Test multipage upload with invalid file types."""
+    mock_multipage_upload["magic"].return_value = file_type
+
+    files = {"file": (file_name, b"fake content", file_type)}
+    data = {"page_number": 1}
+    response = client.post("/v1/multipage/pages", files=files, data=data)
+
+    assert response.status_code == 400
+    assert "Invalid file type" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("page_exists", "overwrite", "expected_status"),
+    [
+        (True, False, 409),  # duplicate without overwrite -> conflict
+        (True, True, 200),  # duplicate with overwrite -> success
+        (False, False, 200),  # new page -> success
+        (False, True, 200),  # new page with overwrite flag -> success
+    ],
+)
+def test_upload_multipage_page_overwrite_scenarios(
+    multipage_ddb_table, mock_multipage_upload, page_exists, overwrite, expected_status
+):
+    """Test multipage upload duplicate/overwrite scenarios."""
+    mock_multipage_upload["page_exists"].return_value = page_exists
+
+    files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
+    data = {"session_id": "session-123", "page_number": 1, "overwrite": overwrite}
+    response = client.post("/v1/multipage/pages", files=files, data=data)
+
+    assert response.status_code == expected_status
+    if expected_status == 409:
+        assert "already exists" in response.json()["detail"]
+
+
+def test_upload_multipage_page_with_category(multipage_ddb_table, mock_multipage_upload):
+    """Test multipage upload with document category."""
+    files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
+    data = {"page_number": 1, "category": "income"}
+    response = client.post("/v1/multipage/pages", files=files, data=data)
+
+    assert response.status_code == 200
+    mock_multipage_upload["upsert"].assert_called_once()
+
+
+def test_submit_multipage_document_not_found(multipage_ddb_table, mock_multipage_submit):
+    """Test submitting non-existent session."""
+    mock_multipage_submit["get_pages"].return_value = []
+
+    data = {"session_id": "nonexistent-session"}
+    response = client.post("/v1/multipage/submit", data=data)
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_submit_multipage_document_synchronous(multipage_ddb_table, mock_multipage_submit):
+    """Test synchronous multipage submission (wait=true)."""
+    with patch("documentai_api.app.get_v1_document_processing_results") as mock_get_results:
+        mock_multipage_submit["get_pages"].return_value = [
+            create_page_metadata(1, category="income"),
+        ]
+        mock_get_results.return_value = {"status": "success", "data": {}}
+
+        data = {"session_id": "session-123"}
+        response = client.post("/v1/multipage/submit?wait=true", data=data)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+
+
+def test_submit_multipage_document_with_category(multipage_ddb_table, mock_multipage_submit):
+    """Test submit uses category from first page."""
+    from documentai_api.config.constants import DocumentCategory
+
+    mock_multipage_submit["get_pages"].return_value = [
+        create_page_metadata(1, category="income"),
+        create_page_metadata(2),
+    ]
+
+    data = {"session_id": "session-123"}
+    response = client.post("/v1/multipage/submit", data=data)
+
+    assert response.status_code == 200
+    mock_multipage_submit["upload"].assert_called_once()
+
+    # verify category was converted to enum
+    call_args = mock_multipage_submit["upload"].call_args
+    assert call_args.kwargs["user_provided_document_category"] == DocumentCategory.INCOME
+
+
+@pytest.mark.parametrize(
+    ("mock_method", "error"),
+    [
+        ("merge", Exception("PDF merge failed")),
+        ("upload", HTTPException(status_code=500, detail="Upload failed")),
+    ],
+)
+def test_submit_multipage_document_errors(
+    multipage_ddb_table, mock_multipage_submit, mock_method, error
+):
+    """Test error handling during multipage submit."""
+    mock_multipage_submit["get_pages"].return_value = [
+        create_page_metadata(1, category="income"),
+        create_page_metadata(2),
+    ]
+    mock_multipage_submit[mock_method].side_effect = error
+
+    data = {"session_id": "session-123"}
+    response = client.post("/v1/multipage/submit", data=data)
+
+    assert response.status_code == 500
+
+
+def test_submit_multipage_document_already_submitted(multipage_ddb_table, mock_multipage_submit):
+    """Test submitting a session that was already submitted."""
+    mock_multipage_submit["is_submitted"].return_value = True
+
+    data = {"session_id": "session-123"}
+    response = client.post("/v1/multipage/submit", data=data)
+
+    assert response.status_code == 400
+    assert "already been submitted" in response.json()["detail"]
+
+    # verify we didn't try to process
+    mock_multipage_submit["get_pages"].assert_not_called()
+    mock_multipage_submit["merge"].assert_not_called()
+
+
+def test_submit_multipage_document_success(multipage_ddb_table, mock_multipage_submit):
+    """Test successful multipage document submission."""
+    mock_multipage_submit["get_pages"].return_value = [
+        create_page_metadata(1, category="income"),
+        create_page_metadata(2),
+    ]
+
+    data = {"session_id": "session-123"}
+    response = client.post("/v1/multipage/submit", data=data)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "jobId" in result
+    assert result["sessionId"] == "session-123"
+    assert result["status"] == "not_started"
+    assert result["pageCount"] == 2
+
+    # verify session was marked as submitted
+    mock_multipage_submit["mark_submitted"].assert_called_once_with("session-123")
+
+
+def test_upload_multipage_page_error_handling(multipage_ddb_table, mock_multipage_upload):
+    """Test error handling during multipage page upload."""
+    mock_multipage_upload["upload"].side_effect = Exception("S3 upload failed")
+
+    files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
+    data = {"page_number": 1}
+    response = client.post("/v1/multipage/pages", files=files, data=data)
+
+    assert response.status_code == 500
+    assert "Failed to upload page" in response.json()["detail"]

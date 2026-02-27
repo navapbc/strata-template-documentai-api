@@ -8,6 +8,7 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
+    DocumentCategory,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -18,12 +19,130 @@ from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
     InternalApiResponse,
+    PageMetadata,
     ProcessingTimes,
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)
+
+
+def get_document_metadata_table() -> str:
+    """Get document metadata table name from environment."""
+    table_name = os.getenv("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME")
+    if not table_name:
+        # fallback to legacy DDE_ prefix for backward compatibility
+        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        if not table_name:
+            raise ValueError("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME not set")
+    return table_name
+
+
+def get_multipage_session_table() -> str:
+    """Get multipage upload sessions table name from environment."""
+    table_name = os.getenv("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME")
+    if not table_name:
+        raise ValueError("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME not set")
+    return table_name
+
+
+def multipage_page_exists(session_id: str, page_number: int) -> bool:
+    """Check if a page exists for a multipage session."""
+    table_name = get_multipage_session_table()
+    key = {"sessionId": session_id, "pageNumber": page_number}
+    item = ddb_service.get_item(table_name, key)
+    return item is not None
+
+
+async def upsert_multipage_session(
+    session_id: str,
+    page_number: int,
+    s3_key: str,
+    category: DocumentCategory | None = None,
+):
+    """Upsert multipage session page record."""
+    table_name = get_multipage_session_table()
+
+    item = {
+        "sessionId": session_id,
+        "pageNumber": page_number,
+        "s3Key": s3_key,
+        "uploadedAt": datetime.now(UTC).isoformat(),
+    }
+
+    if category:
+        item["category"] = category.value
+
+    ddb_service.put_item(table_name, item)
+
+
+def get_multipage_session_pages(session_id: str) -> list[PageMetadata]:
+    """Get all pages for a multipage session.
+
+    Args:
+        session_id: Session ID to query
+
+    Returns:
+        List of page records sorted by page number, empty list if session not found
+    """
+    table_name = get_multipage_session_table()
+    bucket_name = os.getenv("DDE_INPUT_LOCATION", "").replace("s3://", "")
+
+    items = ddb_service.query_by_key(
+        table_name=table_name,
+        index_name=None,  # query on primary key, no GSI needed
+        key_name="sessionId",
+        key_value=session_id,
+    )
+
+    # convert dict items to PageMetadata objects
+    pages = [
+        PageMetadata(
+            page_number=item.get("pageNumber", 0),
+            s3_key=item.get("s3Key", ""),
+            s3_bucket=bucket_name,
+            category=item.get("category"),
+            uploaded_at=item.get("uploadedAt"),
+        )
+        for item in items
+    ]
+
+    # sort by page number
+    return sorted(pages, key=lambda x: x.page_number)
+
+
+def is_multipage_session_submitted(session_id: str) -> bool:
+    """Check if a multipage session has already been submitted."""
+    table_name = get_multipage_session_table()
+    items = ddb_service.query_by_key(
+        table_name=table_name, index_name=None, key_name="sessionId", key_value=session_id
+    )
+
+    return len(items) > 0 and any(item.get("submittedAt") for item in items)
+
+
+def mark_multipage_session_submitted(session_id: str):
+    """Mark all pages in a multipage session as submitted.
+
+    Note: Updates each page individually. If a partial failure occurs, which is
+    unlikely, the session is still considered submitted if any page is submitted.
+    """
+    table_name = get_multipage_session_table()
+    items = ddb_service.query_by_key(
+        table_name=table_name, index_name=None, key_name="sessionId", key_value=session_id
+    )
+
+    submitted_at = datetime.now(UTC).isoformat()
+    for item in items:
+        # peform page-by-page updates rather than a batch update to ensure
+        # submittedAt is set on at least one record even if partial failure occurs
+        ddb_service.update_item(
+            table_name=table_name,
+            key={"sessionId": session_id, "pageNumber": item["pageNumber"]},
+            update_expression="SET submittedAt = :submittedAt",
+            expression_attribute_values={":submittedAt": submitted_at},
+        )
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -247,7 +366,7 @@ def _build_update_expression(
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = get_document_metadata_table()
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
@@ -273,7 +392,7 @@ def get_user_provided_document_category(object_key: str) -> str:
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = get_document_metadata_table()
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -288,7 +407,7 @@ def get_ddb_record(object_key: str) -> dict:
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = get_document_metadata_table()
     index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
 
     if not index_name:
@@ -356,7 +475,7 @@ def insert_ddb(
     overall_blur_score=None,
 ):
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = get_document_metadata_table()
 
         item = {
             DocumentMetadata.FILE_NAME: object_key,

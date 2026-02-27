@@ -111,6 +111,8 @@
   "upload_metadata_keys": {
     "user_provided_document_category": "user-provided-document-category",
     "job_id": "job-id",
-    "trace_id": "trace-id"
+    "trace_id": "trace-id",
+    "s3_prefix": "s3-prefix",
+    "multipage_upload_session_id": "multipage-upload-session-id"
   }
 }

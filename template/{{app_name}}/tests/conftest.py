@@ -65,6 +65,28 @@ def ddb_table(aws_credentials):
 
 
 @pytest.fixture
+def multipage_ddb_table(aws_credentials):
+    """Create a test multipage upload sessions DynamoDB table."""
+    import boto3
+
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+        table = dynamodb.create_table(
+            TableName="test-multipage-table",
+            KeySchema=[
+                {"AttributeName": "sessionId", "KeyType": "HASH"},
+                {"AttributeName": "pageNumber", "KeyType": "RANGE"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "sessionId", "AttributeType": "S"},
+                {"AttributeName": "pageNumber", "AttributeType": "N"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield table
+
+
+@pytest.fixture
 def mock_bda_clients():
     """Mock BDA clients (not supported by moto yet)."""
     with (
@@ -97,3 +119,10 @@ def mock_grayscale_dependencies():
         patch("PIL.Image.fromarray") as mock_pil_fromarray,
     ):
         yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
+
+
+@pytest.fixture
+def mock_s3_service():
+    """Mock s3_service for testing."""
+    with patch("documentai_api.utils.pdf.s3_service") as mock:
+        yield mock

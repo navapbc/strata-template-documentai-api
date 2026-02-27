@@ -639,3 +639,69 @@ def test_classify_functions(function, response_code, status, matched_document_cl
             expected_call["error_message"] = error_msg
 
         mock_update.assert_called_once_with(**expected_call)
+
+
+@pytest.mark.parametrize(
+    ("query_result", "expected"),
+    [
+        (
+            [{"sessionId": "session-123", "pageNumber": 1, "submittedAt": "2026-02-26T12:00:00Z"}],
+            True,
+        ),
+        ([{"sessionId": "session-123", "pageNumber": 1}], False),
+        ([], False),
+        # partial submission. page two is submitted, page one is not
+        (
+            [
+                {"sessionId": "session-123", "pageNumber": 1},
+                {
+                    "sessionId": "session-123",
+                    "pageNumber": 2,
+                    "submittedAt": "2026-02-26T12:00:00Z",
+                },
+            ],
+            True,
+        ),
+    ],
+)
+def test_is_multipage_session_submitted(mock_ddb_service, query_result, expected):
+    """Test checking if session is submitted in various scenarios."""
+    with patch.dict(
+        os.environ, {"DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME": "test-multipage-table"}
+    ):
+        mock_ddb_service.query_by_key.return_value = query_result
+
+        result = ddb_util.is_multipage_session_submitted("session-123")
+
+        assert result is expected
+
+
+def test_mark_multipage_session_submitted(mock_ddb_service):
+    """Test marking all pages in a session as submitted."""
+    with patch.dict(
+        os.environ, {"DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME": "test-multipage-table"}
+    ):
+        mock_ddb_service.query_by_key.return_value = [
+            {"sessionId": "session-123", "pageNumber": 1},
+            {"sessionId": "session-123", "pageNumber": 2},
+        ]
+
+        ddb_util.mark_multipage_session_submitted("session-123")
+
+        # verify update_item was called twice (once per page)
+        assert mock_ddb_service.update_item.call_count == 2
+
+        # verify the calls had correct arguments
+        calls = mock_ddb_service.update_item.call_args_list
+
+        # first call to update_item should be for page 1
+        assert calls[0].kwargs["table_name"] == "test-multipage-table"
+        assert calls[0].kwargs["key"] == {"sessionId": "session-123", "pageNumber": 1}
+        assert calls[0].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+        assert ":submittedAt" in calls[0].kwargs["expression_attribute_values"]
+
+        # second call to update_item should be for page 2
+        assert calls[1].kwargs["table_name"] == "test-multipage-table"
+        assert calls[1].kwargs["key"] == {"sessionId": "session-123", "pageNumber": 2}
+        assert calls[1].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+        assert ":submittedAt" in calls[1].kwargs["expression_attribute_values"]

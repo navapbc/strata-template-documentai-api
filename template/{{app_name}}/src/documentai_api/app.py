@@ -18,10 +18,17 @@ from documentai_api.config.constants import (
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
     ProcessStatus,
+    S3Prefix,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
-from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.ddb import (
+    ClassificationData,
+    classify_as_failed,
+    get_ddb_by_job_id,
+    multipage_page_exists,
+    upsert_multipage_session,
+)
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
@@ -104,44 +111,74 @@ def _get_job_status(job_id: str) -> JobStatus:
     return JobStatus(ddb_record, object_key, process_status, v1_response)
 
 
+async def validate_file_type(file: UploadFile) -> str:
+    """Validate file type and return content type.
+
+    Raises HTTPException if file type is not supported.
+    Returns the detected content type.
+    """
+    file_content = await file.read()
+    actual_content_type = magic.from_buffer(file_content, mime=True)
+
+    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type detected '{actual_content_type}'. File must be "
+                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
+            ),
+        )
+
+    file.file.seek(0)  # reset file pointer for subsequent reads
+    return actual_content_type
+
+
 async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
+    s3_prefix: S3Prefix = S3Prefix.INPUT,
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    multipage_upload_session_id: str | None = None,
 ):
     logger.debug(
         "S3 upload started",
         extra={
+            "unique_file_name": unique_file_name,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
+            "s3_prefix": s3_prefix,
         },
     )
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
 
     bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    unique_file_name = f"{s3_prefix.value}/{unique_file_name}"
 
     try:
         metadata = {}
-        if user_provided_document_category:
-            # add type check for safety
-            if not isinstance(user_provided_document_category, DocumentCategory):
-                raise ValueError(
-                    f"Expected DocumentCategory, got {type(user_provided_document_category)}"
-                )
 
+        if user_provided_document_category:
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
+
+        if s3_prefix:
+            metadata[UPLOAD_METADATA_KEYS["s3_prefix"]] = s3_prefix.value
 
         if job_id:
             metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
 
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        if multipage_upload_session_id:
+            metadata[UPLOAD_METADATA_KEYS["multipage_upload_session_id"]] = (
+                multipage_upload_session_id
+            )
 
         logger.debug(
             "S3: Starting actual upload",
@@ -236,18 +273,7 @@ async def create_document(
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
-    file_content = await file.read()
-    actual_content_type = magic.from_buffer(file_content, mime=True)
-
-    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid file type detected '{actual_content_type}'. File must be "
-                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
-            ),
-        )
-
+    actual_content_type = await validate_file_type(file)
     logger.info(
         f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
     )
@@ -335,6 +361,161 @@ async def get_schema(document_type: str):
         )
 
     return schema
+
+
+@app.post("/v1/multipage/pages")
+async def upload_multipage_document(
+    request: Request,
+    response: Response,
+    file: UploadFile,
+    session_id: Annotated[str | None, Form(description="Session ID for multi-page upload")] = None,
+    page_number: Annotated[int, Form(description="Page number (1-indexed)")] = 1,
+    overwrite: Annotated[bool, Form(description="Allow overwriting existing page")] = False,
+    category: Annotated[
+        DocumentCategory | None, Form(description="Type of document being uploaded")
+    ] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Upload a page for multi-page document processing.
+
+    If session_id is not provided, creates a new session.
+    Returns session_id for subsequent page uploads.
+    """
+    try:
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        if not session_id:
+            session_id = str(uuid.uuid4())
+
+        if multipage_page_exists(session_id, page_number) and not overwrite:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Page {page_number} already exists for session {session_id}. Set overwrite=true to replace.",
+            )
+
+        actual_content_type = await validate_file_type(file)
+        logger.info(
+            f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
+        )
+
+        file.file.seek(0)
+        file_extension = file.filename.split(".")[-1]
+        unique_file_name = f"{session_id}/page-{page_number}.{file_extension}"
+
+        await upload_document_for_processing(
+            file=file,
+            unique_file_name=unique_file_name,
+            content_type=actual_content_type,
+            s3_prefix=S3Prefix.PENDING_MERGE,
+            user_provided_document_category=category,
+            trace_id=trace_id,
+        )
+
+        await upsert_multipage_session(
+            session_id=session_id,
+            page_number=page_number,
+            s3_key=f"{S3Prefix.PENDING_MERGE.value}/{unique_file_name}",
+            category=category,
+        )
+
+        response.headers["X-Trace-ID"] = trace_id
+        return {
+            "sessionId": session_id,
+            "pageNumber": page_number,
+            "message": "Page uploaded successfully",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error uploading multipage document page {page_number} for session {session_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Failed to upload page") from e
+
+
+@app.post("/v1/multipage/submit")
+async def submit_multipage_document(
+    request: Request,
+    response: Response,
+    session_id: Annotated[str, Form(description="Session ID to submit")],
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    wait: bool = False,
+    timeout: int = 120,
+):
+    """Submit a multi-page session for processing.
+
+    Merges all uploaded pages and submits for document processing.
+    Returns job_id for tracking results.
+    """
+    from documentai_api.utils.ddb import (
+        get_multipage_session_pages,
+        is_multipage_session_submitted,
+        mark_multipage_session_submitted,
+    )
+    from documentai_api.utils.files import create_upload_file_from_bytes
+    from documentai_api.utils.pdf import merge_pages_to_pdf
+
+    try:
+        if is_multipage_session_submitted(session_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Session {session_id} has already been submitted for processing",
+            )
+
+        # 1. get all pages for session from dynamodb
+        pages = get_multipage_session_pages(session_id)
+
+        if not pages:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+        # 2. download and merge pdf from S3
+        merged_pdf_bytes = merge_pages_to_pdf(pages)
+
+        # 3. upload merged pdf to input/ prefix
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        job_id = str(uuid.uuid4())
+        unique_file_name = f"multipage-{session_id}-{uuid.uuid4()}.pdf"
+        category_str = pages[0].category
+        category = DocumentCategory(category_str) if category_str else None
+
+        # create UploadFile-like object from bytes
+        merged_file = create_upload_file_from_bytes(merged_pdf_bytes, unique_file_name)
+
+        await upload_document_for_processing(
+            file=merged_file,
+            unique_file_name=unique_file_name,
+            content_type="application/pdf",
+            s3_prefix=S3Prefix.INPUT,
+            user_provided_document_category=category,
+            job_id=job_id,
+            trace_id=trace_id,
+            multipage_upload_session_id=session_id,
+        )
+
+        # 4. update session record in ddb to mark as submitted
+        mark_multipage_session_submitted(session_id)
+
+        response.headers["X-Trace-ID"] = trace_id
+
+        if not wait:
+            return {
+                "jobId": job_id,
+                "sessionId": session_id,
+                "status": ProcessStatus.NOT_STARTED.value,
+                "message": "Multi-page document submitted successfully",
+                "pageCount": len(pages),
+            }
+        else:
+            results = await get_v1_document_processing_results(job_id, timeout)
+            return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting multipage document for session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit multipage document") from e
 
 
 if __name__ == "__main__":
