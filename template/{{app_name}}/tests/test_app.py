@@ -108,33 +108,28 @@ def test_document_status_not_found():
         assert response.status_code == 404
 
 
-def test_get_job_status_found():
-    """Test _get_job_status when job exists."""
+@pytest.mark.parametrize(
+    ("ddb_return", "expected_values"),
+    [
+        (
+            {
+                "fileName": "test.pdf",
+                "processStatus": "success",
+                "v1ApiResponseJson": '{"status": "success"}',
+            },
+            ("test.pdf", "success", '{"status": "success"}'),
+        ),
+        (None, (None, None, None)),
+    ],
+)
+def test_get_job_status(ddb_return, expected_values):
+    """Test _get_job_status."""
     with patch("documentai_api.app.get_ddb_by_job_id") as mock_get_ddb:
-        mock_get_ddb.return_value = {
-            "fileName": "test.pdf",
-            "processStatus": "success",
-            "v1ApiResponseJson": '{"status": "success"}',
-        }
-
+        mock_get_ddb.return_value = ddb_return
         result = _get_job_status("job-123")
-
-    assert result.object_key == "test.pdf"
-    assert result.process_status == "success"
-    assert result.v1_response_json == '{"status": "success"}'
-
-
-def test_get_job_status_not_found():
-    """Test _get_job_status when job doesn't exist."""
-    with patch("documentai_api.app.get_ddb_by_job_id") as mock_get_ddb:
-        mock_get_ddb.return_value = None
-
-        result = _get_job_status("job-123")
-
-    assert result.ddb_record is None
-    assert result.object_key is None
-    assert result.process_status is None
-    assert result.v1_response_json is None
+    assert result.object_key == expected_values[0]
+    assert result.process_status == expected_values[1]
+    assert result.v1_response_json == expected_values[2]
 
 
 @pytest.mark.asyncio
@@ -286,24 +281,19 @@ def test_list_schemas():
     assert "schemas" in response.json()
 
 
-def test_get_schema_found():
+@pytest.mark.parametrize(
+    ("schema_return", "expected_status"),
+    [
+        ({"fields": []}, 200),  # found
+        (None, 404),  # not found
+    ],
+)
+def test_get_schema(schema_return, expected_status):
     """Test getting specific schema."""
     with patch("documentai_api.app.get_document_schema") as mock_get_schema:
-        mock_get_schema.return_value = {"fields": []}
-
+        mock_get_schema.return_value = schema_return
         response = client.get("/v1/schemas/invoice")
-
-    assert response.status_code == 200
-
-
-def test_get_schema_not_found():
-    """Test getting non-existent schema."""
-    with patch("documentai_api.app.get_document_schema") as mock_get_schema:
-        mock_get_schema.return_value = None
-
-        response = client.get("/v1/schemas/invalid")
-
-    assert response.status_code == 404
+    assert response.status_code == expected_status
 
 
 @pytest.mark.asyncio
@@ -623,3 +613,76 @@ def test_upload_multipage_page_error_handling(multipage_ddb_table, mock_multipag
 
     assert response.status_code == 500
     assert "Failed to upload page" in response.json()["detail"]
+
+
+def test_get_multipage_session_success(multipage_ddb_table, mock_multipage_submit):
+    """Test getting session details."""
+    mock_multipage_submit["get_pages"].return_value = [
+        create_page_metadata(1, category="income"),
+        create_page_metadata(2),
+    ]
+
+    response = client.get("/v1/multipage/sessions/session-123")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["sessionId"] == "session-123"
+    assert result["pageCount"] == 2
+    assert len(result["pages"]) == 2
+    assert result["pages"][0]["pageNumber"] == 1
+    assert result["pages"][0]["category"] == "income"
+
+
+@pytest.mark.parametrize(
+    ("mock_side_effect", "expected_status"),
+    [
+        (True, 204),  # success - return value
+        (False, 404),  # not found - return value
+        (
+            ValueError("Cannot delete - session already submitted"),
+            400,
+        ),  # already submitted - exception
+    ],
+)
+def test_delete_multipage_page(multipage_ddb_table, monkeypatch, mock_side_effect, expected_status):
+    """Test deleting a page."""
+    monkeypatch.setenv("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME", "test-multipage-table")
+
+    with patch("documentai_api.utils.ddb.delete_multipage_page") as mock_delete:
+        if isinstance(mock_side_effect, Exception):
+            mock_delete.side_effect = mock_side_effect
+        else:
+            mock_delete.return_value = mock_side_effect
+
+        response = client.delete("/v1/multipage/sessions/session-123/pages/1")
+
+        assert response.status_code == expected_status
+        if expected_status == 400:
+            assert "already" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("mock_side_effect", "expected_status"),
+    [
+        (True, 204),  # success
+        (False, 404),  # not found
+        (ValueError("Cannot delete - session already submitted"), 400),  # already submitted
+    ],
+)
+def test_delete_multipage_session(
+    multipage_ddb_table, monkeypatch, mock_side_effect, expected_status
+):
+    """Test deleting entire session."""
+    monkeypatch.setenv("DOCUMENTAI_MULTIPAGE_UPLOAD_SESSIONS_TABLE_NAME", "test-multipage-table")
+
+    with patch("documentai_api.utils.ddb.delete_multipage_session") as mock_delete:
+        if isinstance(mock_side_effect, Exception):
+            mock_delete.side_effect = mock_side_effect
+        else:
+            mock_delete.return_value = mock_side_effect
+
+        response = client.delete("/v1/multipage/sessions/session-123")
+
+        assert response.status_code == expected_status
+        if expected_status == 400:
+            assert "already" in response.json()["detail"]

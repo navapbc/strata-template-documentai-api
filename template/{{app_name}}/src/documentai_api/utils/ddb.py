@@ -145,6 +145,81 @@ def mark_multipage_session_submitted(session_id: str):
         )
 
 
+def delete_multipage_page(session_id: str, page_number: int) -> bool:
+    """Delete a specific page from a multipage session.
+
+    note: using an explicit hard-delete rather than a delete marker:
+          - multipage sessions are temporary by design
+          - simpler queries when combining pages into single document
+          - lifecycle rules/time-to-live will eventually delete s3 and ddb
+
+    Returns True if page was deleted, False if not found.
+    Raises ValueError if session has already been submitted.
+    """
+    if is_multipage_session_submitted(session_id):
+        raise ValueError(f"Cannot delete - session {session_id} has already been submitted")
+
+    table_name = get_multipage_session_table()
+    bucket_name = os.getenv("DDE_INPUT_LOCATION", "").replace("s3://", "")
+
+    # check if page exists
+    key = {"sessionId": session_id, "pageNumber": page_number}
+    item = ddb_service.get_item(table_name, key)
+
+    if not item:
+        return False
+
+    # delete from s3
+    s3_key = item.get("s3Key")
+    if s3_key:
+        s3_service.delete_file(bucket_name, s3_key)
+
+    # delete from ddb
+    ddb_service.delete_item(table_name, key)
+
+    return True
+
+
+def delete_multipage_session(session_id: str) -> bool:
+    """Delete an entire multipage session and all its pages.
+
+    note: using an explicit hard-delete rather than a delete marker:
+          - multipage sessions are temporary by design
+          - no reason to keep orphaned page records if session is deleted
+
+    Raises ValueError if session has already been submitted.
+    """
+    if is_multipage_session_submitted(session_id):
+        raise ValueError(f"Cannot delete - session {session_id} has already been submitted")
+
+    table_name = get_multipage_session_table()
+    bucket_name = os.getenv("DDE_INPUT_LOCATION", "").replace("s3://", "")
+
+    # get all pages
+    items = ddb_service.query_by_key(
+        table_name=table_name,
+        index_name=None,
+        key_name="sessionId",
+        key_value=session_id,
+    )
+
+    if not items:
+        return False
+
+    # delete all pages from S3 and DDB
+    for item in items:
+        s3_key = item.get("s3Key")
+        if s3_key:
+            s3_service.delete_file(bucket_name, s3_key)
+
+        ddb_service.delete_item(
+            table_name,
+            {"sessionId": session_id, "pageNumber": item["pageNumber"]},
+        )
+
+    return True
+
+
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
     """Extract AWS region from BDA invocation ARN."""
     try:

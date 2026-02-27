@@ -518,5 +518,80 @@ async def submit_multipage_document(
         raise HTTPException(status_code=500, detail="Failed to submit multipage document") from e
 
 
+@app.get("/v1/multipage/sessions/{session_id}")
+async def get_multipage_session(session_id: str):
+    """Get multipage session details including all uploaded pages."""
+    from documentai_api.utils.ddb import get_multipage_session_pages
+
+    try:
+        pages = get_multipage_session_pages(session_id)
+
+        if not pages:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+        return {
+            "sessionId": session_id,
+            "pageCount": len(pages),
+            "pages": [
+                {
+                    "pageNumber": page.page_number,
+                    "uploadedAt": page.uploaded_at,
+                    "category": page.category,
+                }
+                for page in pages
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve session") from e
+
+
+@app.delete("/v1/multipage/sessions/{session_id}/pages/{page_number}")
+async def delete_multipage_page(session_id: str, page_number: int):
+    """Delete a specific page from a multipage session."""
+    from documentai_api.utils.ddb import delete_multipage_page
+
+    try:
+        deleted = delete_multipage_page(session_id, page_number)
+
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Page {page_number} not found in session {session_id}",
+            )
+
+        return Response(status_code=204)
+    except ValueError as e:  # catches previously submitted session error
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting page {page_number} from session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete page") from e
+
+
+@app.delete("/v1/multipage/sessions/{session_id}")
+async def delete_multipage_session(session_id: str):
+    """Delete an entire multipage session and all its pages."""
+    from documentai_api.utils.ddb import delete_multipage_session
+
+    try:
+        deleted = delete_multipage_session(session_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+        return Response(status_code=204)
+    except ValueError as e:  # catches previously submitted session error
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete session") from e
+
+
 if __name__ == "__main__":
     app()
