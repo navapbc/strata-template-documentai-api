@@ -47,33 +47,28 @@ def test_document_status_not_found():
         assert response.status_code == 404
 
 
-def test_get_job_status_found():
-    """Test _get_job_status when job exists."""
+@pytest.mark.parametrize(
+    ("ddb_return", "expected_values"),
+    [
+        (
+            {
+                "fileName": "test.pdf",
+                "processStatus": "success",
+                "v1ApiResponseJson": '{"status": "success"}',
+            },
+            ("test.pdf", "success", '{"status": "success"}'),
+        ),
+        (None, (None, None, None)),
+    ],
+)
+def test_get_job_status(ddb_return, expected_values):
+    """Test _get_job_status."""
     with patch("documentai_api.app.get_ddb_by_job_id") as mock_get_ddb:
-        mock_get_ddb.return_value = {
-            "fileName": "test.pdf",
-            "processStatus": "success",
-            "v1ApiResponseJson": '{"status": "success"}',
-        }
-
+        mock_get_ddb.return_value = ddb_return
         result = _get_job_status("job-123")
-
-    assert result.object_key == "test.pdf"
-    assert result.process_status == "success"
-    assert result.v1_response_json == '{"status": "success"}'
-
-
-def test_get_job_status_not_found():
-    """Test _get_job_status when job doesn't exist."""
-    with patch("documentai_api.app.get_ddb_by_job_id") as mock_get_ddb:
-        mock_get_ddb.return_value = None
-
-        result = _get_job_status("job-123")
-
-    assert result.ddb_record is None
-    assert result.object_key is None
-    assert result.process_status is None
-    assert result.v1_response_json is None
+    assert result.object_key == expected_values[0]
+    assert result.process_status == expected_values[1]
+    assert result.v1_response_json == expected_values[2]
 
 
 @pytest.mark.asyncio
@@ -145,12 +140,12 @@ async def test_get_v1_document_processing_results_timeout():
             process_status="started",
             v1_response_json=None,
         )
-        mock_classify_as_failed.return_value = {"status": "failed", "message": "timeout"}
+        mock_classify_as_failed.return_value = {"jobStatus": "failed", "message": "timeout"}
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
     mock_classify_as_failed.assert_called_once()
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
 
 
 @pytest.mark.asyncio
@@ -166,7 +161,7 @@ async def test_get_v1_document_processing_results_timeout_no_object_key():
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
     assert "timeout" in result["message"]
 
 
@@ -182,9 +177,9 @@ def test_get_document_results_with_extracted_data():
             ddb_record={"fileName": "test.pdf"},
             object_key="test.pdf",
             process_status="success",
-            v1_response_json='{"status": "success"}',
+            v1_response_json='{"jobStatus": "success"}',
         )
-        mock_build_api_response.return_value = {"status": "success", "extractedData": {}}
+        mock_build_api_response.return_value = {"jobStatus": "success", "extractedData": {}}
 
         response = client.get("/v1/documents/job-123?include_extracted_data=true")
 
@@ -210,7 +205,7 @@ def test_get_document_results_in_progress():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "started"
+    assert data["jobStatus"] == "started"
     assert "in progress" in data["message"].lower()
 
 
@@ -225,24 +220,19 @@ def test_list_schemas():
     assert "schemas" in response.json()
 
 
-def test_get_schema_found():
+@pytest.mark.parametrize(
+    ("schema_return", "expected_status"),
+    [
+        ({"fields": []}, 200),  # found
+        (None, 404),  # not found
+    ],
+)
+def test_get_schema(schema_return, expected_status):
     """Test getting specific schema."""
     with patch("documentai_api.app.get_document_schema") as mock_get_schema:
-        mock_get_schema.return_value = {"fields": []}
-
+        mock_get_schema.return_value = schema_return
         response = client.get("/v1/schemas/invoice")
-
-    assert response.status_code == 200
-
-
-def test_get_schema_not_found():
-    """Test getting non-existent schema."""
-    with patch("documentai_api.app.get_document_schema") as mock_get_schema:
-        mock_get_schema.return_value = None
-
-        response = client.get("/v1/schemas/invalid")
-
-    assert response.status_code == 404
+    assert response.status_code == expected_status
 
 
 @pytest.mark.asyncio
@@ -332,7 +322,7 @@ def test_create_document_asynchronous():
     assert response.status_code == 200
     data = response.json()
     assert "jobId" in data
-    assert data["status"] == "not_started"
+    assert data["jobStatus"] == "not_started"
     assert "uploaded successfully" in data["message"].lower()
 
 
@@ -344,13 +334,13 @@ def test_create_document_synchronous():
         patch("documentai_api.app.get_v1_document_processing_results") as mock_get_results,
     ):
         mock_magic.return_value = "application/pdf"
-        mock_get_results.return_value = {"status": "success", "data": {}}
+        mock_get_results.return_value = {"jobStatus": "success", "data": {}}
 
         files = {"file": ("test.pdf", b"fake pdf", "application/pdf")}
         response = client.post("/v1/documents?wait=true", files=files)
 
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    assert response.json()["jobStatus"] == "success"
 
 
 def test_get_document_results_error_handling():

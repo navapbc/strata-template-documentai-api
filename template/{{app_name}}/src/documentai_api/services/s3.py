@@ -69,3 +69,9 @@ def is_password_protected(bucket: str, key: str) -> bool:
         return b"/Encrypt" in file_bytes[:2048]
 
     return False
+
+
+def delete_file(bucket: str, key: str) -> None:
+    """Delete file from S3."""
+    s3_client = AWSClientFactory.get_s3_client()
+    s3_client.delete_object(Bucket=bucket, Key=key)

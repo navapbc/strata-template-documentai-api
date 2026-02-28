@@ -11,6 +11,7 @@ class DocumentMetadata:
     PROCESSED_DATE = "processedDate"
     JOB_ID = "jobId"
     TRACE_ID = "traceId"
+    BATCH_ID = "batchId"
     V1_API_RESPONSE_JSON = "v1ApiResponseJson"
     CREATED_AT = "createdAt"
     UPDATED_AT = "updatedAt"

@@ -5,9 +5,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from documentai_api.config.constants import ProcessStatus
+from documentai_api.config.constants import BatchStatus, ProcessStatus
+from documentai_api.schemas.batch import Batch
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils import ddb as ddb_util
+from documentai_api.utils import env
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
 
@@ -511,6 +513,7 @@ def test_insert_initial_ddb_record(
             user_provided_document_category=user_provided_document_category,
             job_id="test-job-id",
             trace_id="test-trace-id",
+            batch_id="test-batch-id",
         )
 
         mock_insert_ddb.assert_called_once_with(
@@ -524,6 +527,7 @@ def test_insert_initial_ddb_record(
             content_type=content_type,
             job_id="test-job-id",
             trace_id="test-trace-id",
+            batch_id="test-batch-id",
             is_document_blurry=is_blurry,
             is_password_protected=is_password_protected,
             pages_detected=1,
@@ -639,3 +643,94 @@ def test_classify_functions(function, response_code, status, matched_document_cl
             expected_call["error_message"] = error_msg
 
         mock_update.assert_called_once_with(**expected_call)
+
+
+def test_create_batch(mock_ddb_service):
+    """Test creating a batch record."""
+    from documentai_api.config.constants import BatchStatus, DocumentCategory
+
+    with patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}):
+        ddb_util.create_batch(
+            batch_id="test-batch-id",
+            total_files=5,
+            category=DocumentCategory.INCOME,
+            status=BatchStatus.UPLOADING,
+        )
+
+        mock_ddb_service.put_item.assert_called_once()
+        call_args = mock_ddb_service.put_item.call_args
+        assert call_args[0][0] == "test-batches-table"
+
+        item = call_args[0][1]
+        assert item[Batch.BATCH_ID] == "test-batch-id"
+        assert item[Batch.TOTAL_FILES] == 5
+        assert item[Batch.CATEGORY] == "income"
+        assert item[Batch.BATCH_STATUS] == "uploading"
+        assert Batch.CREATED_AT in item
+        assert Batch.TIME_TO_LIVE in item
+
+
+def test_update_batch_status(mock_ddb_service):
+    """Test updating batch status."""
+    with patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}):
+        ddb_util.update_batch_status("test-batch-id", status=BatchStatus.PROCESSING)
+
+        mock_ddb_service.update_item.assert_called_once()
+        call_args = mock_ddb_service.update_item.call_args
+        assert call_args[0][0] == "test-batches-table"
+        assert call_args[0][1] == {Batch.BATCH_ID: "test-batch-id"}
+        assert Batch.BATCH_STATUS in call_args[0][2]
+        assert call_args[0][3][":batchStatus"] == "processing"
+
+
+def test_update_batch_status_with_error(mock_ddb_service):
+    """Test updating batch status with error message."""
+    with patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}):
+        ddb_util.update_batch_status(
+            "test-batch-id", status=BatchStatus.FAILED, error_message="Test error"
+        )
+
+        call_args = mock_ddb_service.update_item.call_args
+        assert f"{Batch.ERROR_MESSAGE} = :errorMessage" in call_args[0][2]
+        assert call_args[0][3][":errorMessage"] == "Test error"
+
+
+def test_get_batch(mock_ddb_service):
+    """Test getting a batch record."""
+    with patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}):
+        mock_ddb_service.get_item.return_value = {
+            Batch.BATCH_ID: "test-batch-id",
+            Batch.BATCH_STATUS: "processing",
+            Batch.TOTAL_FILES: 5,
+        }
+
+        result = ddb_util.get_batch("test-batch-id")
+
+        mock_ddb_service.get_item.assert_called_once_with(
+            "test-batches-table", {Batch.BATCH_ID: "test-batch-id"}
+        )
+        assert result[Batch.BATCH_ID] == "test-batch-id"
+        assert result[Batch.BATCH_STATUS] == "processing"
+
+
+def test_query_jobs_by_batch_id(mock_ddb_service):
+    """Test querying jobs by batch ID."""
+    with patch.dict(
+        os.environ,
+        {
+            "DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table",
+            "DOCUMENTAI_DOCUMENT_METADATA_BATCH_ID_INDEX_NAME": "batchId-index",
+        },
+    ):
+        mock_ddb_service.query_by_key.return_value = [
+            {"fileName": "doc1.pdf", "jobId": "job-1", "batchId": "test-batch-id"},
+            {"fileName": "doc2.pdf", "jobId": "job-2", "batchId": "test-batch-id"},
+        ]
+
+        result = ddb_util.query_jobs_by_batch_id("test-batch-id")
+
+        mock_ddb_service.query_by_key.assert_called_once_with(
+            "test-table", "batchId-index", "batchId", "test-batch-id"
+        )
+        assert len(result) == 2
+        assert result[0]["jobId"] == "job-1"

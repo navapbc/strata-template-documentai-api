@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 
@@ -65,3 +65,16 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
+
+
+class S3Prefix(StrEnum):
+    INPUT = "input"
+    SESSIONS = "sessions"
+    BATCHES = "batches"
+
+
+class BatchStatus(StrEnum):
+    UPLOADING = "uploading"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"

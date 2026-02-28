@@ -94,6 +94,7 @@ def main(
     object_key: str,
     user_provided_document_category: str | None = None,
     job_id: str | None = None,
+    batch_id: str | None = None,
     trace_id: str | None = None,
 ):
     """Process uploaded file.
@@ -103,8 +104,8 @@ def main(
         object_key: S3 object key
         user_provided_document_category: Optional document category
         job_id: Optional job ID
+        batch_id: Optional batch ID
         trace_id: Optional trace ID
-
     Returns: None
     """
     logger.info(f"Processing upload: s3://{bucket_name}/{object_key}")
@@ -147,6 +148,7 @@ def main(
             user_provided_document_category=user_provided_document_category,
             job_id=job_id,
             trace_id=trace_id,
+            batch_id=batch_id,
         )
 
         # check the resulting status - only convert if going to bda

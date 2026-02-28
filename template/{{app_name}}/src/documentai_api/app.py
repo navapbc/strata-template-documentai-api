@@ -16,9 +16,12 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
+    BatchStatus,
     DocumentCategory,
     ProcessStatus,
+    S3Prefix,
 )
+from documentai_api.schemas.batch import Batch
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
@@ -63,6 +66,9 @@ def get_config(request: Request):
         "endpoints": {
             "upload": "/v1/documents",
             "uploadSync": "/v1/documents?wait=true",
+            "batchUpload": "/v1/documents/batch",
+            "batchUploadZip": "/v1/documents/batch/zip",
+            "batchUploadStatus": "/v1/batches/{batch_id}",
             "status": "/v1/documents/{job_id}",
             "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
             "schemas": "/v1/schemas",
@@ -104,44 +110,72 @@ def _get_job_status(job_id: str) -> JobStatus:
     return JobStatus(ddb_record, object_key, process_status, v1_response)
 
 
+async def validate_file_type(file: UploadFile) -> str:
+    """Validate file type and return content type.
+
+    Raises HTTPException if file type is not supported.
+    Returns the detected content type.
+    """
+    file_content = await file.read()
+    actual_content_type = magic.from_buffer(file_content, mime=True)
+
+    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type detected '{actual_content_type}'. File must be "
+                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
+            ),
+        )
+
+    file.file.seek(0)  # reset file pointer for subsequent reads
+    return actual_content_type
+
+
 async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
+    s3_prefix: S3Prefix = S3Prefix.INPUT,
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    batch_id: str | None = None,
 ):
     logger.debug(
         "S3 upload started",
         extra={
+            "unique_file_name": unique_file_name,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
+            "s3_prefix": s3_prefix,
         },
     )
     if not DDE_INPUT_LOCATION:
         raise ValueError("DDE_INPUT_LOCATION environment variable not set")
 
     bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    unique_file_name = f"{s3_prefix.value}/{unique_file_name}"
 
     try:
         metadata = {}
-        if user_provided_document_category:
-            # add type check for safety
-            if not isinstance(user_provided_document_category, DocumentCategory):
-                raise ValueError(
-                    f"Expected DocumentCategory, got {type(user_provided_document_category)}"
-                )
 
+        if user_provided_document_category:
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
+
+        if s3_prefix:
+            metadata[UPLOAD_METADATA_KEYS["s3_prefix"]] = s3_prefix.value
 
         if job_id:
             metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
 
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        if batch_id:
+            metadata[UPLOAD_METADATA_KEYS["batch_id"]] = batch_id
 
         logger.debug(
             "S3: Starting actual upload",
@@ -208,7 +242,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
     else:
         # fallback if we never got a record
         return {
-            "status": "failed",
+            "jobStatus": "failed",
             "message": f"Processing timeout after {timeout} seconds",
             "processedAt": None,
         }
@@ -236,18 +270,7 @@ async def create_document(
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
-    file_content = await file.read()
-    actual_content_type = magic.from_buffer(file_content, mime=True)
-
-    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid file type detected '{actual_content_type}'. File must be "
-                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
-            ),
-        )
-
+    actual_content_type = await validate_file_type(file)
     logger.info(
         f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
     )
@@ -271,7 +294,7 @@ async def create_document(
     if not wait:
         return {
             "jobId": job_id,
-            "status": ProcessStatus.NOT_STARTED.value,
+            "jobStatus": ProcessStatus.NOT_STARTED.value,
             "message": "Document uploaded successfully",
         }
     else:
@@ -291,7 +314,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         if not job_status.v1_response_json:
             return {
                 "jobId": job_id,
-                "status": job_status.process_status,
+                "jobStatus": job_status.process_status,
                 "message": "Processing in progress",
             }
 
@@ -335,6 +358,187 @@ async def get_schema(document_type: str):
         )
 
     return schema
+
+
+async def process_batch_files(
+    files: list[UploadFile],
+    batch_id: str,
+    category: DocumentCategory | None,
+    trace_id: str,
+) -> list[dict]:
+    """Process multiple files for batch upload.
+
+    Returns list of job info dicts with fileName, jobId, batchPosition.
+    """
+    job_ids = []
+
+    for idx, file in enumerate(files):
+        file_extension = file.filename.split(".")[-1]
+        file_name = file.filename.split(".")[0]
+        unique_file_name = f"{batch_id}/{idx}-{file_name}-{uuid.uuid4()}.{file_extension}"
+        job_id = str(uuid.uuid4())
+        actual_content_type = await validate_file_type(file)
+        file.file.seek(0)
+
+        await upload_document_for_processing(
+            file=file,
+            unique_file_name=unique_file_name,
+            content_type=actual_content_type,
+            s3_prefix=S3Prefix.BATCHES,
+            user_provided_document_category=category,
+            job_id=job_id,
+            trace_id=trace_id,
+            batch_id=batch_id,
+        )
+
+        job_ids.append(
+            {
+                "fileName": file.filename,
+                "jobId": job_id,
+                "batchPosition": idx,
+            }
+        )
+
+    return job_ids
+
+
+@app.post("/v1/documents/batch")
+async def upload_document_batch(
+    response: Response,
+    files: list[UploadFile],
+    batch_id: Annotated[str | None, Form()] = None,
+    category: Annotated[DocumentCategory | None, Form()] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Upload multiple documents as a batch."""
+    from documentai_api.utils.ddb import create_batch, update_batch_status
+
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+    if not batch_id:
+        batch_id = str(uuid.uuid4())
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    try:
+        create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
+        job_ids = await process_batch_files(files, batch_id, category, trace_id)
+        update_batch_status(batch_id, status=BatchStatus.PROCESSING)
+
+        response.headers["X-Trace-ID"] = trace_id
+        return {
+            "batchId": batch_id,
+            "batchStatus": BatchStatus.PROCESSING.value,
+            "totalFiles": len(files),
+            "jobs": job_ids,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading batch: {e}")
+        update_batch_status(batch_id, status=BatchStatus.FAILED, error_message=str(e))
+        raise HTTPException(status_code=500, detail="Failed to upload batch") from e
+
+
+@app.post("/v1/documents/batch/zip")
+async def upload_zip_batch(
+    response: Response,
+    zip_file: UploadFile,
+    batch_id: Annotated[str | None, Form()] = None,
+    category: Annotated[DocumentCategory | None, Form()] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Upload a zip file containing multiple documents."""
+    from documentai_api.utils.ddb import create_batch, update_batch_status
+    from documentai_api.utils.zip import extract_files_from_zip
+
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+    if not batch_id:
+        batch_id = str(uuid.uuid4())
+
+    try:
+        files = await extract_files_from_zip(zip_file)
+
+        if not files:
+            raise HTTPException(status_code=400, detail="No valid files found in zip")
+
+        create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
+        job_ids = await process_batch_files(files, batch_id, category, trace_id)
+        update_batch_status(batch_id, status=BatchStatus.PROCESSING)
+
+        response.headers["X-Trace-ID"] = trace_id
+        return {
+            "batchId": batch_id,
+            "batchStatus": BatchStatus.PROCESSING.value,
+            "totalFiles": len(files),
+            "jobs": job_ids,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading zip batch: {e}")
+        update_batch_status(batch_id, status=BatchStatus.FAILED, error_message=str(e))
+        raise HTTPException(status_code=500, detail="Failed to upload zip batch") from e
+
+
+@app.get("/v1/batches/{batch_id}")
+async def get_batch_status(batch_id: str):
+    """Get status of all documents in a batch.
+
+    Note: Batch completion is lazily evaluated. When all jobs are complete,
+    this endpoint updates the batch status to COMPLETED. For real-time updates,
+    consider implementing an event-driven approach with DDB Streams or EventBridge.
+    """
+    from documentai_api.utils.ddb import get_batch, query_jobs_by_batch_id, update_batch_status
+
+    try:
+        batch = get_batch(batch_id)
+
+        if not batch:
+            raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
+
+        job_records = query_jobs_by_batch_id(batch_id)
+        jobs = [
+            {
+                "fileName": record.get("fileName"),
+                "jobId": record.get("jobId"),
+                "jobStatus": record.get("processStatus", "not_found"),
+            }
+            for record in job_records
+        ]
+
+        completed = sum(1 for j in jobs if j["jobStatus"] in PROCESSING_STATUS_COMPLETED)
+        failed = sum(1 for j in jobs if j["jobStatus"] == ProcessStatus.FAILED.value)
+        current_batch_status = batch.get(Batch.BATCH_STATUS)
+
+        # lazy completion check: if all jobs are done and batch is still "processing",
+        # update batch status to "completed" in DDB
+        if (
+            current_batch_status == BatchStatus.PROCESSING.value
+            and len(jobs) > 0
+            and completed == len(jobs)
+        ):
+            update_batch_status(batch_id, status=BatchStatus.COMPLETED)
+            current_batch_status = BatchStatus.COMPLETED.value
+            logger.info(f"Batch {batch_id} marked as completed ({completed}/{len(jobs)} jobs done)")
+
+        return {
+            "batchId": batch_id,
+            "batchStatus": current_batch_status,
+            "totalJobs": len(jobs),
+            "completed": completed,
+            "inProgress": len(jobs) - completed,
+            "failed": failed,
+            "createdAt": batch.get(Batch.CREATED_AT),
+            "category": batch.get(Batch.CATEGORY),
+            "jobs": jobs,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving batch {batch_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve batch") from e
 
 
 if __name__ == "__main__":

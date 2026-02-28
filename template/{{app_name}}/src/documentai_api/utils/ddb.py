@@ -7,12 +7,16 @@ from decimal import Decimal
 from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
+    BatchStatus,
     ConfigDefaults,
+    DocumentCategory,
     ProcessStatus,
 )
+from documentai_api.schemas.batch import Batch
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -24,6 +28,93 @@ from documentai_api.utils.response_builder import build_v1_api_response, get_int
 from documentai_api.utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# Batch Upload Functions
+# =============================================================================
+
+
+def get_batch_table() -> str:
+    """Get batch table name from environment."""
+    table_name = os.getenv(env.DOCUMENTAI_BATCH_TABLE_NAME)
+    if not table_name:
+        raise ValueError(f"{env.DOCUMENTAI_BATCH_TABLE_NAME} not set")
+    return table_name
+
+
+def create_batch(
+    batch_id: str,
+    total_files: int,
+    category: DocumentCategory | None,
+    status: BatchStatus = BatchStatus.UPLOADING,
+):
+    """Create batch record in DynamoDB."""
+    table_name = get_batch_table()
+
+    item = {
+        Batch.BATCH_ID: batch_id,
+        Batch.BATCH_STATUS: status.value,
+        Batch.TOTAL_FILES: total_files,
+        Batch.CREATED_AT: datetime.now(UTC).isoformat(),
+        Batch.TIME_TO_LIVE: int(datetime.now(UTC).timestamp() + (30 * 24 * 60 * 60)),  # 30 days
+    }
+
+    if category:
+        item[Batch.CATEGORY] = (
+            category.value if isinstance(category, DocumentCategory) else category
+        )
+
+    ddb_service.put_item(table_name, item)
+
+
+def update_batch_status(batch_id: str, status: BatchStatus, error_message: str | None = None):
+    """Update batch status."""
+    table_name = get_batch_table()
+    key = {Batch.BATCH_ID: batch_id}
+
+    update_expr = f"SET {Batch.BATCH_STATUS} = :batchStatus, {Batch.UPDATED_AT} = :updatedAt"
+    expr_values = {
+        ":batchStatus": status.value,
+        ":updatedAt": datetime.now(UTC).isoformat(),
+    }
+
+    if error_message:
+        update_expr += f", {Batch.ERROR_MESSAGE} = :errorMessage"
+        expr_values[":errorMessage"] = error_message
+
+    ddb_service.update_item(table_name, key, update_expr, expr_values)
+
+
+def get_batch(batch_id: str) -> dict | None:
+    """Get batch record by batch ID."""
+    table_name = get_batch_table()
+    key = {Batch.BATCH_ID: batch_id}
+    return ddb_service.get_item(table_name, key)
+
+
+def query_jobs_by_batch_id(batch_id: str) -> list[dict]:
+    """Query jobs table for all jobs in a batch."""
+    table_name = get_document_metadata_table()
+    index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_BATCH_ID_INDEX_NAME)
+
+    if not index_name:
+        raise ValueError(
+            f"{env.DOCUMENTAI_DOCUMENT_METADATA_BATCH_ID_INDEX_NAME} environment variable not set"
+        )
+
+    return ddb_service.query_by_key(table_name, index_name, DocumentMetadata.BATCH_ID, batch_id)
+
+
+def get_document_metadata_table() -> str:
+    """Get document metadata table name from environment."""
+    table_name = os.getenv("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME")
+    if not table_name:
+        # fallback to legacy DDE_ prefix for backward compatibility
+        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        if not table_name:
+            raise ValueError("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME not set")
+    return table_name
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:
@@ -247,7 +338,7 @@ def _build_update_expression(
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = get_document_metadata_table()
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
@@ -273,7 +364,7 @@ def get_user_provided_document_category(object_key: str) -> str:
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = get_document_metadata_table()
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -288,7 +379,7 @@ def get_ddb_record(object_key: str) -> dict:
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = get_document_metadata_table()
     index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
 
     if not index_name:
@@ -349,6 +440,7 @@ def insert_ddb(
     pages_detected: int | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    batch_id: str | None = None,
     is_password_protected: bool | None = False,
     is_document_blurry: bool | None = False,
     document_profile_raw_metrics=None,
@@ -356,7 +448,7 @@ def insert_ddb(
     overall_blur_score=None,
 ):
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = get_document_metadata_table()
 
         item = {
             DocumentMetadata.FILE_NAME: object_key,
@@ -385,6 +477,9 @@ def insert_ddb(
 
         if trace_id:
             item[DocumentMetadata.TRACE_ID] = trace_id
+
+        if batch_id:
+            item[DocumentMetadata.BATCH_ID] = batch_id
 
         if is_password_protected is not None:
             item[DocumentMetadata.IS_PASSWORD_PROTECTED] = bool(is_password_protected)
@@ -418,6 +513,7 @@ def insert_initial_ddb_record(
     user_provided_document_category: str,
     job_id: str | None = None,
     trace_id: str | None = None,
+    batch_id: str | None = None,
 ):
     """Insert initial DDB record."""
     # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
@@ -523,6 +619,7 @@ def insert_initial_ddb_record(
         pages_detected=pages_detected,
         job_id=job_id,
         trace_id=trace_id,
+        batch_id=batch_id,
         is_document_blurry=is_document_blurry,
         is_password_protected=is_password_protected,
         document_profile_raw_metrics=document_profile_raw_metrics,

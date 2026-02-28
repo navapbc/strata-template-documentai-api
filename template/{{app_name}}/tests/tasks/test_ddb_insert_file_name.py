@@ -180,6 +180,7 @@ def test_main_with_metadata():
             user_provided_document_category="income",
             job_id="job-123",
             trace_id="trace-456",
+            batch_id="batch-789",
         )
 
     mock_insert_ddb.assert_called_once_with(
@@ -188,6 +189,7 @@ def test_main_with_metadata():
         user_provided_document_category="income",
         job_id="job-123",
         trace_id="trace-456",
+        batch_id="batch-789",
     )
     assert result is None
 

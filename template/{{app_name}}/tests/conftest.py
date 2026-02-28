@@ -97,3 +97,31 @@ def mock_grayscale_dependencies():
         patch("PIL.Image.fromarray") as mock_pil_fromarray,
     ):
         yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
+
+
+@pytest.fixture
+def pdf_file():
+    """Create a test PDF file tuple."""
+
+    def _create(filename: str = "test.pdf", content: bytes = b"fake pdf"):
+        return (filename, content, "application/pdf")
+
+    return _create
+
+
+@pytest.fixture
+def zip_with_pdfs():
+    """Create a ZIP file containing PDFs."""
+
+    def _create(filenames: list[str]):
+        from io import BytesIO
+        from zipfile import ZipFile
+
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            for filename in filenames:
+                zip_file.writestr(filename, b"fake pdf content")
+        zip_buffer.seek(0)
+        return zip_buffer
+
+    return _create
