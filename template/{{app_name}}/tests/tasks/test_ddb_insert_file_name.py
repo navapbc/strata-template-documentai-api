@@ -178,18 +178,20 @@ def test_main_with_metadata():
             "test-bucket",
             "test.pdf",
             user_provided_document_category="income",
-            job_id="job-123",
-            trace_id="trace-456",
-            batch_id="batch-789",
+            job_id="test-job-id",
+            trace_id="test-trace-id",
+            batch_id="test-batch-id",
+            external_reference_id="test-external-reference-id",
         )
 
     mock_insert_ddb.assert_called_once_with(
         source_bucket_name="test-bucket",
         source_object_key="test.pdf",
         user_provided_document_category="income",
-        job_id="job-123",
-        trace_id="trace-456",
-        batch_id="batch-789",
+        job_id="test-job-id",
+        trace_id="test-trace-id",
+        batch_id="test-batch-id",
+        external_reference_id="test-external-reference-id",
     )
     assert result is None
 

@@ -141,6 +141,7 @@ async def upload_document_for_processing(
     job_id: str | None = None,
     trace_id: str | None = None,
     batch_id: str | None = None,
+    external_reference_id: str | None = None,
 ):
     logger.debug(
         "S3 upload started",
@@ -176,6 +177,9 @@ async def upload_document_for_processing(
 
         if batch_id:
             metadata[UPLOAD_METADATA_KEYS["batch_id"]] = batch_id
+
+        if external_reference_id:
+            metadata[UPLOAD_METADATA_KEYS["external_reference_id"]] = external_reference_id
 
         logger.debug(
             "S3: Starting actual upload",
@@ -257,6 +261,7 @@ async def create_document(
         DocumentCategory | None, Form(description="Type of document being uploaded")
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    external_reference_id: Annotated[str | None, Form()] = None,
     wait: bool = False,  # async by default
     timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
 ):
@@ -288,6 +293,7 @@ async def create_document(
         user_provided_document_category=category,
         job_id=job_id,
         trace_id=trace_id,
+        external_reference_id=external_reference_id,
     )
 
     response.headers["X-Trace-ID"] = trace_id
@@ -363,8 +369,9 @@ async def get_schema(document_type: str):
 async def process_batch_files(
     files: list[UploadFile],
     batch_id: str,
-    category: DocumentCategory | None,
     trace_id: str,
+    category: DocumentCategory | None,
+    external_reference_id: str | None,
 ) -> list[dict]:
     """Process multiple files for batch upload.
 
@@ -389,6 +396,7 @@ async def process_batch_files(
             job_id=job_id,
             trace_id=trace_id,
             batch_id=batch_id,
+            external_reference_id=external_reference_id,
         )
 
         job_ids.append(
@@ -409,6 +417,7 @@ async def upload_document_batch(
     batch_id: Annotated[str | None, Form()] = None,
     category: Annotated[DocumentCategory | None, Form()] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    external_reference_id: Annotated[str | None, Form()] = None,
 ):
     """Upload multiple documents as a batch."""
     from documentai_api.utils.ddb import create_batch, update_batch_status
@@ -422,7 +431,15 @@ async def upload_document_batch(
 
     try:
         create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
-        job_ids = await process_batch_files(files, batch_id, category, trace_id)
+
+        job_ids = await process_batch_files(
+            files=files,
+            batch_id=batch_id,
+            category=category,
+            trace_id=trace_id,
+            external_reference_id=external_reference_id,
+        )
+
         update_batch_status(batch_id, status=BatchStatus.PROCESSING)
 
         response.headers["X-Trace-ID"] = trace_id
@@ -447,6 +464,7 @@ async def upload_zip_batch(
     batch_id: Annotated[str | None, Form()] = None,
     category: Annotated[DocumentCategory | None, Form()] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    external_reference_id: Annotated[str | None, Form()] = None,
 ):
     """Upload a zip file containing multiple documents."""
     from documentai_api.utils.ddb import create_batch, update_batch_status
@@ -464,7 +482,15 @@ async def upload_zip_batch(
             raise HTTPException(status_code=400, detail="No valid files found in zip")
 
         create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
-        job_ids = await process_batch_files(files, batch_id, category, trace_id)
+
+        job_ids = await process_batch_files(
+            files=files,
+            batch_id=batch_id,
+            category=category,
+            trace_id=trace_id,
+            external_reference_id=external_reference_id,
+        )
+
         update_batch_status(batch_id, status=BatchStatus.PROCESSING)
 
         response.headers["X-Trace-ID"] = trace_id

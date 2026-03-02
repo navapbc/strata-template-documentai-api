@@ -441,6 +441,7 @@ def insert_ddb(
     job_id: str | None = None,
     trace_id: str | None = None,
     batch_id: str | None = None,
+    external_reference_id: str | None = None,
     is_password_protected: bool | None = False,
     is_document_blurry: bool | None = False,
     document_profile_raw_metrics=None,
@@ -481,6 +482,9 @@ def insert_ddb(
         if batch_id:
             item[DocumentMetadata.BATCH_ID] = batch_id
 
+        if external_reference_id:
+            item[DocumentMetadata.EXTERNAL_REFERENCE_ID] = external_reference_id
+
         if is_password_protected is not None:
             item[DocumentMetadata.IS_PASSWORD_PROTECTED] = bool(is_password_protected)
 
@@ -514,6 +518,7 @@ def insert_initial_ddb_record(
     job_id: str | None = None,
     trace_id: str | None = None,
     batch_id: str | None = None,
+    external_reference_id: str | None = None,
 ):
     """Insert initial DDB record."""
     # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
@@ -620,6 +625,7 @@ def insert_initial_ddb_record(
         job_id=job_id,
         trace_id=trace_id,
         batch_id=batch_id,
+        external_reference_id=external_reference_id,
         is_document_blurry=is_document_blurry,
         is_password_protected=is_password_protected,
         document_profile_raw_metrics=document_profile_raw_metrics,

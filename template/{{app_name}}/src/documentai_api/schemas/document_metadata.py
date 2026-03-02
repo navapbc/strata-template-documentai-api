@@ -12,6 +12,7 @@ class DocumentMetadata:
     JOB_ID = "jobId"
     TRACE_ID = "traceId"
     BATCH_ID = "batchId"
+    EXTERNAL_REFERENCE_ID = "externalReferenceId"
     V1_API_RESPONSE_JSON = "v1ApiResponseJson"
     CREATED_AT = "createdAt"
     UPDATED_AT = "updatedAt"

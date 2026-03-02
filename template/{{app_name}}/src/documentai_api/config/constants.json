@@ -113,6 +113,7 @@
     "job_id": "job-id",
     "trace_id": "trace-id",
     "s3_prefix": "s3-prefix",
-    "batch_id": "batch-id"
+    "batch_id": "batch-id",
+    "external_reference_id": "external-reference-id"
   }
 }

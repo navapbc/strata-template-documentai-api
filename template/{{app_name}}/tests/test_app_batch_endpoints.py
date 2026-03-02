@@ -36,6 +36,7 @@ def test_batch_upload_success(pdf_file):
             ("files", pdf_file("doc1.pdf")),
             ("files", pdf_file("doc2.pdf")),
         ]
+        data = {"external_reference_id": "test-case-id"}
         response = client.post("/v1/documents/batch", files=files)
 
     assert response.status_code == 200

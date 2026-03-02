@@ -312,12 +312,17 @@ def test_create_document_asynchronous():
     """Test asynchronous document upload (default behavior, returns job_id immediately)."""
     with (
         patch("documentai_api.app.magic.from_buffer") as mock_magic,
-        patch("documentai_api.app.upload_document_for_processing"),
+        patch("documentai_api.app.upload_document_for_processing") as mock_upload,
     ):
         mock_magic.return_value = "application/pdf"
 
         files = {"file": ("test.pdf", b"fake pdf", "application/pdf")}
-        response = client.post("/v1/documents", files=files)
+        data = {"external_reference_id": "case-123"}
+        response = client.post("/v1/documents", files=files, data=data)
+
+        # verify external_reference_id passed
+        call_kwargs = mock_upload.call_args[1]
+        assert call_kwargs["external_reference_id"] == "case-123"
 
     assert response.status_code == 200
     data = response.json()

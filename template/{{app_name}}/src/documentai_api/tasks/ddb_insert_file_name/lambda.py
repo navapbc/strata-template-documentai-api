@@ -23,6 +23,7 @@ def handler(event, _context):
     job_id = metadata.get(UPLOAD_METADATA_KEYS["job_id"])
     trace_id = metadata.get(UPLOAD_METADATA_KEYS["trace_id"])
     batch_id = metadata.get(UPLOAD_METADATA_KEYS["batch_id"])
+    external_reference_id = metadata.get(UPLOAD_METADATA_KEYS["external_reference_id"])
 
     process_upload_main(
         upload_bucket_name,
@@ -31,6 +32,7 @@ def handler(event, _context):
         job_id,
         trace_id,
         batch_id=batch_id,
+        external_reference_id=external_reference_id,
     )
 
     return {"statusCode": 200}

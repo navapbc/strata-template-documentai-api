@@ -69,7 +69,7 @@ ProcessStatus = Enum(
 
 class S3Prefix(StrEnum):
     INPUT = "input"
-    SESSIONS = "sessions"
+    BUILDS = "builds"
     BATCHES = "batches"
 
 

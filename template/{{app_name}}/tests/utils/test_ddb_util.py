@@ -514,6 +514,7 @@ def test_insert_initial_ddb_record(
             job_id="test-job-id",
             trace_id="test-trace-id",
             batch_id="test-batch-id",
+            external_reference_id="test-external-reference-id",
         )
 
         mock_insert_ddb.assert_called_once_with(
@@ -528,6 +529,7 @@ def test_insert_initial_ddb_record(
             job_id="test-job-id",
             trace_id="test-trace-id",
             batch_id="test-batch-id",
+            external_reference_id="test-external-reference-id",
             is_document_blurry=is_blurry,
             is_password_protected=is_password_protected,
             pages_detected=1,
