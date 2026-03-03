@@ -13,6 +13,7 @@ from documentai_api.config.constants import (
     API_DESCRIPTION,
     API_TITLE,
     API_VERSION,
+    MAX_BATCH_SIZE,
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
@@ -464,6 +465,11 @@ async def upload_document_batch(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
+    if len(files) > MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=400, detail=f"Batch size exceeds maximum of {MAX_BATCH_SIZE} files"
+        )
+
     validate_batch_id(batch_id, tenant_id)
 
     try:
@@ -527,6 +533,11 @@ async def upload_zip_batch(
 
         if not files:
             raise HTTPException(status_code=400, detail="No valid files found in zip")
+
+        if len(files) > MAX_BATCH_SIZE:
+            raise HTTPException(
+                status_code=400, detail=f"Batch size exceeds maximum of {MAX_BATCH_SIZE} files"
+            )
 
         create_batch(batch_id, len(files), category, tenant_id, status=BatchStatus.UPLOADING)
 

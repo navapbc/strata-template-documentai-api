@@ -9,6 +9,11 @@ def load_settings():
         return json.load(f)
 
 
+# maximum batch upload size - set to match BDA concurrent job limit (~25) to
+# prevent throttling. can be increased if BDA quota is raised.
+# TODO: Make configurable via environment variable for different deployments
+MAX_BATCH_SIZE = 25
+
 SETTINGS = load_settings()
 API_VERSION = SETTINGS["api"]["version"]
 API_TITLE = SETTINGS["api"]["title"]

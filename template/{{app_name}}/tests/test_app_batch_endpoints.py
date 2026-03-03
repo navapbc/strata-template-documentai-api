@@ -276,3 +276,49 @@ def test_validate_batch_id_existing_batch(existing_tenant, request_tenant, expec
 
         assert exc_info.value.status_code == 409
         assert expected_detail in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_upload_document_batch_exceeds_max_size(monkeypatch):
+    """Test batch upload fails when exceeding MAX_BATCH_SIZE."""
+    monkeypatch.setattr("documentai_api.app.MAX_BATCH_SIZE", 2)
+
+    files = [
+        ("files", ("file1.pdf", b"content1", "application/pdf")),
+        ("files", ("file2.pdf", b"content2", "application/pdf")),
+        ("files", ("file3.pdf", b"content3", "application/pdf")),
+    ]
+
+    response = client.post("/v1/documents/batch", files=files)
+
+    assert response.status_code == 400
+    assert "exceeds maximum of 2 files" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_upload_zip_batch_exceeds_max_size(monkeypatch, zip_with_pdfs):
+    """Test ZIP batch upload fails when exceeding MAX_BATCH_SIZE."""
+    monkeypatch.setattr("documentai_api.app.MAX_BATCH_SIZE", 2)
+
+    mock_files = []
+    for i in range(3):
+        mock_file = MagicMock()
+        mock_file.filename = f"file{i + 1}.pdf"
+        mock_file.file = BytesIO(b"fake pdf")
+        mock_files.append(mock_file)
+
+    with (
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-table"}),
+        patch(
+            "documentai_api.utils.zip.extract_files_from_zip", new_callable=AsyncMock
+        ) as mock_extract,
+        patch("documentai_api.app.validate_batch_id"),
+    ):
+        mock_extract.return_value = mock_files
+
+        zip_content = zip_with_pdfs(["file1.pdf", "file2.pdf", "file3.pdf"])
+        files = [("zip_file", ("batch.zip", zip_content, "application/zip"))]
+        response = client.post("/v1/documents/batch/zip", files=files)
+
+    assert response.status_code == 400
+    assert "exceeds maximum of 2 files" in response.json()["detail"]
