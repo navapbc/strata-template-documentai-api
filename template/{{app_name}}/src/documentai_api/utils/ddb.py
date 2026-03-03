@@ -47,6 +47,7 @@ def create_batch(
     batch_id: str,
     total_files: int,
     category: DocumentCategory | None,
+    tenant_id: str | None = None,
     status: BatchStatus = BatchStatus.UPLOADING,
 ):
     """Create batch record in DynamoDB."""
@@ -64,6 +65,9 @@ def create_batch(
         item[Batch.CATEGORY] = (
             category.value if isinstance(category, DocumentCategory) else category
         )
+
+    if tenant_id:
+        item[Batch.TENANT_ID] = tenant_id
 
     ddb_service.put_item(table_name, item)
 
@@ -440,6 +444,7 @@ def insert_ddb(
     pages_detected: int | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    tenant_id: str | None = None,
     batch_id: str | None = None,
     external_reference_id: str | None = None,
     is_password_protected: bool | None = False,
@@ -479,6 +484,9 @@ def insert_ddb(
         if trace_id:
             item[DocumentMetadata.TRACE_ID] = trace_id
 
+        if tenant_id:
+            item[DocumentMetadata.TENANT_ID] = tenant_id
+
         if batch_id:
             item[DocumentMetadata.BATCH_ID] = batch_id
 
@@ -517,6 +525,7 @@ def insert_initial_ddb_record(
     user_provided_document_category: str,
     job_id: str | None = None,
     trace_id: str | None = None,
+    tenant_id: str | None = None,
     batch_id: str | None = None,
     external_reference_id: str | None = None,
 ):
@@ -624,6 +633,7 @@ def insert_initial_ddb_record(
         pages_detected=pages_detected,
         job_id=job_id,
         trace_id=trace_id,
+        tenant_id=tenant_id,
         batch_id=batch_id,
         external_reference_id=external_reference_id,
         is_document_blurry=is_document_blurry,

@@ -112,6 +112,7 @@
     "user_provided_document_category": "user-provided-document-category",
     "job_id": "job-id",
     "trace_id": "trace-id",
+    "tenant_id": "tenant_id",
     "s3_prefix": "s3-prefix",
     "batch_id": "batch-id",
     "external_reference_id": "external-reference-id"

@@ -11,6 +11,9 @@ services:
       # machine's dir instead of the host machine's dir, which may be divergent.
       # This is especially true for any dependency or temp directories.
       - {{app_name}}_venv:/app/.venv
+      - ~/.aws:/root/.aws:ro
+    env_file:
+      - .env
 
 volumes:
   {{app_name}}_venv:

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import magic
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from documentai_api.config.constants import (
@@ -132,6 +132,32 @@ async def validate_file_type(file: UploadFile) -> str:
     return actual_content_type
 
 
+def validate_batch_id(batch_id: str, tenant_id: str | None) -> None:
+    """Validate batch ID is not already in use.
+
+    Raises:
+        HTTPException: 409 if batch already exists
+    """
+    from documentai_api.utils.ddb import get_batch
+
+    existing_batch = get_batch(batch_id)
+    if not existing_batch:
+        return
+
+    existing_tenant = existing_batch.get(Batch.TENANT_ID)
+    is_same_tenant = (existing_tenant is None and tenant_id is None) or (
+        existing_tenant == tenant_id
+    )
+
+    if is_same_tenant:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Batch ID {batch_id} already exists with status {existing_batch.get(Batch.BATCH_STATUS)}",
+        )
+    else:
+        raise HTTPException(status_code=409, detail="Batch ID already exists")
+
+
 async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
@@ -140,6 +166,7 @@ async def upload_document_for_processing(
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    tenant_id: str | None = None,
     batch_id: str | None = None,
     external_reference_id: str | None = None,
 ):
@@ -174,6 +201,9 @@ async def upload_document_for_processing(
 
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        if tenant_id:
+            metadata[UPLOAD_METADATA_KEYS["tenant_id"]] = tenant_id
 
         if batch_id:
             metadata[UPLOAD_METADATA_KEYS["batch_id"]] = batch_id
@@ -256,11 +286,12 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
 async def create_document(
     request: Request,
     response: Response,
-    file: UploadFile,
+    file: Annotated[UploadFile, File(description="Document to upload")],
     category: Annotated[
         DocumentCategory | None, Form(description="Type of document being uploaded")
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
     external_reference_id: Annotated[str | None, Form()] = None,
     wait: bool = False,  # async by default
     timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
@@ -293,6 +324,7 @@ async def create_document(
         user_provided_document_category=category,
         job_id=job_id,
         trace_id=trace_id,
+        tenant_id=tenant_id,
         external_reference_id=external_reference_id,
     )
 
@@ -369,8 +401,9 @@ async def get_schema(document_type: str):
 async def process_batch_files(
     files: list[UploadFile],
     batch_id: str,
-    trace_id: str,
     category: DocumentCategory | None,
+    trace_id: str | None,
+    tenant_id: str | None,
     external_reference_id: str | None,
 ) -> list[dict]:
     """Process multiple files for batch upload.
@@ -395,6 +428,7 @@ async def process_batch_files(
             user_provided_document_category=category,
             job_id=job_id,
             trace_id=trace_id,
+            tenant_id=tenant_id,
             batch_id=batch_id,
             external_reference_id=external_reference_id,
         )
@@ -413,14 +447,15 @@ async def process_batch_files(
 @app.post("/v1/documents/batch")
 async def upload_document_batch(
     response: Response,
-    files: list[UploadFile],
+    files: Annotated[list[UploadFile], File(..., description="Documents to process")],
     batch_id: Annotated[str | None, Form()] = None,
     category: Annotated[DocumentCategory | None, Form()] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
     external_reference_id: Annotated[str | None, Form()] = None,
 ):
     """Upload multiple documents as a batch."""
-    from documentai_api.utils.ddb import create_batch, update_batch_status
+    from documentai_api.utils.ddb import create_batch, get_batch, update_batch_status
 
     if not trace_id:
         trace_id = str(uuid.uuid4())
@@ -429,24 +464,29 @@ async def upload_document_batch(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
+    validate_batch_id(batch_id, tenant_id)
+
     try:
-        create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
+        create_batch(batch_id, len(files), category, tenant_id, status=BatchStatus.UPLOADING)
 
         job_ids = await process_batch_files(
             files=files,
             batch_id=batch_id,
             category=category,
             trace_id=trace_id,
+            tenant_id=tenant_id,
             external_reference_id=external_reference_id,
         )
 
         update_batch_status(batch_id, status=BatchStatus.PROCESSING)
 
         response.headers["X-Trace-ID"] = trace_id
+        batch_record = get_batch(batch_id)
         return {
             "batchId": batch_id,
             "batchStatus": BatchStatus.PROCESSING.value,
             "totalFiles": len(files),
+            "createdAt": batch_record.get(Batch.CREATED_AT) if batch_record else None,
             "jobs": job_ids,
         }
     except HTTPException:
@@ -460,20 +500,27 @@ async def upload_document_batch(
 @app.post("/v1/documents/batch/zip")
 async def upload_zip_batch(
     response: Response,
-    zip_file: UploadFile,
+    zip_file: Annotated[
+        UploadFile,
+        File(..., description="ZIP file containing documents", media_type="application/zip"),
+    ],
     batch_id: Annotated[str | None, Form()] = None,
     category: Annotated[DocumentCategory | None, Form()] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
     external_reference_id: Annotated[str | None, Form()] = None,
 ):
     """Upload a zip file containing multiple documents."""
-    from documentai_api.utils.ddb import create_batch, update_batch_status
+    from documentai_api.utils.ddb import create_batch, get_batch, update_batch_status
     from documentai_api.utils.zip import extract_files_from_zip
 
     if not trace_id:
         trace_id = str(uuid.uuid4())
+
     if not batch_id:
         batch_id = str(uuid.uuid4())
+
+    validate_batch_id(batch_id, tenant_id)
 
     try:
         files = await extract_files_from_zip(zip_file)
@@ -481,23 +528,26 @@ async def upload_zip_batch(
         if not files:
             raise HTTPException(status_code=400, detail="No valid files found in zip")
 
-        create_batch(batch_id, len(files), category, status=BatchStatus.UPLOADING)
+        create_batch(batch_id, len(files), category, tenant_id, status=BatchStatus.UPLOADING)
 
         job_ids = await process_batch_files(
             files=files,
             batch_id=batch_id,
             category=category,
             trace_id=trace_id,
+            tenant_id=tenant_id,
             external_reference_id=external_reference_id,
         )
 
         update_batch_status(batch_id, status=BatchStatus.PROCESSING)
 
         response.headers["X-Trace-ID"] = trace_id
+        batch_record = get_batch(batch_id)
         return {
             "batchId": batch_id,
             "batchStatus": BatchStatus.PROCESSING.value,
             "totalFiles": len(files),
+            "createdAt": batch_record.get(Batch.CREATED_AT) if batch_record else None,
             "jobs": job_ids,
         }
     except HTTPException:

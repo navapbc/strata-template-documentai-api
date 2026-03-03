@@ -22,6 +22,7 @@ def handler(event, _context):
     )
     job_id = metadata.get(UPLOAD_METADATA_KEYS["job_id"])
     trace_id = metadata.get(UPLOAD_METADATA_KEYS["trace_id"])
+    tenant_id = metadata.get(UPLOAD_METADATA_KEYS["tenant_id"])
     batch_id = metadata.get(UPLOAD_METADATA_KEYS["batch_id"])
     external_reference_id = metadata.get(UPLOAD_METADATA_KEYS["external_reference_id"])
 
@@ -31,6 +32,7 @@ def handler(event, _context):
         user_provided_document_category,
         job_id,
         trace_id,
+        tenant_id=tenant_id,
         batch_id=batch_id,
         external_reference_id=external_reference_id,
     )

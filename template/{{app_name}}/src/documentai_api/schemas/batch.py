@@ -8,6 +8,7 @@ class Batch:
     BATCH_STATUS = "batchStatus"
     TOTAL_FILES = "totalFiles"
     CATEGORY = "category"
+    TENANT_ID = "tenantId"
     CREATED_AT = "createdAt"
     UPDATED_AT = "updatedAt"
     ERROR_MESSAGE = "errorMessage"

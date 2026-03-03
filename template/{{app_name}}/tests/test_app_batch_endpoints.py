@@ -2,11 +2,13 @@
 
 import os
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from documentai_api.app import app
+from documentai_api.app import app, validate_batch_id
 from documentai_api.config.constants import BatchStatus
 from documentai_api.schemas.batch import Batch
 from documentai_api.utils import env
@@ -27,16 +29,22 @@ def test_config_includes_batch_endpoints():
 def test_batch_upload_success(pdf_file):
     """Test successful batch upload."""
     with (
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
         patch("documentai_api.app.magic.from_buffer", return_value="application/pdf"),
         patch("documentai_api.app.upload_document_for_processing"),
+        patch("documentai_api.app.validate_batch_id"),
         patch("documentai_api.utils.ddb.create_batch"),
         patch("documentai_api.utils.ddb.update_batch_status"),
+        patch(
+            "documentai_api.utils.ddb.get_batch",
+            return_value={"batchId": "test-batch", "createdAt": "2026-03-02T20:00:00Z"},
+        ),
     ):
         files = [
             ("files", pdf_file("doc1.pdf")),
             ("files", pdf_file("doc2.pdf")),
         ]
-        data = {"external_reference_id": "test-case-id"}
+        data = {"tenant-id": "test-tenant-id", "external_reference_id": "test-case-id"}
         response = client.post("/v1/documents/batch", files=files)
 
     assert response.status_code == 200
@@ -57,6 +65,7 @@ def test_batch_upload_invalid_file_type():
     with (
         patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
         patch("documentai_api.app.magic.from_buffer", return_value="text/plain"),
+        patch("documentai_api.app.validate_batch_id"),
         patch("documentai_api.utils.ddb.create_batch"),
         patch("documentai_api.utils.ddb.update_batch_status"),
     ):
@@ -66,14 +75,26 @@ def test_batch_upload_invalid_file_type():
     assert response.status_code == 400
 
 
-def test_zip_upload_success(zip_with_pdfs):
+def test_zip_upload_success(ddb_table, zip_with_pdfs):
     """Test successful ZIP upload."""
     with (
-        patch("documentai_api.utils.zip") as mock_extract,
-        patch("documentai_api.app.magic.from_buffer", return_value="application/pdf"),
-        patch("documentai_api.app.upload_document_for_processing"),
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-table"}),
+        patch(
+            "documentai_api.utils.zip.extract_files_from_zip", new_callable=AsyncMock
+        ) as mock_extract,
+        patch(
+            "documentai_api.app.validate_file_type",
+            new_callable=AsyncMock,
+            return_value="application/pdf",
+        ),
+        patch("documentai_api.app.upload_document_for_processing", new_callable=AsyncMock),
+        patch("documentai_api.app.validate_batch_id"),
         patch("documentai_api.utils.ddb.create_batch"),
         patch("documentai_api.utils.ddb.update_batch_status"),
+        patch(
+            "documentai_api.utils.ddb.get_batch",
+            return_value={"batchId": "test-batch", "createdAt": "2026-03-02T20:00:00Z"},
+        ),
     ):
         mock_file = MagicMock()
         mock_file.filename = "doc1.pdf"
@@ -88,9 +109,18 @@ def test_zip_upload_success(zip_with_pdfs):
     assert response.json()["totalFiles"] == 1
 
 
-def test_zip_upload_empty():
+def test_zip_upload_empty(ddb_table):
     """Test ZIP upload with no valid files."""
-    with patch("documentai_api.utils.zip", return_value=[]):
+    with (
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-table"}),
+        patch(
+            "documentai_api.utils.zip.extract_files_from_zip", new_callable=AsyncMock
+        ) as mock_extract,
+        patch("documentai_api.app.validate_batch_id"),
+        patch("documentai_api.utils.ddb.create_batch"),
+        patch("documentai_api.utils.ddb.update_batch_status"),
+    ):
+        mock_extract.return_value = []
         zip_content = BytesIO(b"fake zip")
         files = {"zip_file": ("empty.zip", zip_content, "application/zip")}
         response = client.post("/v1/documents/batch/zip", files=files)
@@ -208,3 +238,41 @@ def test_get_batch_status_no_lazy_completion_when_incomplete():
         data = response.json()
         assert data["batchStatus"] == "processing"
         mock_update.assert_not_called()
+
+
+def test_validate_batch_id_no_existing_batch():
+    """Test validation passes when batch doesn't exist."""
+    with patch("documentai_api.utils.ddb.get_batch") as mock_get_batch:
+        mock_get_batch.return_value = None
+        validate_batch_id("new-batch-id", "tenant-1")
+
+
+@pytest.mark.parametrize(
+    ("existing_tenant", "request_tenant", "expected_detail"),
+    [
+        # Same tenant scenarios - detailed error
+        ("tenant-1", "tenant-1", "already exists with status processing"),
+        (None, None, "already exists with status processing"),
+        # Different tenant scenarios - generic error
+        ("tenant-1", "tenant-2", "Batch ID already exists"),
+        ("tenant-1", None, "Batch ID already exists"),
+        (None, "tenant-1", "Batch ID already exists"),
+    ],
+)
+def test_validate_batch_id_existing_batch(existing_tenant, request_tenant, expected_detail):
+    """Test validation fails appropriately for existing batches."""
+    with (
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
+        patch("documentai_api.utils.ddb.get_batch") as mock_get_batch,
+    ):
+        batch = {Batch.BATCH_ID: "batch-1", Batch.BATCH_STATUS: "processing"}
+        if existing_tenant is not None:
+            batch[Batch.TENANT_ID] = existing_tenant
+
+        mock_get_batch.return_value = batch
+
+        with pytest.raises(HTTPException) as exc_info:
+            validate_batch_id("batch-1", request_tenant)
+
+        assert exc_info.value.status_code == 409
+        assert expected_detail in exc_info.value.detail

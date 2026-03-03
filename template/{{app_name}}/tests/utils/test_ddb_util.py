@@ -513,6 +513,7 @@ def test_insert_initial_ddb_record(
             user_provided_document_category=user_provided_document_category,
             job_id="test-job-id",
             trace_id="test-trace-id",
+            tenant_id="test-tenant-id",
             batch_id="test-batch-id",
             external_reference_id="test-external-reference-id",
         )
@@ -528,6 +529,7 @@ def test_insert_initial_ddb_record(
             content_type=content_type,
             job_id="test-job-id",
             trace_id="test-trace-id",
+            tenant_id="test-tenant-id",
             batch_id="test-batch-id",
             external_reference_id="test-external-reference-id",
             is_document_blurry=is_blurry,

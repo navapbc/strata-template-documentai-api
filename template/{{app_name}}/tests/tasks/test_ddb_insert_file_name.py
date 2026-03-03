@@ -180,6 +180,7 @@ def test_main_with_metadata():
             user_provided_document_category="income",
             job_id="test-job-id",
             trace_id="test-trace-id",
+            tenant_id="test-tenant-id",
             batch_id="test-batch-id",
             external_reference_id="test-external-reference-id",
         )
@@ -190,6 +191,7 @@ def test_main_with_metadata():
         user_provided_document_category="income",
         job_id="test-job-id",
         trace_id="test-trace-id",
+        tenant_id="test-tenant-id",
         batch_id="test-batch-id",
         external_reference_id="test-external-reference-id",
     )

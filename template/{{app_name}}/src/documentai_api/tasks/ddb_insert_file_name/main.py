@@ -94,8 +94,9 @@ def main(
     object_key: str,
     user_provided_document_category: str | None = None,
     job_id: str | None = None,
-    batch_id: str | None = None,
     trace_id: str | None = None,
+    tenant_id: str | None = None,
+    batch_id: str | None = None,
     external_reference_id: str | None = None,
 ):
     """Process uploaded file.
@@ -149,6 +150,7 @@ def main(
             user_provided_document_category=user_provided_document_category,
             job_id=job_id,
             trace_id=trace_id,
+            tenant_id=tenant_id,
             batch_id=batch_id,
             external_reference_id=external_reference_id,
         )
