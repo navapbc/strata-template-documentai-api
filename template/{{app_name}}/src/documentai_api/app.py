@@ -230,7 +230,7 @@ async def create_document(
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
-    timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
+    timeout: int = 180,  # accounts for ECS cold starts and BDA processing time
 ):
     """Upload a document for processing.
 

@@ -111,7 +111,7 @@ def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
     return FieldMetrics(field_count, non_empty_count, avg_confidence)
 
 
-def _build_completion_timing(object_key: str) -> tuple[list, dict]:
+def _build_completion_timing(object_key: str, bda_output_s3_uri: str) -> tuple[list, dict]:
     """Build completion timing updates."""
     updates = []
     values = {}
@@ -120,9 +120,6 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
         ddb_record = get_ddb_record(object_key)
 
         if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
-            # get BDA output S3 URI from record for accurate timing
-            bda_output_s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
-
             completed_time = datetime.now(UTC)
 
             # use S3 LastModified timestamp if available
@@ -162,7 +159,7 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
     return updates, values
 
 
-def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
+def _build_timing_updates(object_key: str, status: str, bda_output_s3_uri: str) -> tuple[str, dict]:
     """Handle all timing-related updates for different statuses."""
     status = status.value if isinstance(status, ProcessStatus) else status
 
@@ -181,7 +178,9 @@ def _build_timing_updates(object_key: str, status: str) -> tuple[str, dict]:
             logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
     elif status in PROCESSING_STATUS_COMPLETED:
-        completion_updates, completion_values = _build_completion_timing(object_key)
+        completion_updates, completion_values = _build_completion_timing(
+            object_key, bda_output_s3_uri
+        )
         updates.extend(completion_updates)
         values.update(completion_values)
 
@@ -338,7 +337,9 @@ def update_ddb(
         )
 
         # add timing updates
-        timing_updates, timing_values = _build_timing_updates(object_key, status)
+        timing_updates, timing_values = _build_timing_updates(
+            object_key, status, bda_output_s3_uri=data.bda_output_s3_uri if data else None
+        )
         if timing_updates:
             update_expr += f", {timing_updates}"
             expr_values.update(timing_values)

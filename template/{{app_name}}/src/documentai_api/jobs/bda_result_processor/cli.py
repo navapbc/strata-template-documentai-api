@@ -1,20 +1,22 @@
+import json
+
 import typer
 
-from documentai_api.jobs.document_processor.main import main
+from documentai_api.jobs.bda_result_processor.main import main
 
 app = typer.Typer()
 
 
 @app.command()
 def cli(
-    object_key: str = typer.Option(..., help="S3 object key (e.g. 'input/document.pdf')"),
-    bucket_name: str | None = typer.Option(
-        None, help="S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)"
-    ),
+    bucket_name: str = typer.Argument(..., help="S3 bucket containing BDA output"),
+    object_key: str = typer.Argument(..., help="S3 object key of BDA output file"),
 ):
-    """Process uploaded document and invoke BDA."""
+    """Process BDA output file."""
     try:
-        main(object_key, bucket_name)
+        result = main(bucket_name, object_key)
+        if result:
+            typer.echo(json.dumps(result))
     except Exception:
         raise typer.Exit(1) from None
 
