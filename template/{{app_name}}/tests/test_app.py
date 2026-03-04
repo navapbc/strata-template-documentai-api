@@ -83,7 +83,7 @@ async def test_upload_document_for_processing_success():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
     ):
         from documentai_api.config.constants import DocumentCategory
@@ -102,12 +102,12 @@ async def test_upload_document_for_processing_success():
 
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_no_env():
-    """Test upload fails when DDE_INPUT_LOCATION not set."""
+    """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
     mock_file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", None),
-        pytest.raises(ValueError, match="DDE_INPUT_LOCATION"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", None),
+        pytest.raises(ValueError, match="DOCUMENTAI_INPUT_LOCATION"),
     ):
         await upload_document_for_processing(
             file=mock_file,
@@ -252,7 +252,7 @@ async def test_upload_document_for_processing_s3_failure():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
     ):
         mock_upload.side_effect = Exception("S3 error")
@@ -275,7 +275,7 @@ async def test_upload_document_for_processing_invalid_category_type():
     mock_file.file = MagicMock()
 
     with (
-        patch("documentai_api.app.DDE_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
         pytest.raises(HTTPException),
     ):
         await upload_document_for_processing(

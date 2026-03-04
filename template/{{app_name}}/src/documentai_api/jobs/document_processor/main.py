@@ -3,7 +3,7 @@
 
 import os
 
-from documentai_api.config.constants import ConfigDefaults, ProcessStatus
+from documentai_api.config.constants import ConfigDefaults, ProcessStatus, S3Prefix
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
@@ -16,7 +16,7 @@ from documentai_api.utils.ddb import (
     set_bda_processing_status_not_started,
     set_bda_processing_status_started,
 )
-from documentai_api.utils.env import DDE_INPUT_LOCATION
+from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -104,23 +104,23 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
         return False
 
 
-def invoke_bda(bucket_name: str, object_key: str) -> dict:
+def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
     """Invoke BDA for a file that's ready for processing."""
     try:
         invocation_arn = invoke_bedrock_data_automation(bucket_name, object_key)
 
         set_bda_processing_status_started(
-            object_key=object_key,
+            object_key=ddb_key,
             bda_invocation_arn=invocation_arn,
         )
 
-        logger.info(f"BDA job started for {object_key}, ARN: {invocation_arn}")
+        logger.info(f"BDA job started for {ddb_key}, ARN: {invocation_arn}")
         return {"invocationArn": invocation_arn}
 
     except Exception as e:
-        logger.error(f"BDA invocation failed for {object_key}: {e}")
+        logger.error(f"BDA invocation failed for {ddb_key}: {e}")
         classify_as_failed(
-            object_key=object_key,
+            object_key=ddb_key,
             error_message="BDA invocation failed",
             data=ClassificationData(additional_info=str(e)),
         )
@@ -135,43 +135,61 @@ def main(object_key: str, bucket_name: str | None = None):
 
     Args:
         object_key: S3 object key (e.g. "input/document.pdf")
-        bucket_name: Optional S3 bucket name (defaults to DDE_INPUT_LOCATION env var)
+        bucket_name: Optional S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)
     """
     if bucket_name is None:
-        bucket_name = os.getenv(DDE_INPUT_LOCATION, "").replace("s3://", "")
+        bucket_name = os.getenv(DOCUMENTAI_INPUT_LOCATION, "").replace("s3://", "")
 
     logger.info(f"Processing document: s3://{bucket_name}/{object_key}")
 
+    # strip S3 prefix for DynamoDB key (files are stored without prefix)
+    ddb_key = object_key.removeprefix(f"{S3Prefix.INPUT}/")
+
     try:
-        existing_record = get_ddb_record(object_key)
+        existing_record = get_ddb_record(ddb_key)
     except ValueError:
         # first time seeing this file
-        logger.info(f"First time processing {object_key}")
+        logger.info(f"First time processing {ddb_key}")
         insert_initial_ddb_record(
             source_bucket_name=bucket_name,
             source_object_key=object_key,
+            ddb_key=ddb_key,
             user_provided_document_category=None,
             job_id=None,
             trace_id=None,
         )
 
-        existing_record = get_ddb_record(object_key)
+        existing_record = get_ddb_record(ddb_key)
 
     status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
 
     if status == ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
         if convert_s3_object_to_grayscale(bucket_name, object_key):
-            set_bda_processing_status_not_started(object_key)
-            invoke_bda(bucket_name, object_key)
-            logger.info(f"Converted {object_key} to grayscale and invoked BDA")
+            set_bda_processing_status_not_started(ddb_key)
+            invoke_bda(bucket_name, object_key, ddb_key)
+            logger.info(f"Converted {ddb_key} to grayscale and invoked BDA")
         else:
             # conversion failed or file too large
             classify_as_not_implemented(
-                object_key=object_key,
+                object_key=ddb_key,
                 data=ClassificationData(additional_info="File too large after conversion"),
             )
     elif status == ProcessStatus.NOT_STARTED.value:
         # ready for BDA immediately
-        invoke_bda(bucket_name, object_key)
+        invoke_bda(bucket_name, object_key, ddb_key)
     else:
-        logger.info(f"File {object_key} already has status: {status}, skipping")
+        logger.info(f"File {ddb_key} already has status: {status}, skipping")
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 2:
+        logger.error(
+            "Usage: python -m documentai_api.jobs.document_processor.main <object_key> [bucket_name]"
+        )
+        sys.exit(1)
+
+    object_key = sys.argv[1]
+    bucket_name = sys.argv[2] if len(sys.argv) > 2 else None
+    main(object_key, bucket_name)

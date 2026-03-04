@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from documentai_api.utils import bda_invoker as bda_invoker_util
+from documentai_api.utils import env
 
 
 def test_invoke_bedrock_data_automation_single_page():
@@ -10,9 +11,9 @@ def test_invoke_bedrock_data_automation_single_page():
         patch.dict(
             "os.environ",
             {
-                "DDE_PROJECT_ARN": "arn:aws:project",
-                "DDE_PROFILE_ARN": "arn:aws:profile",
-                "DDE_OUTPUT_LOCATION": "s3://output-bucket/path",
+                env.DOCUMENTAI_PROJECT_ARN: "arn:aws:project",
+                env.DOCUMENTAI_PROFILE_ARN: "arn:aws:profile",
+                env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
             },
         ),
         patch(
@@ -44,9 +45,9 @@ def test_invoke_bedrock_data_automation_document_truncation():
         patch.dict(
             "os.environ",
             {
-                "DDE_PROJECT_ARN": "arn:aws:project",
-                "DDE_PROFILE_ARN": "arn:aws:profile",
-                "DDE_OUTPUT_LOCATION": "s3://output-bucket/path",
+                env.DOCUMENTAI_PROJECT_ARN: "arn:aws:project",
+                env.DOCUMENTAI_PROFILE_ARN: "arn:aws:profile",
+                env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
             },
         ),
         patch(

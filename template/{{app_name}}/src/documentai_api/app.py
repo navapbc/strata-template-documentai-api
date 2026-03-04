@@ -18,15 +18,17 @@ from documentai_api.config.constants import (
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
     ProcessStatus,
+    S3Prefix,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
-DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
 
 app = FastAPI(
     title=API_TITLE,
@@ -108,6 +110,7 @@ async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
+    s3_prefix: S3Prefix = S3Prefix.INPUT,
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -115,14 +118,17 @@ async def upload_document_for_processing(
     logger.debug(
         "S3 upload started",
         extra={
+            "unique_file_name": unique_file_name,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
+            "s3_prefix": s3_prefix,
         },
     )
-    if not DDE_INPUT_LOCATION:
-        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+    if not DOCUMENTAI_INPUT_LOCATION:
+        raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
 
-    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    bucket_name = DOCUMENTAI_INPUT_LOCATION.replace("s3://", "")
+    unique_file_name = f"{s3_prefix.value}/{unique_file_name}"
 
     try:
         metadata = {}

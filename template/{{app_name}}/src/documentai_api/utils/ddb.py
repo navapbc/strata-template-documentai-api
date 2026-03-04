@@ -13,6 +13,7 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -247,7 +248,7 @@ def _build_update_expression(
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
@@ -273,7 +274,7 @@ def get_user_provided_document_category(object_key: str) -> str:
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -288,11 +289,13 @@ def get_ddb_record(object_key: str) -> dict:
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID."""
-    table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
-    index_name = os.getenv("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME")
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     if not index_name:
-        raise ValueError("DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME environment variable not set")
+        raise ValueError(
+            f"{env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME} environment variable not set"
+        )
 
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None
@@ -356,7 +359,7 @@ def insert_ddb(
     overall_blur_score=None,
 ):
     try:
-        table_name = os.getenv("DDE_DOCUMENT_METADATA_TABLE_NAME")
+        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
 
         item = {
             DocumentMetadata.FILE_NAME: object_key,
@@ -415,6 +418,7 @@ def insert_ddb(
 def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
+    ddb_key: str,
     user_provided_document_category: str,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -432,9 +436,7 @@ def insert_initial_ddb_record(
     )
 
     if not user_provided_document_category:
-        logger.warning(
-            f"Warning: user_provided_document_category is None/empty for {source_object_key}"
-        )
+        logger.warning(f"Warning: user_provided_document_category is None/empty for {ddb_key}")
         user_provided_document_category = "unknown"
 
     document_detector = DocumentDetector()
@@ -488,12 +490,12 @@ def insert_initial_ddb_record(
 
                 try:
                     if document_detector.is_multipage_document(file_bytes):
-                        logger.info(f"{source_object_key} is a multipage doc")
+                        logger.info(f"{ddb_key} is a multipage doc")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
                     else:
-                        logger.info(f"{source_object_key} is a single page doc")
+                        logger.info(f"{ddb_key} is a single page doc")
 
                 except Exception as e:
                     logger.info(f"=== Multipage detection failed: {e} ===")
@@ -508,13 +510,13 @@ def insert_initial_ddb_record(
     # create the json response signaling the process is complete
     if process_status not in PROCESSING_STATUS_PENDING_EXTRACTION:
         internal_api_response: InternalApiResponse = get_internal_api_response(
-            object_key=source_object_key,
+            object_key=ddb_key,
             response_code=response_code,
             matched_document_class=None,
         )
 
     insert_ddb(
-        object_key=source_object_key,
+        object_key=ddb_key,
         user_provided_document_category=user_provided_document_category,
         process_status=process_status,
         internal_api_response=internal_api_response,

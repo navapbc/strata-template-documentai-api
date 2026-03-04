@@ -13,12 +13,13 @@ from documentai_api.jobs.document_processor.main import (
     main,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
+from documentai_api.utils import env
 
 
 @pytest.fixture(autouse=True)
 def mock_env(monkeypatch):
     """Mock environment variables for all tests."""
-    monkeypatch.setenv("DDE_INPUT_LOCATION", "s3://test-bucket")
+    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, "s3://test-bucket")
 
 
 @pytest.mark.parametrize(
@@ -165,7 +166,7 @@ def test_invoke_bda_success():
     ):
         mock_invoke.return_value = "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
 
-        result = invoke_bda("test-bucket", "test.pdf")
+        result = invoke_bda("test-bucket", "input/test.pdf", "test.pdf")
 
     assert result["invocationArn"] == "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
     mock_set_status.assert_called_once_with(
@@ -185,7 +186,7 @@ def test_invoke_bda_failure():
         mock_invoke.side_effect = Exception("BDA service error")
 
         with pytest.raises(Exception, match="BDA service error"):
-            invoke_bda("test-bucket", "test.pdf")
+            invoke_bda("test-bucket", "input/test.pdf", "test.pdf")
 
         mock_classify.assert_called_once()
         assert mock_classify.call_args.kwargs["object_key"] == "test.pdf"
@@ -206,10 +207,10 @@ def test_main_first_time_pdf():
             {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
         ]
 
-        main("test.pdf", "test-bucket")
+        main("input/test.pdf", "test-bucket")
 
     mock_insert.assert_called_once()
-    mock_invoke.assert_called_once_with("test-bucket", "test.pdf")
+    mock_invoke.assert_called_once_with("test-bucket", "input/test.pdf", "test.pdf")
 
 
 def test_main_first_time_image():
@@ -233,12 +234,12 @@ def test_main_first_time_image():
         ]
         mock_convert.return_value = True
 
-        main("test.jpg", "test-bucket")
+        main("input/test.jpg", "test-bucket")
 
     mock_insert.assert_called_once()
-    mock_convert.assert_called_once_with("test-bucket", "test.jpg")
+    mock_convert.assert_called_once_with("test-bucket", "input/test.jpg")
     mock_set_status.assert_called_once_with("test.jpg")
-    mock_invoke.assert_called_once_with("test-bucket", "test.jpg")
+    mock_invoke.assert_called_once_with("test-bucket", "input/test.jpg", "test.jpg")
 
 
 def test_main_grayscale_conversion_fails():
@@ -260,7 +261,7 @@ def test_main_grayscale_conversion_fails():
         ]
         mock_convert.return_value = False
 
-        main("test.jpg", "test-bucket")
+        main("input/test.jpg", "test-bucket")
 
     mock_classify.assert_called_once()
     mock_invoke.assert_not_called()
@@ -274,7 +275,7 @@ def test_main_already_processed():
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "success"}
 
-        main("test.pdf", "test-bucket")
+        main("input/test.pdf", "test-bucket")
 
     mock_invoke.assert_not_called()
 
@@ -287,9 +288,9 @@ def test_main_uses_env_bucket_when_not_provided():
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value}
 
-        main("test.pdf")
+        main("input/test.pdf")
 
-    mock_invoke.assert_called_once_with("test-bucket", "test.pdf")
+    mock_invoke.assert_called_once_with("test-bucket", "input/test.pdf", "test.pdf")
 
 
 def test_main_idempotent_on_duplicate_events():
@@ -300,6 +301,6 @@ def test_main_idempotent_on_duplicate_events():
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "processing"}
 
-        main("test.pdf", "test-bucket")
+        main("input/test.pdf", "test-bucket")
 
     mock_invoke.assert_not_called()

@@ -11,6 +11,8 @@ RUN apt-get update -qq \
         build-essential \
         curl \
         libmagic1 \
+        poppler-utils \
+        libopencv-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
