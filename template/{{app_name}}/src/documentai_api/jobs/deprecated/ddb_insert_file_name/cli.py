@@ -1,5 +1,4 @@
 import typer
-
 from documentai_api.tasks.ddb_insert_file_name.main import main
 
 app = typer.Typer()

@@ -3,14 +3,14 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from documentai_api.config.constants import ConfigDefaults
 from documentai_api.tasks.ddb_insert_file_name import (
     convert_s3_object_to_grayscale,
     convert_to_grayscale,
     is_file_too_large_for_bda,
     main,
 )
+
+from documentai_api.config.constants import ConfigDefaults
 
 
 @pytest.mark.parametrize(

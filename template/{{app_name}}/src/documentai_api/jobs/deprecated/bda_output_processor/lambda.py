@@ -1,6 +1,7 @@
 """Lambda handler for processing BDA output from S3 events."""
 
 from documentai_api.tasks.bda_output_processor.main import main as process_bda_output_main
+
 from documentai_api.utils.error_handling import handle_lambda_errors
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import extract_s3_info_from_event, validate_s3_event

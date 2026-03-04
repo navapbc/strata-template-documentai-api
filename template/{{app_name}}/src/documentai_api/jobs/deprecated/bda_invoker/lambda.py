@@ -2,9 +2,10 @@
 
 import os
 
+from documentai_api.tasks.bda_invoker.main import main as invoke_bda_main
+
 from documentai_api.config.constants import ProcessStatus
 from documentai_api.schemas.document_metadata import DocumentMetadata
-from documentai_api.tasks.bda_invoker.main import main as invoke_bda_main
 from documentai_api.utils.env import DDE_INPUT_LOCATION
 from documentai_api.utils.error_handling import handle_lambda_errors
 from documentai_api.utils.logger import get_logger

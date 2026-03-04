@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from documentai_api.tasks.bda_invoker import main
 
 

@@ -1,7 +1,6 @@
 import json
 
 import typer
-
 from documentai_api.tasks.bda_invoker.main import main
 
 app = typer.Typer()
