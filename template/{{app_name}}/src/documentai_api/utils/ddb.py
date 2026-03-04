@@ -14,6 +14,7 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
+from documentai_api.utils import s3 as s3_utils
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -119,7 +120,22 @@ def _build_completion_timing(object_key: str) -> tuple[list, dict]:
         ddb_record = get_ddb_record(object_key)
 
         if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
+            # get BDA output S3 URI from record for accurate timing
+            bda_output_s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
+
             completed_time = datetime.now(UTC)
+
+            # use S3 LastModified timestamp if available
+            if bda_output_s3_uri:
+                try:
+                    bucket, key = s3_utils.parse_s3_uri(bda_output_s3_uri)
+                    completed_time = s3_service.get_last_modified_at(bucket, key)
+                    logger.info(f"Using S3 LastModified for bdaCompletedAt: {completed_time}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get S3 timestamp for bdaCompletedAt, using current time: {e}"
+                    )
+
             updates.append(f"{DocumentMetadata.BDA_COMPLETED_AT} = :bdaCompletedAt")
             values[":bdaCompletedAt"] = completed_time.isoformat()
 

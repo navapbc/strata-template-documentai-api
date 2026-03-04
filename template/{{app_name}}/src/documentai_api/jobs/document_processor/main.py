@@ -3,6 +3,9 @@
 
 import os
 
+from botocore.exceptions import ClientError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from documentai_api.config.constants import ConfigDefaults, ProcessStatus, S3Prefix
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
@@ -104,6 +107,12 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
         return False
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(ClientError),
+    reraise=True,
+)
 def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
     """Invoke BDA for a file that's ready for processing."""
     try:
@@ -182,14 +191,6 @@ def main(object_key: str, bucket_name: str | None = None):
 
 
 if __name__ == "__main__":
-    import sys
+    from documentai_api.jobs.document_processor.cli import app
 
-    if len(sys.argv) < 2:
-        logger.error(
-            "Usage: python -m documentai_api.jobs.document_processor.main <object_key> [bucket_name]"
-        )
-        sys.exit(1)
-
-    object_key = sys.argv[1]
-    bucket_name = sys.argv[2] if len(sys.argv) > 2 else None
-    main(object_key, bucket_name)
+    app()

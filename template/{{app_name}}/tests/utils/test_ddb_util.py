@@ -131,29 +131,39 @@ def test_build_completion_timing(has_bda_started_at):
         ddb_record[DocumentMetadata.BDA_STARTED_AT] = datetime(
             year, 1, 1, 12, 0, 5, tzinfo=UTC
         ).isoformat()
+        ddb_record[DocumentMetadata.BDA_OUTPUT_S3_URI] = "s3://bucket/key/job_metadata.json"
 
-    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with (
+        patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
+        patch("documentai_api.utils.ddb.s3_utils.parse_s3_uri") as mock_parse_uri,
+        patch("documentai_api.utils.ddb.s3_service.get_last_modified_at") as mock_get_modified,
+        patch("documentai_api.utils.ddb.datetime") as mock_datetime,
+    ):
         mock_get_ddb_record.return_value = ddb_record
+        mock_parse_uri.return_value = ("bucket", "key/job_metadata.json")
+        mock_get_modified.return_value = datetime(year, 1, 1, 12, 0, 15, tzinfo=UTC)
+        mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 15, tzinfo=UTC)
+        mock_datetime.fromisoformat = datetime.fromisoformat
 
-        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
-            mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 15, tzinfo=UTC)
-            mock_datetime.fromisoformat = datetime.fromisoformat
+        updates, values = ddb_util._build_completion_timing("test-file")
 
-            updates, values = ddb_util._build_completion_timing("test-file")
-
-            # updates is a list of database fields and associated placeholders:
-            # ['bdaCompletedAt = :bdaCompletedAt', 'processedDate = :processedDate', ...]
-            # use any() to check if field name appears in any list item
-            if has_bda_started_at:
-                assert any(DocumentMetadata.BDA_COMPLETED_AT in u for u in updates)
-                assert any(DocumentMetadata.PROCESSED_DATE in u for u in updates)
-                assert ":bdaCompletedAt" in values
-                assert ":processedDate" in values
-                assert values[":totalProcessingTime"] == Decimal("15.0")
-                assert values[":bdaProcessingTime"] == Decimal("10.0")
-            else:
-                assert updates == []
-                assert values == {}
+        # updates is a list of database fields and associated placeholders:
+        # ['bdaCompletedAt = :bdaCompletedAt', 'processedDate = :processedDate', ...]
+        # use any() to check if field name appears in any list item
+        if has_bda_started_at:
+            assert any(DocumentMetadata.BDA_COMPLETED_AT in u for u in updates)
+            assert any(DocumentMetadata.PROCESSED_DATE in u for u in updates)
+            assert ":bdaCompletedAt" in values
+            assert ":processedDate" in values
+            assert values[":totalProcessingTime"] == Decimal("15.0")
+            assert values[":bdaProcessingTime"] == Decimal("10.0")
+            mock_parse_uri.assert_called_once_with("s3://bucket/key/job_metadata.json")
+            mock_get_modified.assert_called_once_with("bucket", "key/job_metadata.json")
+        else:
+            assert updates == []
+            assert values == {}
+            mock_parse_uri.assert_not_called()
+            mock_get_modified.assert_not_called()
 
 
 @pytest.mark.parametrize(

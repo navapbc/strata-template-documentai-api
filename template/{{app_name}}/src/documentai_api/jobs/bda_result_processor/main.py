@@ -56,14 +56,6 @@ def main(bucket_name: str, object_key: str) -> dict:
 
 
 if __name__ == "__main__":
-    import sys
+    from documentai_api.jobs.bda_result_processor.cli import app
 
-    if len(sys.argv) < 3:
-        logger.error(
-            "Usage: python -m documentai_api.jobs.bda_result_processor.main <bucket_name> <object_key>"
-        )
-        sys.exit(1)
-
-    bucket_name = sys.argv[1]
-    object_key = sys.argv[2]
-    main(bucket_name, object_key)
+    app()

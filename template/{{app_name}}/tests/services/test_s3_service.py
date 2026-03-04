@@ -120,3 +120,15 @@ def test_is_password_protected_not_pdf(s3_bucket):
 
     result = s3_service.is_password_protected(s3_bucket.name, "test-key")
     assert result is False
+
+
+def test_get_last_modified_at(s3_client, s3_bucket):
+    """Get LastModified timestamp from S3 object."""
+    from datetime import datetime
+
+    s3_bucket.put_object(Key="test-key", Body=b"data")
+
+    result = s3_service.get_last_modified_at(s3_bucket.name, "test-key")
+
+    assert isinstance(result, datetime)
+    assert result.tzinfo is not None  # boto3 returns tzutc() which is timezone-aware

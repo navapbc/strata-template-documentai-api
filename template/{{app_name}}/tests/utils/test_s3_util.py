@@ -109,3 +109,34 @@ def test_extract_s3_info_invalid_events(event):
     """Raise ValueError for invalid event structures."""
     with pytest.raises(ValueError, match="Invalid EventBridge event structure"):
         s3_util.extract_s3_info_from_event(event)
+
+
+@pytest.mark.parametrize(
+    ("s3_uri", "expected_bucket", "expected_key"),
+    [
+        ("s3://bucket/key", "bucket", "key"),
+        ("s3://my-bucket/path/to/file.json", "my-bucket", "path/to/file.json"),
+        ("s3://bucket/prefix/input/file.pdf", "bucket", "prefix/input/file.pdf"),
+    ],
+)
+def test_parse_s3_uri_valid(s3_uri, expected_bucket, expected_key):
+    """Parse valid S3 URIs."""
+    bucket, key = s3_util.parse_s3_uri(s3_uri)
+    assert bucket == expected_bucket
+    assert key == expected_key
+
+
+@pytest.mark.parametrize(
+    "invalid_uri",
+    [
+        "http://bucket/key",
+        "bucket/key",
+        "s3://",
+        "s3://bucket",
+        "s3://bucket/",
+    ],
+)
+def test_parse_s3_uri_invalid(invalid_uri):
+    """Raise ValueError for invalid S3 URIs."""
+    with pytest.raises(ValueError, match="Invalid S3 URI"):
+        s3_util.parse_s3_uri(invalid_uri)
