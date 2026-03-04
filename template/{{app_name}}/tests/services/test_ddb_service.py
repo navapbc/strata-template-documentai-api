@@ -46,7 +46,17 @@ def test_update_item(ddb_table):
     assert response["Item"]["description"] == "updated"
 
 
-def test_query_by_key(ddb_table):
+def test_query_by_key_primary_key(ddb_table):
+    """Query by primary key without index."""
+    ddb_table.put_item(Item={"id": "123", "userId": "user-123"})
+
+    result = ddb_service.query_by_key(ddb_table.name, None, "id", "123")
+
+    assert len(result) == 1
+    assert result[0]["id"] == "123"
+
+
+def test_query_by_key_with_gsi(ddb_table):
     """Query DynamoDB table by key using GSI."""
     ddb_table.put_item(Item={"id": "123", "userId": "user-123"})
     ddb_table.put_item(Item={"id": "456", "userId": "user-123"})

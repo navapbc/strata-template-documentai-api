@@ -11,6 +11,7 @@ from documentai_api.app import (
     get_v1_document_processing_results,
     upload_document_for_processing,
 )
+from documentai_api.utils.models import PageMetadata
 
 client = TestClient(app)
 

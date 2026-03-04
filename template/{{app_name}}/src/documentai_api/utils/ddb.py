@@ -9,6 +9,7 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
     ProcessStatus,
+    DocumentCategory,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
@@ -21,11 +22,165 @@ from documentai_api.utils.models import (
     FieldMetrics,
     InternalApiResponse,
     ProcessingTimes,
+    PageMetadata,
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)
+
+
+def get_document_metadata_table() -> str:
+    """Get document metadata table name from environment."""
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    if not table_name:
+        raise ValueError(f"{env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME} not set")
+
+    return table_name
+
+
+def get_document_build_table() -> str:
+    """Get multipage upload sessions table name from environment."""
+    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME)
+    if not table_name:
+        raise ValueError(f"{env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME} not set")
+    return table_name
+
+
+def document_build_page_exists(build_id: str, page_number: int) -> bool:
+    """Check if a page exists for a multipage session."""
+    table_name = get_document_build_table()
+    key = {"buildId": build_id, "pageNumber": page_number}
+    item = ddb_service.get_item(table_name, key)
+    return item is not None
+
+
+async def upsert_document_build_page(
+    build_id: str,
+    page_number: int,
+    s3_key: str,
+    category: DocumentCategory | None = None,
+):
+    """Upsert multipage session page record."""
+    table_name = get_document_build_table()
+
+    item = {
+        "buildId": build_id,
+        "pageNumber": page_number,
+        "s3Key": s3_key,
+        "uploadedAt": datetime.now(UTC).isoformat(),
+    }
+
+    if category:
+        item["category"] = category.value
+
+    ddb_service.put_item(table_name, item)
+
+
+def get_document_build_pages(build_id: str) -> list[PageMetadata]:
+    """Get all pages for a multipage session."""
+    table_name = get_document_build_table()
+    bucket_name = os.getenv("DDE_INPUT_LOCATION", "").replace("s3://", "")
+
+    items = ddb_service.query_by_key(
+        table_name=table_name,
+        index_name=None,
+        key_name="buildId",
+        key_value=build_id,
+    )
+
+    pages = [
+        PageMetadata(
+            page_number=item.get("pageNumber", 0),
+            s3_key=item.get("s3Key", ""),
+            s3_bucket_name=bucket_name,  # Note: renamed from s3_bucket
+            category=item.get("category"),
+            uploaded_at=item.get("uploadedAt"),
+        )
+        for item in items
+    ]
+
+    return sorted(pages, key=lambda x: x.page_number)
+
+
+def is_document_build_submitted(build_id: str) -> bool:
+    """Check if a multipage session has already been submitted."""
+    table_name = get_document_build_table()
+    items = ddb_service.query_by_key(
+        table_name=table_name, index_name=None, key_name="buildId", key_value=build_id
+    )
+
+    return len(items) > 0 and any(item.get("submittedAt") for item in items)
+
+
+def mark_document_build_submitted(build_id: str):
+    """Mark all pages in a multipage session as submitted."""
+    table_name = get_document_build_table()
+    items = ddb_service.query_by_key(
+        table_name=table_name, index_name=None, key_name="buildId", key_value=build_id
+    )
+
+    submitted_at = datetime.now(UTC).isoformat()
+    for item in items:
+        ddb_service.update_item(
+            table_name=table_name,
+            key={"buildId": build_id, "pageNumber": item["pageNumber"]},
+            update_expression="SET submittedAt = :submittedAt",
+            expression_attribute_values={":submittedAt": submitted_at},
+        )
+
+
+def delete_document_build_page(build_id: str, page_number: int) -> bool:
+    """Delete a specific page from a multipage session."""
+    if is_document_build_submitted(build_id):
+        raise ValueError(f"Cannot delete - session {build_id} has already been submitted")
+
+    table_name = get_document_build_table()
+    bucket_name = os.getenv(env.DOCUMENTAI_INPUT_LOCATION, "").replace("s3://", "")
+
+    key = {"buildId": build_id, "pageNumber": page_number}
+    item = ddb_service.get_item(table_name, key)
+
+    if not item:
+        return False
+
+    s3_key = item.get("s3Key")
+    if s3_key:
+        s3_service.delete_file(bucket_name, s3_key)
+
+    ddb_service.delete_item(table_name, key)
+    return True
+
+
+def delete_document_build(build_id: str) -> bool:
+    """Delete an entire multipage session and all its pages."""
+    if is_document_build_submitted(build_id):
+        raise ValueError(f"Cannot delete - session {build_id} has already been submitted")
+
+    table_name = get_document_build_table()
+    bucket_name = os.getenv(env.DOCUMENTAI_INPUT_LOCATION, "").replace("s3://", "")
+
+    items = ddb_service.query_by_key(
+        table_name=table_name,
+        index_name=None,
+        key_name="buildId",
+        key_value=build_id,
+    )
+
+    if not items:
+        return False
+
+    for item in items:
+        s3_key = item.get("s3Key")
+        if s3_key:
+            s3_service.delete_file(bucket_name, s3_key)
+
+        ddb_service.delete_item(
+            table_name,
+            {"buildId": build_id, "pageNumber": item["pageNumber"]},
+        )
+
+    return True
 
 
 def extract_region_from_bda_arn(bda_invocation_arn: str) -> str | None:

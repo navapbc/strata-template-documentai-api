@@ -38,6 +38,13 @@ def s3_bucket(aws_credentials):
 
 
 @pytest.fixture
+def mock_s3_service():
+    """Mock s3_service for testing."""
+    with patch("documentai_api.utils.pdf.s3_service") as mock:
+        yield mock
+
+
+@pytest.fixture
 def ddb_table(aws_credentials):
     """Create a test DynamoDB table."""
     import boto3
@@ -64,6 +71,27 @@ def ddb_table(aws_credentials):
         yield table
 
 
+@pytest.fixture
+def document_builds_ddb_table(aws_credentials):
+    """Create a test document builds DynamoDB table."""
+    import boto3
+
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+        table = dynamodb.create_table(
+            TableName="test-document-builds-table",
+            KeySchema=[
+                {"AttributeName": "buildId", "KeyType": "HASH"},
+                {"AttributeName": "pageNumber", "KeyType": "RANGE"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "buildId", "AttributeType": "S"},
+                {"AttributeName": "pageNumber", "AttributeType": "N"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield table
+        
 @pytest.fixture
 def mock_bda_clients():
     """Mock BDA clients (not supported by moto yet)."""

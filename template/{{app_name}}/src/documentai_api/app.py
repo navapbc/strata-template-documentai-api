@@ -22,7 +22,7 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
-from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id, document_build_page_exists, upsert_document_build_page
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
@@ -106,6 +106,24 @@ def _get_job_status(job_id: str) -> JobStatus:
     return JobStatus(ddb_record, object_key, process_status, v1_response)
 
 
+async def validate_file_type(file: UploadFile) -> str:
+    """Validate file type and return content type."""
+    file_content = await file.read()
+    actual_content_type = magic.from_buffer(file_content, mime=True)
+
+    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid file type detected '{actual_content_type}'. File must be "
+                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
+            ),
+        )
+
+    file.file.seek(0)
+    return actual_content_type
+
+
 async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
@@ -113,6 +131,7 @@ async def upload_document_for_processing(
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
+    document_build_id: str | None = None
 ):
     logger.debug(
         "S3 upload started",
@@ -141,11 +160,17 @@ async def upload_document_for_processing(
                 user_provided_document_category.value
             )
 
+        if s3_prefix:
+            metadata[UPLOAD_METADATA_KEYS["s3_prefix"]] = s3_prefix.value
+
         if job_id:
             metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
 
         if trace_id:
             metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+        if document_build_id:
+            metadata[UPLOAD_METADATA_KEYS["document_build_id"]] = document_build_id
 
         logger.debug(
             "S3: Starting actual upload",
@@ -240,17 +265,7 @@ async def create_document(
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
-    file_content = await file.read()
-    actual_content_type = magic.from_buffer(file_content, mime=True)
-
-    if actual_content_type not in SUPPORTED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Invalid file type detected '{actual_content_type}'. File must be "
-                f"{', '.join(SUPPORTED_CONTENT_TYPES)}"
-            ),
-        )
+    actual_content_type = await validate_file_type(file)
 
     logger.info(
         f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
@@ -320,6 +335,223 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         logger.error(msg)
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
+
+@app.post("/v1/document-builds/pages")
+async def upload_document_build_page(
+    request: Request,
+    response: Response,
+    file: UploadFile,
+    build_id: Annotated[str | None, Form(description="Build ID for multi-page upload")] = None,
+    page_number: Annotated[int, Form(description="Page number (1-indexed)")] = 1,
+    overwrite: Annotated[bool, Form(description="Allow overwriting existing page")] = False,
+    category: Annotated[
+        DocumentCategory | None, Form(description="Type of document being uploaded")
+    ] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Upload a page for multi-page document processing."""
+    try:
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        if not build_id:
+            build_id = str(uuid.uuid4())
+
+        if document_build_page_exists(build_id, page_number) and not overwrite:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Page {page_number} already exists for build {build_id}. Set overwrite=true to replace.",
+            )
+
+        actual_content_type = await validate_file_type(file)
+        logger.info(
+            f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
+        )
+
+        file.file.seek(0)
+        file_extension = file.filename.split(".")[-1]
+        unique_file_name = f"{build_id}/page-{page_number}.{file_extension}"
+
+        await upload_document_for_processing(
+            file=file,
+            unique_file_name=unique_file_name,
+            content_type=actual_content_type,
+            s3_prefix=S3Prefix.BUILDS,
+            user_provided_document_category=category,
+            trace_id=trace_id,
+        )
+
+        await upsert_document_build_page(
+            build_id=build_id,
+            page_number=page_number,
+            s3_key=f"{S3Prefix.BUILDS.value}/{unique_file_name}",
+            category=category,
+        )
+
+        response.headers["X-Trace-ID"] = trace_id
+        return {
+            "buildId": build_id,
+            "pageNumber": page_number,
+            "message": "Page uploaded successfully",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error uploading document build page {page_number} for build {build_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Failed to upload page") from e
+
+
+@app.post("/v1/document-builds/submit")
+async def submit_document_build(
+    request: Request,
+    response: Response,
+    build_id: Annotated[str, Form(description="Build ID to submit")],
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+    wait: bool = False,
+    timeout: int = 120,
+):
+    """Submit a multi-page build for processing."""
+    from documentai_api.utils.ddb import (
+        get_document_build_pages,
+        is_document_build_submitted,
+        mark_document_build_submitted,
+    )
+    from documentai_api.utils.files import create_upload_file_from_bytes
+    from documentai_api.utils.pdf import merge_pages_to_pdf
+
+    try:
+        if is_document_build_submitted(build_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Build {build_id} has already been submitted for processing",
+            )
+
+        pages = get_document_build_pages(build_id)
+
+        if not pages:
+            raise HTTPException(status_code=404, detail=f"Build {build_id} not found")
+
+        merged_pdf_bytes = merge_pages_to_pdf(pages)
+
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        job_id = str(uuid.uuid4())
+        unique_file_name = f"document-build-{build_id}-{uuid.uuid4()}.pdf"
+        category_str = pages[0].category
+        category = DocumentCategory(category_str) if category_str else None
+
+        merged_file = create_upload_file_from_bytes(merged_pdf_bytes, unique_file_name)
+
+        await upload_document_for_processing(
+            file=merged_file,
+            unique_file_name=unique_file_name,
+            content_type="application/pdf",
+            s3_prefix=S3Prefix.INPUT,
+            user_provided_document_category=category,
+            job_id=job_id,
+            trace_id=trace_id,
+            document_build_id=build_id,
+        )
+
+        mark_document_build_submitted(build_id)
+
+        response.headers["X-Trace-ID"] = trace_id
+
+        if not wait:
+            return {
+                "jobId": job_id,
+                "buildId": build_id,
+                "status": ProcessStatus.NOT_STARTED.value,
+                "message": "Multi-page document submitted successfully",
+                "pageCount": len(pages),
+            }
+        else:
+            results = await get_v1_document_processing_results(job_id, timeout)
+            return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting document build {build_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit document build") from e
+
+
+@app.get("/v1/document-builds/{build_id}")
+async def get_document_build(build_id: str):
+    """Get document build details including all uploaded pages."""
+    from documentai_api.utils.ddb import get_document_build_pages
+
+    try:
+        pages = get_document_build_pages(build_id)
+
+        if not pages:
+            raise HTTPException(status_code=404, detail=f"Build {build_id} not found")
+
+        return {
+            "buildId": build_id,
+            "pageCount": len(pages),
+            "pages": [
+                {
+                    "pageNumber": page.page_number,
+                    "uploadedAt": page.uploaded_at,
+                    "category": page.category,
+                }
+                for page in pages
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving build {build_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve build") from e
+
+
+@app.delete("/v1/document-builds/{build_id}/pages/{page_number}")
+async def delete_document_build_page(build_id: str, page_number: int):
+    """Delete a specific page from a document build."""
+    from documentai_api.utils.ddb import delete_document_build_page
+
+    try:
+        deleted = delete_document_build_page(build_id, page_number)
+
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Page {page_number} not found in build {build_id}",
+            )
+
+        return Response(status_code=204)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting page {page_number} from build {build_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete page") from e
+
+
+@app.delete("/v1/document-builds/{build_id}")
+async def delete_document_build(build_id: str):
+    """Delete an entire document build and all its pages."""
+    from documentai_api.utils.ddb import delete_document_build
+
+    try:
+        deleted = delete_document_build(build_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Build {build_id} not found")
+
+        return Response(status_code=204)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting build {build_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete build") from e
+    
 
 @app.get("/v1/schemas")
 async def list_schemas():

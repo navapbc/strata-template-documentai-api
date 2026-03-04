@@ -45,3 +45,14 @@ class ProcessingTimes:
 
     total_processing_time_seconds: float = 0.0
     bda_processing_time_seconds: float = 0.0
+
+
+@dataclass
+class PageMetadata:
+    """Metadata for a multipage document page."""
+
+    page_number: int
+    s3_key: str
+    s3_bucket_name: str
+    category: str | None = None
+    uploaded_at: str | None = None

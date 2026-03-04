@@ -649,3 +649,63 @@ def test_classify_functions(function, response_code, status, matched_document_cl
             expected_call["error_message"] = error_msg
 
         mock_update.assert_called_once_with(**expected_call)
+
+@pytest.mark.parametrize(
+    ("query_result", "expected"),
+    [
+        (
+            [{"buildId": "build-123", "pageNumber": 1, "submittedAt": "2026-02-26T12:00:00Z"}],
+            True,
+        ),
+        ([{"buildId": "build-123", "pageNumber": 1}], False),
+        ([], False),
+        (
+            [
+                {"buildId": "build-123", "pageNumber": 1},
+                {
+                    "buildId": "build-123",
+                    "pageNumber": 2,
+                    "submittedAt": "2026-02-26T12:00:00Z",
+                },
+            ],
+            True,
+        ),
+    ],
+)
+def test_is_document_build_submitted(mock_ddb_service, query_result, expected):
+    """Test checking if document build is submitted in various scenarios."""
+    with patch.dict(
+        os.environ, {"DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME": "test-document-builds-table"}
+    ):
+        mock_ddb_service.query_by_key.return_value = query_result
+
+        result = ddb_util.is_document_build_submitted("build-123")
+
+        assert result is expected
+
+
+def test_mark_document_build_submitted(mock_ddb_service):
+    """Test marking all pages in a document build as submitted."""
+    with patch.dict(
+        os.environ, {"DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME": "test-document-builds-table"}
+    ):
+        mock_ddb_service.query_by_key.return_value = [
+            {"buildId": "build-123", "pageNumber": 1},
+            {"buildId": "build-123", "pageNumber": 2},
+        ]
+
+        ddb_util.mark_document_build_submitted("build-123")
+
+        assert mock_ddb_service.update_item.call_count == 2
+
+        calls = mock_ddb_service.update_item.call_args_list
+
+        assert calls[0].kwargs["table_name"] == "test-document-builds-table"
+        assert calls[0].kwargs["key"] == {"buildId": "build-123", "pageNumber": 1}
+        assert calls[0].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+        assert ":submittedAt" in calls[0].kwargs["expression_attribute_values"]
+
+        assert calls[1].kwargs["table_name"] == "test-document-builds-table"
+        assert calls[1].kwargs["key"] == {"buildId": "build-123", "pageNumber": 2}
+        assert calls[1].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+        assert ":submittedAt" in calls[1].kwargs["expression_attribute_values"]
