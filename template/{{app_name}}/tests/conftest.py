@@ -91,7 +91,8 @@ def document_builds_ddb_table(aws_credentials):
             BillingMode="PAY_PER_REQUEST",
         )
         yield table
-        
+
+
 @pytest.fixture
 def mock_bda_clients():
     """Mock BDA clients (not supported by moto yet)."""

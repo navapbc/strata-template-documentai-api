@@ -1,17 +1,17 @@
 """Tests for document build endpoints."""
 
 from unittest.mock import patch
-from io import BytesIO
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from documentai_api.app import app
-from documentai_api.utils.models import PageMetadata
 from documentai_api.utils import env
+from documentai_api.utils.models import PageMetadata
 
 client = TestClient(app)
+
 
 @pytest.fixture
 def mock_document_build_upload(monkeypatch):
@@ -146,7 +146,9 @@ def test_upload_document_build_page_overwrite_scenarios(
         assert "already exists" in response.json()["detail"]
 
 
-def test_upload_document_build_page_with_category(document_builds_ddb_table, mock_document_build_upload):
+def test_upload_document_build_page_with_category(
+    document_builds_ddb_table, mock_document_build_upload
+):
     """Test document build upload with document category."""
     files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
     data = {"page_number": 1, "category": "income"}
@@ -225,7 +227,9 @@ def test_submit_document_build_errors(
     assert response.status_code == 500
 
 
-def test_submit_document_build_already_submitted(document_builds_ddb_table, mock_document_build_submit):
+def test_submit_document_build_already_submitted(
+    document_builds_ddb_table, mock_document_build_submit
+):
     """Test submitting a build that was already submitted."""
     mock_document_build_submit["is_submitted"].return_value = True
 
@@ -261,7 +265,9 @@ def test_submit_document_build_success(document_builds_ddb_table, mock_document_
     mock_document_build_submit["mark_submitted"].assert_called_once_with("build-123")
 
 
-def test_upload_document_build_page_error_handling(document_builds_ddb_table, mock_document_build_upload):
+def test_upload_document_build_page_error_handling(
+    document_builds_ddb_table, mock_document_build_upload
+):
     """Test error handling during document build page upload."""
     mock_document_build_upload["upload"].side_effect = Exception("S3 upload failed")
 
@@ -290,6 +296,7 @@ def test_get_document_build_success(document_builds_ddb_table, mock_document_bui
     assert result["pages"][0]["pageNumber"] == 1
     assert result["pages"][0]["category"] == "income"
 
+
 @pytest.mark.parametrize(
     ("mock_side_effect", "expected_status"),
     [
@@ -301,7 +308,9 @@ def test_get_document_build_success(document_builds_ddb_table, mock_document_bui
         ),  # already submitted - exception
     ],
 )
-def test_delete_document_build_page(document_builds_ddb_table, monkeypatch, mock_side_effect, expected_status):
+def test_delete_document_build_page(
+    document_builds_ddb_table, monkeypatch, mock_side_effect, expected_status
+):
     """Test deleting a page."""
     monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME, "test-document-builds-table")
 

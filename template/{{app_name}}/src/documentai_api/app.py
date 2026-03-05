@@ -8,6 +8,7 @@ from typing import Annotated
 import magic
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 
 from documentai_api.config.constants import (
     API_DESCRIPTION,
@@ -22,13 +23,26 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
-from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id, document_build_page_exists, upsert_document_build_page
+from documentai_api.utils.ddb import (
+    ClassificationData,
+    classify_as_failed,
+    document_build_page_exists,
+    get_ddb_by_job_id,
+    upsert_document_build_page,
+)
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
 DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
+
+CONFIG_EXCLUDED_ROUTES = {
+    "//config",
+    "/openapi.json",
+    "/docs",
+    "/redoc",
+}
 
 app = FastAPI(
     title=API_TITLE,
@@ -45,32 +59,37 @@ app.add_middleware(
 )
 
 
+def discover_endpoints(app):
+    endpoints = {}
+
+    for route in app.routes:
+        if isinstance(route, APIRoute) and route.name and route.path not in CONFIG_EXCLUDED_ROUTES:
+            endpoints[route.name] = route.path
+
+    return dict(sorted(endpoints.items()))
+
+
 @app.get("/")
 def root():
     return {"message": API_TITLE, "status": "healthy"}
 
 
-@app.get("/health")
+@app.get("/health", name="health")
 async def health():
     return {"message": "healthy"}
 
 
-@app.get("/config")
+@app.get("/config", name="config")
 def get_config(request: Request):
+    endpoints = discover_endpoints(app)
+    endpoints["uploadSync"] = f"{endpoints['upload']}?wait=true"
+
     return {
         "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
         "version": API_VERSION,
         "imageTag": os.getenv("IMAGE_TAG"),
         "environment": os.getenv("ENVIRONMENT", "local"),
-        "endpoints": {
-            "upload": "/v1/documents",
-            "uploadSync": "/v1/documents?wait=true",
-            "status": "/v1/documents/{job_id}",
-            "statusWithExtractedData": "/v1/documents/{job_id}?include_extracted_data=true",
-            "schemas": "/v1/schemas",
-            "schemaDetail": "/v1/schemas/{document_type}",
-            "health": "/health",
-        },
+        "endpoints": endpoints,
         "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
     }
 
@@ -131,7 +150,7 @@ async def upload_document_for_processing(
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-    document_build_id: str | None = None
+    document_build_id: str | None = None,
 ):
     logger.debug(
         "S3 upload started",
@@ -243,7 +262,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
         }
 
 
-@app.post("/v1/documents")
+@app.post("/v1/documents", name="upload")
 async def create_document(
     request: Request,
     response: Response,
@@ -298,7 +317,7 @@ async def create_document(
         return results
 
 
-@app.get("/v1/documents/{job_id}")
+@app.get("/v1/documents/{job_id}", name="getUploadstatus")
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID."""
     try:
@@ -336,7 +355,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
-@app.post("/v1/document-builds/pages")
+@app.post("/v1/document-builds/pages", name="createDocumentBuild")
 async def upload_document_build_page(
     request: Request,
     response: Response,
@@ -397,13 +416,11 @@ async def upload_document_build_page(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Error uploading document build page {page_number} for build {build_id}: {e}"
-        )
+        logger.error(f"Error uploading document build page {page_number} for build {build_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload page") from e
 
 
-@app.post("/v1/document-builds/submit")
+@app.post("/v1/document-builds/submit", name="submitDocumentBuild")
 async def submit_document_build(
     request: Request,
     response: Response,
@@ -478,7 +495,7 @@ async def submit_document_build(
         raise HTTPException(status_code=500, detail="Failed to submit document build") from e
 
 
-@app.get("/v1/document-builds/{build_id}")
+@app.get("/v1/document-builds/{build_id}", name="getDocumentBuildStatus")
 async def get_document_build(build_id: str):
     """Get document build details including all uploaded pages."""
     from documentai_api.utils.ddb import get_document_build_pages
@@ -508,7 +525,7 @@ async def get_document_build(build_id: str):
         raise HTTPException(status_code=500, detail="Failed to retrieve build") from e
 
 
-@app.delete("/v1/document-builds/{build_id}/pages/{page_number}")
+@app.delete("/v1/document-builds/{build_id}/pages/{page_number}", name="deleteDocumentBuildPage")
 async def delete_document_build_page(build_id: str, page_number: int):
     """Delete a specific page from a document build."""
     from documentai_api.utils.ddb import delete_document_build_page
@@ -532,7 +549,7 @@ async def delete_document_build_page(build_id: str, page_number: int):
         raise HTTPException(status_code=500, detail="Failed to delete page") from e
 
 
-@app.delete("/v1/document-builds/{build_id}")
+@app.delete("/v1/document-builds/{build_id}", name="deleteDocumentBuild")
 async def delete_document_build(build_id: str):
     """Delete an entire document build and all its pages."""
     from documentai_api.utils.ddb import delete_document_build
@@ -551,16 +568,16 @@ async def delete_document_build(build_id: str):
     except Exception as e:
         logger.error(f"Error deleting build {build_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete build") from e
-    
 
-@app.get("/v1/schemas")
+
+@app.get("/v1/schemas", name="listSchemas")
 async def list_schemas():
     """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
-@app.get("/v1/schemas/{document_type}")
+@app.get("/v1/schemas/{document_type}", name="getSchemaDetail")
 async def get_schema(document_type: str):
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)

@@ -8,8 +8,8 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
-    ProcessStatus,
     DocumentCategory,
+    ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
@@ -21,8 +21,8 @@ from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
     InternalApiResponse,
-    ProcessingTimes,
     PageMetadata,
+    ProcessingTimes,
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes

@@ -48,8 +48,8 @@ def delete_file(bucket: str, key: str) -> None:
     """Delete file from S3."""
     s3_client = AWSClientFactory.get_s3_client()
     s3_client.delete_object(Bucket=bucket, Key=key)
-    
-    
+
+
 def get_content_type(bucket: str, key: str) -> str:
     """Get file content type."""
     response = head_object(bucket, key)

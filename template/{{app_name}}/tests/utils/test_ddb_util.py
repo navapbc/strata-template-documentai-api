@@ -650,6 +650,7 @@ def test_classify_functions(function, response_code, status, matched_document_cl
 
         mock_update.assert_called_once_with(**expected_call)
 
+
 @pytest.mark.parametrize(
     ("query_result", "expected"),
     [
