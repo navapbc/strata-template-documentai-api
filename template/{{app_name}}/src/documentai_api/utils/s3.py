@@ -1,3 +1,6 @@
+from urllib.parse import urlparse
+
+
 def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
     """Parse S3 URI into bucket and key.
 
@@ -6,15 +9,24 @@ def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
 
     Returns:
         Tuple of (bucket, key)
-
-    Raises:
-        ValueError: If URI format is invalid
     """
-    if not s3_uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI format: {s3_uri}")
+    parts = urlparse(s3_uri)
+    bucket_name = parts.netloc
+    prefix = parts.path.lstrip("/")
+    return (bucket_name, prefix)
 
-    parts = s3_uri.replace("s3://", "").split("/", 1)
-    if len(parts) != 2 or not parts[1]:  # confirm bucket and key exist
-        raise ValueError(f"Invalid S3 URI format: {s3_uri}")
 
-    return parts[0], parts[1]
+def get_s3_prefix_from_location(s3_location: str) -> str:
+    """Extract S3 prefix from location environment variable.
+
+    Args:
+        s3_location: Environment variable value (e.g. "s3://bucket/input")
+
+    Returns:
+        The prefix portion (e.g. "input"), or empty string if no prefix
+    """
+    if not s3_location:
+        return ""
+
+    _, prefix = parse_s3_uri(s3_location)
+    return prefix

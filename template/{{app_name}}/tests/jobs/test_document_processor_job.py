@@ -1,11 +1,11 @@
-"""Tests for jobs/document_processor/main.py."""
+"""Tests for jobs/document_processor/cli.py."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from documentai_api.config.constants import ConfigDefaults, ProcessStatus
-from documentai_api.jobs.document_processor.main import (
+from documentai_api.jobs.document_processor.cli import (
     convert_s3_object_to_grayscale,
     convert_to_grayscale,
     invoke_bda,
@@ -19,7 +19,7 @@ from documentai_api.utils import env
 @pytest.fixture(autouse=True)
 def mock_env(monkeypatch):
     """Mock environment variables for all tests."""
-    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, "s3://test-bucket")
+    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, "s3://test-bucket/input")
 
 
 @pytest.mark.parametrize(
@@ -108,9 +108,9 @@ def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_depende
 def test_convert_s3_object_to_grayscale_success():
     """Test successful S3 object grayscale conversion."""
     with (
-        patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get,
-        patch("documentai_api.jobs.document_processor.main.s3_service.put_object") as mock_s3_put,
-        patch("documentai_api.jobs.document_processor.main.convert_to_grayscale") as mock_convert,
+        patch("documentai_api.jobs.document_processor.cli.s3_service.get_object") as mock_s3_get,
+        patch("documentai_api.jobs.document_processor.cli.s3_service.put_object") as mock_s3_put,
+        patch("documentai_api.jobs.document_processor.cli.convert_to_grayscale") as mock_convert,
     ):
         mock_s3_get.return_value = {
             "Body": MagicMock(read=lambda: b"image data"),
@@ -129,8 +129,8 @@ def test_convert_s3_object_to_grayscale_success():
 def test_convert_s3_object_to_grayscale_file_too_large():
     """Test S3 conversion returns False when file too large."""
     with (
-        patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get,
-        patch("documentai_api.jobs.document_processor.main.convert_to_grayscale") as mock_convert,
+        patch("documentai_api.jobs.document_processor.cli.s3_service.get_object") as mock_s3_get,
+        patch("documentai_api.jobs.document_processor.cli.convert_to_grayscale") as mock_convert,
     ):
         mock_s3_get.return_value = {
             "Body": MagicMock(read=lambda: b"image data"),
@@ -146,7 +146,7 @@ def test_convert_s3_object_to_grayscale_file_too_large():
 
 def test_convert_s3_object_to_grayscale_error():
     """Test S3 grayscale conversion handles errors gracefully."""
-    with patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get:
+    with patch("documentai_api.jobs.document_processor.cli.s3_service.get_object") as mock_s3_get:
         mock_s3_get.side_effect = Exception("S3 error")
 
         result = convert_s3_object_to_grayscale("test-bucket", "test.jpg")
@@ -158,10 +158,10 @@ def test_invoke_bda_success():
     """Test successful BDA invocation."""
     with (
         patch(
-            "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
+            "documentai_api.jobs.document_processor.cli.invoke_bedrock_data_automation"
         ) as mock_invoke,
         patch(
-            "documentai_api.jobs.document_processor.main.set_bda_processing_status_started"
+            "documentai_api.jobs.document_processor.cli.set_bda_processing_status_started"
         ) as mock_set_status,
     ):
         mock_invoke.return_value = "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
@@ -179,9 +179,9 @@ def test_invoke_bda_failure():
     """Test BDA invocation failure updates DDB and raises exception."""
     with (
         patch(
-            "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
+            "documentai_api.jobs.document_processor.cli.invoke_bedrock_data_automation"
         ) as mock_invoke,
-        patch("documentai_api.jobs.document_processor.main.classify_as_failed") as mock_classify,
+        patch("documentai_api.jobs.document_processor.cli.classify_as_failed") as mock_classify,
     ):
         mock_invoke.side_effect = Exception("BDA service error")
 
@@ -196,11 +196,11 @@ def test_invoke_bda_failure():
 def test_main_first_time_pdf():
     """Test first time processing PDF (no grayscale needed)."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
         patch(
-            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
+            "documentai_api.jobs.document_processor.cli.insert_initial_ddb_record"
         ) as mock_insert,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.side_effect = [
             ValueError("Record not found"),
@@ -216,17 +216,17 @@ def test_main_first_time_pdf():
 def test_main_first_time_image():
     """Test first time processing image (needs grayscale)."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
         patch(
-            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
+            "documentai_api.jobs.document_processor.cli.insert_initial_ddb_record"
         ) as mock_insert,
         patch(
-            "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
+            "documentai_api.jobs.document_processor.cli.convert_s3_object_to_grayscale"
         ) as mock_convert,
         patch(
-            "documentai_api.jobs.document_processor.main.set_bda_processing_status_not_started"
+            "documentai_api.jobs.document_processor.cli.set_bda_processing_status_not_started"
         ) as mock_set_status,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.side_effect = [
             ValueError("Record not found"),
@@ -245,15 +245,15 @@ def test_main_first_time_image():
 def test_main_grayscale_conversion_fails():
     """Test grayscale conversion failure marks as not implemented."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.insert_initial_ddb_record"),
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.insert_initial_ddb_record"),
         patch(
-            "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
+            "documentai_api.jobs.document_processor.cli.convert_s3_object_to_grayscale"
         ) as mock_convert,
         patch(
-            "documentai_api.jobs.document_processor.main.classify_as_not_implemented"
+            "documentai_api.jobs.document_processor.cli.classify_as_not_implemented"
         ) as mock_classify,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.side_effect = [
             ValueError("Record not found"),
@@ -270,8 +270,8 @@ def test_main_grayscale_conversion_fails():
 def test_main_already_processed():
     """Test that already processed files are skipped."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "success"}
 
@@ -283,8 +283,8 @@ def test_main_already_processed():
 def test_main_uses_env_bucket_when_not_provided():
     """Test bucket name defaults to environment variable."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value}
 
@@ -296,8 +296,8 @@ def test_main_uses_env_bucket_when_not_provided():
 def test_main_idempotent_on_duplicate_events():
     """Test job is idempotent when receiving duplicate S3 events."""
     with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
+        patch("documentai_api.jobs.document_processor.cli.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.cli.invoke_bda") as mock_invoke,
     ):
         mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "processing"}
 

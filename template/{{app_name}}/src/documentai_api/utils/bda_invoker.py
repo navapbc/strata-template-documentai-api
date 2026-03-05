@@ -62,7 +62,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
             dataAutomationConfiguration={"dataAutomationProjectArn": documentai_project_arn},
             inputConfiguration={"s3Uri": f"s3://{source_bucket_name}/{source_object_name}"},
             outputConfiguration={
-                "s3Uri": f"s3://{documentai_output_location}/processed/{source_object_name}"
+                "s3Uri": f"s3://{documentai_output_location}/{source_object_name}"
             },
         )
         logger.info(f"BDA response: {response}")

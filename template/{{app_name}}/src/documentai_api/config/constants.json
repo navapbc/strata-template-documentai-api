@@ -25,9 +25,6 @@
       "Success"
     ]
   },
-  "bda_output_config": {
-    "processed_file_prefix": "processed"
-  },
   "bda_response_fields": {
     "explainability_info": "explainability_info",
     "field_confidence": "confidence",

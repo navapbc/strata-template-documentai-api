@@ -1,5 +1,5 @@
 import json
-from enum import Enum, StrEnum
+from enum import Enum
 from pathlib import Path
 
 
@@ -29,7 +29,6 @@ BDA_JOB_STATUS_RUNNING = SETTINGS["bda_job_statuses"]["running"]
 BDA_JOB_STATUS_FAILED = SETTINGS["bda_job_statuses"]["failed"]
 BDA_JOB_STATUS_COMPLETED = SETTINGS["bda_job_statuses"]["completed"]
 
-BDA_PROCESSED_FILE_PREFIX = SETTINGS["bda_output_config"]["processed_file_prefix"]
 
 # cache
 CACHE_KEY_BLUEPRINT_SCHEMAS = SETTINGS["cache"]["blueprint_schemas"]["key"]
@@ -65,9 +64,3 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
-
-
-class S3Prefix(StrEnum):
-    INPUT = "input"
-    BUILDS = "builds"
-    BATCHES = "batches"

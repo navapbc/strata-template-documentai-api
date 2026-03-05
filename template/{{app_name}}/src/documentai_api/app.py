@@ -18,13 +18,13 @@ from documentai_api.config.constants import (
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
     ProcessStatus,
-    S3Prefix,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
@@ -110,7 +110,6 @@ async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
-    s3_prefix: S3Prefix = S3Prefix.INPUT,
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -121,14 +120,14 @@ async def upload_document_for_processing(
             "unique_file_name": unique_file_name,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
-            "s3_prefix": s3_prefix,
         },
     )
     if not DOCUMENTAI_INPUT_LOCATION:
         raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
 
-    bucket_name = DOCUMENTAI_INPUT_LOCATION.replace("s3://", "")
-    unique_file_name = f"{s3_prefix.value}/{unique_file_name}"
+    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
+    bucket_name, prefix = parse_s3_uri(DOCUMENTAI_INPUT_LOCATION)
+    object_key = f"{prefix}/{unique_file_name}" if prefix else unique_file_name
 
     try:
         metadata = {}
@@ -159,7 +158,7 @@ async def upload_document_for_processing(
             },
         )
 
-        s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
+        s3_service.upload_file(bucket_name, object_key, file.file, content_type, metadata)
         logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
