@@ -4,18 +4,64 @@ This is the application code for DocumentAI.
 
 ## Overview
 
-A serverless document processing system built on AWS that uses Amazon Bedrock Data Automation (BDA) to classify and extract data from uploaded documents.
+A document processing system built on AWS that uses Amazon Bedrock Data Automation (BDA) to classify and extract data from uploaded documents.
+
+## Architecture
+
+The system follows an event-driven architecture with three main layers:
+
+- **API Layer** - Document upload and status endpoints  
+- **Processing** - Document classification and data extraction pipeline  
+- **Analytics** - Data aggregation and querying capabilities
+
+![Architecture Diagram](../docs/{{app_name}}/media/architecture.png)
+
+**Processing Flow:**
+1. Client uploads document via ALB → FastAPI
+2. FastAPI validates and stores document in S3 Input bucket
+3. S3 event triggers Document Processor (Step Functions)
+4. Document Processor invokes Bedrock Data Automation for classification/extraction
+5. BDA results stored in S3 Output bucket
+6. BDA Output Processor (Step Functions) processes results and updates DynamoDB
+7. Completed jobs sent to SQS for analytics processing
+8. Glue ETL jobs transform data for Athena queries
+
+For detailed component descriptions, see [Project Structure](#project-structure).
 
 ## Features
 
 - **AWS Bedrock Data Automation (BDA) Integration** - Automated document classification and data extraction
 - **Intelligent Document Detection** - Quality analysis, blur detection, and document validation
 - **Multi-format Support** - Process PDF, JPEG, PNG, TIFF, and BMP documents
-- **Event-driven Processing** - S3-triggered Lambda pipeline for scalable document processing
+- **Event-driven Processing** - S3-triggered pipeline for scalable document processing
 - **Testing** - 87% test coverage with unit and integration tests
 - **Local Development** - Docker Compose environment for testing without AWS deployment
 - **Structured Logging** - Standardized logging across all components
 - **DynamoDB Tracking** - Complete processing history and metadata storage
+
+## File Requirements & Limitations
+
+**Supported file formats:**
+- PDF
+- JPEG
+- PNG  
+- TIFF
+
+**File size limits:**
+- **Images** (JPEG, PNG, TIFF): Maximum 5 MB per file
+- **PDF documents**: Maximum 500 MB per file
+
+**PDF page handling:**
+- PDFs with more than 5 pages (configurable) are automatically trimmed to the first 5 pages
+- Quality checks are performed on the first 5 (configurable) pages only
+
+> **Note:** The 5-page default was chosen for performance optimization. Documents are trimmed rather than rejected to ensure processing can proceed.
+
+**Document requirements:**
+- Documents must not be password-protected
+- Minimum text content of 50 characters for document detection
+- Images must meet minimum quality standards (blur detection threshold applied)
+
 
 ## Prerequisites
 
@@ -39,7 +85,7 @@ cd <project-directory>
 
 2\. **Install Python dependencies**
 ```
-uv sync
+make init
 ```
 
 _This installs all dependencies defined in pyproject.toml including development and test dependencies._
@@ -58,12 +104,12 @@ _All tests should pass._
 
 **Required for AWS service integration** (set by infrastructure when deployed):
 
-- `DDE_INPUT_LOCATION` - S3 bucket for document uploads (e.g., `s3://bucket-name`)
-- `DDE_OUTPUT_LOCATION` - S3 bucket for BDA processing results
-- `DDE_DOCUMENT_METADATA_TABLE_NAME` - DynamoDB table for tracking document processing
-- `DDE_PROJECT_ARN` - AWS Bedrock Data Automation project ARN
-- `DDE_PROFILE_ARN` - AWS Bedrock Data Automation profile ARN
-- `DDE_REGION` - AWS region for BDA service
+- `DOCUMENTAI_INPUT_LOCATION` - S3 bucket for document uploads (e.g., `s3://bucket-name`)
+- `DOCUMENTAI_OUTPUT_LOCATION` - S3 bucket for BDA processing results
+- `DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME` - DynamoDB table for tracking document processing
+- `BDA_PROJECT_ARN` - AWS Bedrock Data Automation project ARN
+- `BDA_PROFILE_ARN` - AWS Bedrock Data Automation profile ARN
+- `BDA_REGION` - AWS region for BDA service
 
 **Optional for local development:**
 
@@ -88,17 +134,63 @@ Core application settings are defined in `src/documentai_api/config/constants.js
 
 ### Local Development
 
-**Start the local environment:**
+This project supports two development approaches:
+
+### Option 1: Docker-based Development (Recommended)
+
+Uses Docker Compose to run the application and mock AWS services (LocalStack).
+
+**Setup:**
 ```bash
-docker compose up
+make init          # Build Docker containers
+make start         # Start services in detached mode
+make run-logs      # Start and follow logs
 ```
 
-This starts LocalStack (mock AWS services) and the FastAPI application at http://localhost:8000.
+***Running commands***:
+```bash
+make test          # Run tests in container
+make lint          # Lint code in container
+make format        # Format code in container
+```
 
-**Run the FastAPI server directly:**
+The application will be available at http://localhost:8000.
+
+**Advantages**:
+- Consistent environment across team members
+- Includes LocalStack for AWS service mocking
+- No local Python environment needed
+- Closely matches production environment
+
+### Option 2: Native Development
+
+Run the application directly on your machine without Docker.
+
+**Setup**:
+```bash
+make init-local                    # Install dependencies with uv
+export RUN_CMD_APPROACH=local      # Enable native mode
 ```
-uv run uvicorn documentai_api.app:app --reload --host localhost --port 8000
+
+**Running commands**:
+```bash
+make start-local   # Run FastAPI server natively
+make test          # Run tests natively
+make lint          # Lint code natively
+make format        # Format code natively
 ```
+
+**Advantages**:
+-Faster iteraton (no container overhead)
+-Direct debugging in IDE
+-Lower resource usage
+
+*Note*: To persist native mode, add `export RUN_CMD_APPROACH=local` to your `~/.zshrc` or `~/.bashrc`.
+
+### Switching Between Docker and Native
+The Makefile automatically detects the `RUN_CMD_APPROACH` environment variable:
+- **Not set or `docker`**: Commands run in Docker containers
+- **Set to `local`**: Commands run natively on your machine
 
 ### API Endpoints
 **Upload a document (async)** - returns immediately with `jobId` for polling:
@@ -116,25 +208,7 @@ curl -X POST "http://localhost:8000/v1/documents?wait=true&timeout=120" \
   -F "category=income"
 ```
 
-**Check processing status:**
-```
-curl http://localhost:8000/v1/documents/{jobId}
-```
-
-**Get extracted data:**
-```
-curl "http://localhost:8000/v1/documents/{jobId}?include_extracted_data=true"
-```
-
-**List available schemas:**
-```
-curl http://localhost:8000/v1/schemas
-```
-
-**Get schema for document type:**
-```
-curl http://localhost:8000/v1/schemas/W-2
-```
+For more details on API endpoints, see [openapi.json](../{{app_name}}/docs/openapi.json).
 
 ### Development Commands
 ```bash
@@ -165,12 +239,12 @@ make test-parallel
 
 **Run specific test file:**
 ```bash
-uv run pytest tests/test_document_detector.py
+make test args=tests/test_document_detector.py
 ```
 
 **Run specific test:**
 ```bash
-uv run pytest tests/test_document_detector.py::test_detect_multipage_document
+make test args=tests/test_document_detector.py::test_detect_multipage_document
 ```
 
 For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writing-tests.md).
@@ -184,12 +258,11 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 │ ├── app.py                      # FastAPI application
 │ ├── main.py                     # CLI entry point
 │ ├── config/                     # Configuration and constants
+│ ├── jobs/                       # Background and scheduled jobs
+│ │ ├── bda_result_processor.py
+│ │ └── document_processor.py
 │ ├── schemas/                    # Data models
 │ ├── services/                   # AWS service clients (S3, DynamoDB, BDA)
-│ ├── scripts/                    # Lambda handler scripts
-│ │ ├── bda_invoker.py
-│ │ ├── bda_output_processor.py
-│ │ └── ddb_insert_file_name.py
 │ └── utils/                      # Utilities (document detection, response building, etc.)
 ├── tests/                        # Unit and integration tests
 ├── docker-compose.yml            # Local development environment
@@ -199,14 +272,14 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 ```
 
 ### Key Components
-- **Lambda Handlers** (`scripts/`) - Event-driven document processing pipeline
+- **Jobs** - Event-driven document processing pipeline
 - **Services** - AWS client wrappers for S3, DynamoDB, and Bedrock Data Automation
 - **Utils** - Document detection, quality analysis, response formatting
 - **FastAPI App** - Local development and testing interface
 
 ## Deployment
 
-This application is deployed as part of AWS infrastructure managed in separate repositories. The application code is packaged as a Docker container and deployed to AWS ECS/Lambda by infrastructure-as-code.
+This application is deployed as part of AWS infrastructure managed in separate repositories. The application code is packaged as a Docker container and deployed to AWS ECS by infrastructure-as-code.
 
 **Deployment process:**
 
@@ -214,38 +287,7 @@ This application is deployed as part of AWS infrastructure managed in separate r
 2. Image is pushed to Amazon ECR
 3. Infrastructure deploys the image to:
    - ECS Fargate (FastAPI application)
-   - Lambda functions (event handlers)
 
 **Environment variables** listed in the [Configuration](#configuration) section are set by the infrastructure during deployment.
 
 For infrastructure setup and deployment instructions, refer to the infrastructure repository documentation.
-
-## Contributing
-
-Thank you for your interest in contributing! We welcome all contributions.
-
-**To contribute:**
-
-1. Create a feature branch from `main`
-2. Make your changes with clear commit messages
-3. Add or update tests as needed
-4. Run `make test` and `make lint` to verify
-5. Submit a pull request with:
-   - Clear title and description
-   - Reference to related issues
-   - Test results
-
-**Code review criteria:**
-
-- Functionality and correctness
-- Test coverage
-- Code readability and maintainability
-- Security considerations
-- Documentation updates
-
-All contributors are expected to follow our [Code of Conduct](../CODE_OF_CONDUCT.md).
-
-
-## License
-
-This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.

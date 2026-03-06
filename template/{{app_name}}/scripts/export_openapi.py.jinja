@@ -1,0 +1,27 @@
+import json
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+DOCS_DIR = ROOT_DIR / "docs" / "{{app_name}}"
+OUTPUT_LOCATION = DOCS_DIR / "openapi.json"
+sys.path.append(str(ROOT_DIR / "src"))
+
+try:
+    from documentai_api.app import app
+except ImportError as e:
+    print(f"Error importing FastAPI app: {e}")
+    sys.exit(1)
+
+
+def generate_spec():
+    DOCS_DIR.mkdir(exist_ok=True)
+
+    with open(OUTPUT_LOCATION, "w", encoding="utf-8") as f:
+        json.dump(app.openapi(), f, indent=2, sort_keys=True)
+
+    print(f"OpenAPI spec exported to: {OUTPUT_LOCATION}")
+
+
+if __name__ == "__main__":
+    generate_spec()

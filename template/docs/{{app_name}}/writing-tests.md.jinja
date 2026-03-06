@@ -22,20 +22,29 @@ There are occasions where tests may not line up exactly with a single source fil
 
 ## Mocking AWS Services
 
-Tests use [pytest-mock](https://pytest-mock.readthedocs.io/) to mock AWS service calls. This allows tests to run without requiring actual AWS infrastructure.
+Tests use [moto](https://docs.getmoto.org/en/latest/) to mock AWS service calls, allowing tests to run without requiring actual AWS infrastructure.
 
 Example mocking boto3 clients:
 
 ```python
-def test_upload_file(mocker):
-    mock_s3_client = mocker.MagicMock()
-    mocker.patch(
-        "documentai_api.services.s3.get_s3_client",
-        return_value=mock_s3_client
-    )
-    
-    # Test code that calls upload_file
-    # Assertions on mock_s3_client.put_object calls
+import boto3
+from moto import mock_aws
+
+@mock_aws
+def test_upload_file():
+    s3 = boto3.client("s3", region_name="us-east-1")
+    bucket_name = "test-bucket"
+
+    # Create the bucket in the mocked AWS environment
+    s3.create_bucket(Bucket=bucket_name)
+
+    # Call your actual function
+    upload_file(bucket_name, "test.txt", b"hello")
+
+    # Verify the object exists
+    response = s3.get_object(Bucket=bucket_name, Key="test.txt")
+
+    assert response["Body"].read() == b"hello"
 ```
 
 ## Testing FastAPI Endpoints
@@ -76,15 +85,15 @@ def test_document_processing(sample_pdf_bytes):
 
 - Target coverage: 85-95% (focus on testing important functionality through public APIs)
 - Run `make test-coverage` to see coverage report
-- Generate HTML report: `make test-coverage` (opens `.coverage_report/index.html`)
+- Generate HTML report: `make test-coverage` (generates `.coverage_report/index.html`)
 
 ## Running Tests
 
 - `make test` - Run all tests
 - `make test-coverage` - Run tests with coverage report
 - `make test-parallel` - Run tests in parallel
-- `uv run pytest tests/path/test_file.py` - Run specific test file
-- `uv run pytest tests/path/test_file.py::test_name` - Run specific test
+- `make test args=tests/path/test_file.py` - Run specific test file
+- `make test args=tests/path/test_file.py::test_name` - Run specific test
 
 See the [Testing section in the README](../../{{app_name}}/README.md#testing) for more details.
 
