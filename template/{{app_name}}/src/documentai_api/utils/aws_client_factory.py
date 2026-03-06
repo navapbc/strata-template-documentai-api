@@ -3,6 +3,10 @@ from functools import lru_cache
 
 import boto3
 
+from documentai_api.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class AWSClientFactory:
     _session: boto3.Session | None = None
@@ -10,14 +14,7 @@ class AWSClientFactory:
     @classmethod
     def get_session(cls) -> boto3.Session:
         if cls._session is None:
-            profile_name = (
-                os.getenv("AWS_PROFILE") if not os.getenv("AWS_LAMBDA_FUNCTION_NAME") else None
-            )
-            print(f"Using profile: {profile_name}")
-
-            cls._session = (
-                boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
-            )
+            cls._session = boto3.Session()
 
         return cls._session
 

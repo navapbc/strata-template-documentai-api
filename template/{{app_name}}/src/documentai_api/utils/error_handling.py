@@ -1,12 +1,10 @@
-import logging
-import traceback
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-# configure logging for lambda
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from documentai_api.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def handle_lambda_errors(handler_func: Callable) -> Callable:
@@ -18,19 +16,13 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
             return handler_func(event, context)
         except Exception as e:
             error_msg = f"Handler {handler_func.__name__} failed: {e}"
-            stack_trace = traceback.format_exc()
-
-            print(f"ERROR: {error_msg}")
-            print(f"STACK TRACE:\n{stack_trace}")
-
-            logging.error(error_msg)
-            logging.error(stack_trace)
+            logger.exception(error_msg)
 
             # try to update DDB status to failed
             try:
-                from config.constants import BDA_PROCESSED_FILE_PREFIX
-                from utils.ddb import ClassificationData, classify_as_failed
-                from utils.s3 import extract_s3_info_from_event
+                from documentai_api.config.constants import BDA_PROCESSED_FILE_PREFIX
+                from documentai_api.utils.ddb import ClassificationData, classify_as_failed
+                from documentai_api.utils.s3 import extract_s3_info_from_event
 
                 object_key, _ = extract_s3_info_from_event(event)
 
@@ -51,9 +43,9 @@ def handle_lambda_errors(handler_func: Callable) -> Callable:
                     error_message=error_msg,
                     data=ClassificationData(additional_info=str(e)),
                 )
-                print(f"Updated DDB status to failed for {filename}")
+                logger.warning(f"Updated DDB status to failed for {filename}")
             except Exception as ddb_error:
-                print(f"Failed to update DDB status: {ddb_error}")
+                logger.error(f"Failed to update DDB status: {ddb_error}")
 
             return {"statusCode": 500, "body": str(e)}
 

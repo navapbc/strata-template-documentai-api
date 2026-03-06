@@ -8,6 +8,11 @@ import numpy as np
 from pdf2image import convert_from_bytes
 from PIL import Image
 
+from documentai_api.utils.logger import get_logger
+from documentai_api.utils.numbers import normalize
+
+logger = get_logger(__name__)
+
 # increase PIL limit for large document processing
 Image.MAX_IMAGE_PIXELS = 250000000
 MULTIPAGE_DETECTION_MAX_PAGES = 5
@@ -158,7 +163,7 @@ class DocumentDetector:
             return file_type
 
         except Exception as e:
-            print("An error occurred: ", e)
+            logger.error(f"An error occurred: {e}")
             return None
 
     def is_pdf(self, image_file):
@@ -176,15 +181,15 @@ class DocumentDetector:
         """Convert PDF pages to grayscale OpenCV images."""
         images = []
 
-        if self._is_password_protected(file_bytes):
-            print("DocumentDetector: Password-protected PDF - cannot process")
+        if self.is_password_protected(file_bytes):
+            logger.warning("DocumentDetector: Password-protected PDF - cannot process")
             return images
 
         try:
             poppler_path = "/opt/bin" if os.path.exists("/opt/bin") else None
             # pdf_images = convert_from_bytes(file_bytes, poppler_path=poppler_path)
 
-            # Only convert up to max_pages if specified
+            # only convert up to max_pages if specified
             if max_pages:
                 pdf_images = convert_from_bytes(
                     file_bytes, first_page=1, last_page=max_pages, poppler_path=poppler_path
@@ -201,7 +206,7 @@ class DocumentDetector:
                 images.append(img)
 
         except Exception as e:
-            print(f"Error processing PDF: {e}")
+            logger.error(f"Error processing PDF: {e}")
             raise e
 
         return images
@@ -400,7 +405,7 @@ class DocumentDetector:
             return self._pages_detected
 
         except Exception as e:
-            print("An error occurred: ", e)
+            logger.error("An error occurred: ", e)
             return None
 
     def _extract_document_regions_of_interest(self, gray_image, file_name):
@@ -431,7 +436,9 @@ class DocumentDetector:
                 if edge_ratio > 0.01:  # At least 0.1% edges
                     rois.append(roi)
 
-        print(f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total")
+        logger.info(
+            f"{file_name}: found {len(rois)} content ROIs out of {grid_size * grid_size} total"
+        )
         return rois
 
     def _calculate_edge_score(self, document_roi, file_name):
@@ -522,10 +529,6 @@ class DocumentDetector:
         score = median_std / ideal_std
         return score
 
-    def _normalize(self, value, min_val, max_val):
-        """Scale a metric to 0-1 range."""
-        return max(0.0, min(1.0, (value - min_val) / (max_val - min_val)))
-
     def _calculate_motion_blur_score(self, document_roi, file_name):
         """Return a motion blur severity score (0 = sharp, 1 = strong motion blur)."""
         kernel_h = np.array([[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=np.float32)
@@ -540,7 +543,7 @@ class DocumentDetector:
         ratio = max(h_var, v_var) / (min(h_var, v_var) + 1e-6)
 
         # normalize ratio to 0-1 for easier integration
-        score = min((ratio - 1.0) / 9.0, 1.0)  # ratio ~1-10 → score 0-1
+        score = min((ratio - 1.0) / 9.0, 1.0)  # ratio ~1-10 -> score 0-1
         score = max(0.0, score)
         return score
 
@@ -567,7 +570,7 @@ class DocumentDetector:
             return None
 
         except Exception as e:
-            print(f"Error calculating quality metrics for {file_name}: {e}")
+            logger.error(f"Error calculating quality metrics for {file_name}: {e}")
             return None
 
     def _get_quality_metrics(self, gray_image, file_name):
@@ -618,14 +621,14 @@ class DocumentDetector:
 
         ranges = NormalizationRanges()
         normalized_metrics = QualityMetricsNormalized(
-            fft_score=self._normalize(raw_metrics.fft_score, *ranges.fft_score),
-            edge_score=self._normalize(raw_metrics.edge_score, *ranges.edge_score),
-            laplacian_variance=self._normalize(
+            fft_score=normalize(raw_metrics.fft_score, *ranges.fft_score),
+            edge_score=normalize(raw_metrics.edge_score, *ranges.edge_score),
+            laplacian_variance=normalize(
                 raw_metrics.laplacian_variance, *ranges.laplacian_variance
             ),
-            local_contrast=self._normalize(raw_metrics.local_contrast, *ranges.local_contrast),
-            sobel_score=self._normalize(raw_metrics.sobel_score, *ranges.sobel_score),
-            noise_stddev=self._normalize(raw_metrics.noise_stddev, *ranges.noise_stddev),
+            local_contrast=normalize(raw_metrics.local_contrast, *ranges.local_contrast),
+            sobel_score=normalize(raw_metrics.sobel_score, *ranges.sobel_score),
+            noise_stddev=normalize(raw_metrics.noise_stddev, *ranges.noise_stddev),
         )
 
         overall_blur_score = 1.0 - (
@@ -669,7 +672,7 @@ class DocumentDetector:
     def _calculate_laplacian_variance(self, file_bytes, file_name) -> float:
         """Returns the Laplacian variance for an image/document."""
         if not file_bytes:
-            print("No image bytes provided")
+            logger.warning("No image bytes provided")
             return np.nan
 
         file_type = self.detect_file_type(file_bytes)
@@ -691,7 +694,7 @@ class DocumentDetector:
 
     def fft_blur_score_normalized(self, document_roi, file):
         if document_roi.size == 0:
-            print("Empty image provided")
+            logger.warning("Empty image provided")
             return np.nan
 
         document_roi_f = np.float32(document_roi)
@@ -732,30 +735,49 @@ class DocumentDetector:
 
         return np.nan
 
+    def _get_pdf_page_count(self, file_bytes):
+        from pypdf import PdfReader
+
+        """Returns actual page count without truncation."""
+        try:
+            reader = PdfReader(io.BytesIO(file_bytes))
+            return len(reader.pages)
+        except Exception as e:
+            logger.warning(f"Error processing PDF bytes: {e}")
+            return 1
+
+    def _get_tiff_page_count(self, file_bytes):
+        from PIL import Image
+
+        try:
+            with Image.open(io.BytesIO(file_bytes)) as img:
+                page_count = 0
+                while True:
+                    try:
+                        img.seek(page_count)
+                        page_count += 1
+                    except EOFError:
+                        break
+                return page_count
+        except Exception as e:
+            logger.warning(f"Error processing TIFF: {e}")
+            return 1
+
     def get_page_count(self, file_bytes):
         """Count total pages in document."""
-        if not file_bytes or file_bytes == 0 or self._is_password_protected(file_bytes):
+        if not file_bytes or file_bytes == 0:
             return None
 
         file_type = self.detect_file_type(file_bytes)
 
-        # returns max number of pages equal to MULTIPAGE_DETECTION_MAX_PAGES + 1
-        # we don't care about the actual page count, just if we need to truncate
-        # TODO: update to return actual number of pages rather than MULTIPAGE_DETECTION_MAX_PAGES + 1
         if file_type == "PDF":
-            return len(
-                self._split_pdf_into_images(file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES + 1)
-            )
+            return self._get_pdf_page_count(file_bytes)
         elif file_type == "TIFF":
-            return len(
-                self._split_tiff_into_images(
-                    file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES + 1
-                )
-            )
+            return self._get_tiff_page_count(file_bytes)
         else:
             return 1  # Single page for JPEG/PNG/etc.
 
-    def _is_password_protected(self, file_bytes):
+    def is_password_protected(self, file_bytes):
         """Detect if PDF is password protected."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -767,7 +789,7 @@ class DocumentDetector:
     def _is_multipage_document(self, file_bytes, file_name):
         """Returns True if document contains multiple pages/documents."""
         file_type = self.detect_file_type(file_bytes)
-        print(f"DocumentDetector: Processing {file_type} file")
+        logger.info(f"DocumentDetector: Processing {file_type} file")
 
         if file_type in IMAGE_FILE_TYPES:
             documents_in_image = self._process_image_bytes(
@@ -855,7 +877,7 @@ class DocumentDetector:
             )
 
         page_count = self.get_page_count(file_bytes)
-        is_password_protected = self._is_password_protected(file_bytes)
+        is_password_protected = self.is_password_protected(file_bytes)
         quality_metrics = self._calculate_quality_metrics(file_bytes, file_name)
 
         raw_metrics = quality_metrics[0] if quality_metrics else None

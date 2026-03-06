@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass, field
 
 from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
@@ -16,9 +15,10 @@ from documentai_api.utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.response_codes import ResponseCodes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -71,12 +71,11 @@ def get_matched_blueprint(bda_result_json: dict) -> MatchedBlueprintInfo:
     return MatchedBlueprintInfo(matched_blueprint_name, matched_blueprint_confidence)
 
 
-def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_object_key):
+def process_bda_output(uploaded_filename, bda_output_bucket_name, bda_output_object_key):
     user_provided_document_category = get_user_provided_document_category(uploaded_filename)
 
     if not user_provided_document_category:
         msg = "No user specified document type provided. Document not implemented"
-        print(msg)
         logger.info(msg)
 
         return classify_as_not_implemented(
@@ -99,7 +98,7 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         matched_blueprint_confidence=matched_blueprint.confidence,
     )
 
-    print(f"Matched blueprint: {matched_blueprint.name}")
+    logger.debug(f"Matched blueprint: {matched_blueprint.name}")
 
     if matched_blueprint.name is None:
         msg = "No matching custom blueprint found. "
@@ -109,7 +108,6 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
             ConfigDefaults.BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH.value
         ):
             msg += "Document detected, but not implemented."
-            print(msg)
             logger.info(msg)
             classification_data.additional_info = msg
             return classify_as_no_custom_blueprint_matched(
@@ -117,7 +115,6 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
             )
         else:
             msg += "Unable to extract meaningful document content."
-            print(msg)
             logger.info(msg)
             classification_data.additional_info = msg
             return classify_as_no_document_detected(
@@ -125,7 +122,6 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
             )
     else:
         msg = "Custom matching blueprint found, and document type matches. Success."
-        print(msg)
         logger.info(msg)
         results = get_bda_processing_results(bda_result_json)
 
@@ -140,4 +136,4 @@ def get_api_response_data(uploaded_filename, bda_output_bucket_name, bda_output_
         )
 
 
-__all__ = ["get_api_response_data"]
+__all__ = ["process_bda_output"]

@@ -1,12 +1,20 @@
 .PHONY: \
 	build \
+	check \
 	clean \
+	clean-volumes \
 	format \
 	help \
+	init \
+	init-local \
 	lint \
-	lint-ci \
+	lint-ruff \
+	lint-uv \
+	login \
 	release-build \
+	run-logs \
 	start \
+	start-local \
 	stop \
 	test
 
@@ -34,18 +42,56 @@ __check_defined = \
 
 APP_NAME := {{app_name}}
 
+# By default, all python/uv commands will run inside of the docker container
+# if you wish to run this natively, add RUN_CMD_APPROACH=local to your environment vars
+# You can set this by either running `export RUN_CMD_APPROACH=local` in your shell or add
+# it to your ~/.zshrc file (and run `source ~/.zshrc`)
+ifeq "$(RUN_CMD_APPROACH)" "local"
+RUN_CMD :=
+else
+RUN_CMD := docker compose run $(DOCKER_EXEC_ARGS) --rm $(APP_NAME)
+endif
+
+PY_RUN_CMD := $(RUN_CMD) uv run --frozen
+
+ifdef CI
+FMT_ARGS := --check
+LINT_ARGS :=
+else
+FMT_ARGS :=
+LINT_ARGS := --fix
+endif
+
 ##################################################
-# Setup
+# Build & Run
 ##################################################
 
-init: ## Install dependencies
+build: ## Build Docker containers
+	docker compose build
+
+start: ## Start containers in detached mode
+	docker compose up --renew-anon-volumes --detach
+
+start-local: ## Run the application server natively
+	$(PY_RUN_CMD) documentai_api
+
+run-logs: start ## Start containers and follow logs
+	docker compose logs --follow --no-color $(APP_NAME)
+
+init: ## Initialize project (container-based)
+	docker compose build
+
+init-local: ## Initialize project for native development
 	uv sync --all-extras --frozen
 
-##################################################
-# Build / Release
-##################################################
-build: ## Build development Docker image
-	docker compose build
+clean-volumes: ## Remove project docker volumes
+	docker compose down --volumes
+
+stop: ## Stop containers
+	docker compose down
+
+check: ## Run all checks
+check: format lint test
 
 release-build: ## Build production Docker image
 	docker buildx build \
@@ -54,43 +100,43 @@ release-build: ## Build production Docker image
 		.
 
 ##################################################
-# Development
-##################################################
-
-start: ## Start development server
-	docker compose up
-
-stop: ## Stop development server
-	docker compose down
-
-
-##################################################
 # Testing
 ##################################################
 
 test: ## Run test suite
-	uv run pytest
+	$(PY_RUN_CMD) pytest $(args)
+
+test-coverage: ## Run tests with coverage report
+	$(PY_RUN_CMD) pytest --cov=src/documentai_api --cov-branch --cov-report=html:.coverage_report --cov-report=term-missing $(args)
+
+test-parallel: ## Run test suite in parallel
+	$(PY_RUN_CMD) pytest -n auto $(args)
 
 ##################################################
 # Lint / Format
 ##################################################
 
 format: ## Format code
-	uv run ruff format .
+	$(PY_RUN_CMD) ruff format $(FMT_ARGS) .
 
-lint: ## Lint code
-	uv run ruff check --fix .
+lint: ## Run all linters
+lint: lint-ruff lint-uv
 
-lint-ci: ## Lint code (CI mode, no fixes)
-	uv run ruff check --no-fix .
+lint-ruff: ## Lint Python code with ruff
+	$(PY_RUN_CMD) ruff check $(LINT_ARGS) .
 
+lint-uv: ## Check uv lockfile is up-to-date
+	$(RUN_CMD) uv lock --check
 
 ##################################################
-# Utilities
+# Miscellaneous Utilities
 ##################################################
+
+login: start ## Start shell in running container
+	docker exec -it $(APP_NAME) bash
 
 clean: ## Clean build artifacts
-	rm -rf .pytest_cache htmlcov .coverage __pycache__
+	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 help: ## Show help

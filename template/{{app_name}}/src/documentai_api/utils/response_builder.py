@@ -11,16 +11,16 @@ from documentai_api.config.constants import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services.bda import get_bda_result_json
 from documentai_api.utils.bda import extract_field_values_from_bda_results
+from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
+from documentai_api.utils.strings import snake_to_camel
+
+logger = get_logger(__name__)
 
 
-def _to_camel_case(snake_str: str) -> str:
-    """Convert snake_case to camelCase."""
-    components = snake_str.split("_")
-    return components[0].lower() + "".join(word.capitalize() for word in components[1:])
-
-
+# TODO: Refactor to improve testability - consider making public along with
+# restructuring to reduce mocking in tests
 def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
     """Extract field data for API response."""
     if not ddb_record:
@@ -44,7 +44,7 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     fields = {}
     for field_item in field_confidence_map_list:
         for field_name, confidence in field_item.items():
-            camel_field = _to_camel_case(field_name)
+            camel_field = snake_to_camel(field_name)
             fields[camel_field] = {
                 "confidence": round(confidence, 2),
                 "value": field_values.get(field_name) if include_extracted_data else "<redacted>",
@@ -69,7 +69,7 @@ def get_internal_api_response(
         InternalApiResponse: Response object for API endpoints
     """
     # import here to avoid circular dependency
-    from utils.ddb import get_user_provided_document_category
+    from documentai_api.utils.ddb import get_user_provided_document_category
 
     user_provided_document_category = get_user_provided_document_category(object_key)
 
@@ -100,12 +100,7 @@ def build_v1_api_response(
         dict: Response data for DDB JSON storage
     """
     status = status.value if isinstance(status, ProcessStatus) else status
-    print(
-        f"DEBUG build_v1_api_response: status={status}, type={type(status)}, in SUCCESS list: {status in PROCESSING_STATUSES_SUCCESSFUL}"
-    )
-    print(f"DEBUG PROCESSING_STATUS_SUCCESS = {PROCESSING_STATUSES_SUCCESSFUL}")
-
-    from utils.ddb import get_ddb_record
+    from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
     job_id = ddb_record.get(DocumentMetadata.JOB_ID)
@@ -114,7 +109,7 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {"job_id": job_id, "status": status, "createdAt": created_at}
+    base_response = {"jobId": job_id, "status": status, "createdAt": created_at}
 
     if completed_at:
         base_response["completedAt"] = completed_at
