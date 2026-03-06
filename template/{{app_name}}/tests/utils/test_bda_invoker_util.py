@@ -11,8 +11,8 @@ def test_invoke_bedrock_data_automation_single_page():
         patch.dict(
             "os.environ",
             {
-                env.DOCUMENTAI_PROJECT_ARN: "arn:aws:project",
-                env.DOCUMENTAI_PROFILE_ARN: "arn:aws:profile",
+                env.BDA_PROJECT_ARN: "arn:aws:project",
+                env.BDA_PROFILE_ARN: "arn:aws:profile",
                 env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
             },
         ),
@@ -45,8 +45,8 @@ def test_invoke_bedrock_data_automation_document_truncation():
         patch.dict(
             "os.environ",
             {
-                env.DOCUMENTAI_PROJECT_ARN: "arn:aws:project",
-                env.DOCUMENTAI_PROFILE_ARN: "arn:aws:profile",
+                env.BDA_PROJECT_ARN: "arn:aws:project",
+                env.BDA_PROFILE_ARN: "arn:aws:profile",
                 env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
             },
         ),

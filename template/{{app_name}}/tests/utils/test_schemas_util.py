@@ -10,7 +10,7 @@ from documentai_api.utils import env, schemas
 @pytest.fixture(autouse=True)
 def mock_env(monkeypatch):
     """Mock environment variables."""
-    monkeypatch.setenv(env.DOCUMENTAI_PROJECT_ARN, "arn:aws:bedrock:us-east-1:123:project/test")
+    monkeypatch.setenv(env.BDA_PROJECT_ARN, "arn:aws:bedrock:us-east-1:123:project/test")
 
 
 @pytest.fixture

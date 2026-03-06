@@ -8,9 +8,9 @@ def test_environment_variable_names_are_defined():
     assert hasattr(env, "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME")
     assert hasattr(env, "DOCUMENTAI_INPUT_LOCATION")
     assert hasattr(env, "DOCUMENTAI_OUTPUT_LOCATION")
-    assert hasattr(env, "DOCUMENTAI_PROFILE_ARN")
-    assert hasattr(env, "DOCUMENTAI_PROJECT_ARN")
-    assert hasattr(env, "DOCUMENTAI_REGION")
+    assert hasattr(env, "BDA_PROFILE_ARN")
+    assert hasattr(env, "BDA_PROJECT_ARN")
+    assert hasattr(env, "BDA_REGION")
 
 
 def test_environment_variable_values():
@@ -18,6 +18,6 @@ def test_environment_variable_values():
     assert env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME == "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME"
     assert env.DOCUMENTAI_INPUT_LOCATION == "DOCUMENTAI_INPUT_LOCATION"
     assert env.DOCUMENTAI_OUTPUT_LOCATION == "DOCUMENTAI_OUTPUT_LOCATION"
-    assert env.DOCUMENTAI_PROFILE_ARN == "DOCUMENTAI_PROFILE_ARN"
-    assert env.DOCUMENTAI_PROJECT_ARN == "DOCUMENTAI_PROJECT_ARN"
-    assert env.DOCUMENTAI_REGION == "DOCUMENTAI_REGION"
+    assert env.BDA_PROFILE_ARN == "BDA_PROFILE_ARN"
+    assert env.BDA_PROJECT_ARN == "BDA_PROJECT_ARN"
+    assert env.BDA_REGION == "BDA_REGION"

@@ -20,9 +20,9 @@ def _fetch_schemas_from_bda() -> dict:
     msg = "Fetching schemas from BDA"
     logger.info(msg)
 
-    project_arn = os.getenv(env.DOCUMENTAI_PROJECT_ARN)
+    project_arn = os.getenv(env.BDA_PROJECT_ARN)
     if not project_arn:
-        msg = f"{env.DOCUMENTAI_PROJECT_ARN} not set"
+        msg = f"{env.BDA_PROJECT_ARN} not set"
         logger.error(msg)
         return {}
 

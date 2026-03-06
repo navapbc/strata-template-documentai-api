@@ -126,8 +126,7 @@ async def upload_document_for_processing(
         raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
 
     # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    bucket_name, prefix = parse_s3_uri(DOCUMENTAI_INPUT_LOCATION)
-    object_key = f"{prefix}/{unique_file_name}" if prefix else unique_file_name
+    bucket_name, object_key = parse_s3_uri(f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}")
 
     try:
         metadata = {}

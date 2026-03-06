@@ -94,12 +94,6 @@ exclude_lines = [
     "@abstractmethod",
 ]
 
-[tool.pytest.ini_options]
-norecursedirs = ["deprecated"]
-
-[tool.ruff.lint.per-file-ignores]
-"*/jobs/deprecated/*/lambda.py" = ["N999"]
-
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]
 build-backend = "uv_build"

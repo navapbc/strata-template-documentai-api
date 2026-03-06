@@ -2,9 +2,9 @@ import os
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils.env import (
+    BDA_PROFILE_ARN,
+    BDA_PROJECT_ARN,
     DOCUMENTAI_OUTPUT_LOCATION,
-    DOCUMENTAI_PROFILE_ARN,
-    DOCUMENTAI_PROJECT_ARN,
 )
 from documentai_api.utils.logger import get_logger
 
@@ -13,13 +13,13 @@ logger = get_logger(__name__)
 
 def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
     """Invoke BDA and return job ARN."""
-    documentai_project_arn = os.getenv(DOCUMENTAI_PROJECT_ARN)
-    documentai_profile_arn = os.getenv(DOCUMENTAI_PROFILE_ARN)
+    bda_project_arn = os.getenv(BDA_PROJECT_ARN)
+    bda_profile_arn = os.getenv(BDA_PROFILE_ARN)
     documentai_output_location = os.getenv(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
 
     logger.info(f"documentai_output_location after processing: {documentai_output_location}")
-    logger.info(f"DOCUMENTAI_PROJECT_ARN: {documentai_project_arn}")
-    logger.info(f"DOCUMENTAI_PROFILE_ARN: {documentai_profile_arn}")
+    logger.info(f"BDA_PROJECT_ARN: {bda_project_arn}")
+    logger.info(f"BDA_PROFILE_ARN: {bda_profile_arn}")
 
     try:
         bedrock = AWSClientFactory.get_bda_runtime_client()
@@ -58,8 +58,8 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
             )
 
         response = bedrock.invoke_data_automation_async(
-            dataAutomationProfileArn=documentai_profile_arn,
-            dataAutomationConfiguration={"dataAutomationProjectArn": documentai_project_arn},
+            dataAutomationProfileArn=bda_profile_arn,
+            dataAutomationConfiguration={"dataAutomationProjectArn": bda_project_arn},
             inputConfiguration={"s3Uri": f"s3://{source_bucket_name}/{source_object_name}"},
             outputConfiguration={
                 "s3Uri": f"s3://{documentai_output_location}/{source_object_name}"

@@ -22,7 +22,7 @@ from documentai_api.utils.ddb import (
 )
 from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION
 from documentai_api.utils.logger import get_logger
-from documentai_api.utils.s3 import get_s3_prefix_from_location, parse_s3_uri
+from documentai_api.utils.s3 import parse_s3_uri
 
 logger = get_logger(__name__)
 app = typer.Typer()
@@ -157,8 +157,7 @@ def main(object_key: str, bucket_name: str | None = None):
     logger.info(f"Processing document: s3://{bucket_name}/{object_key}")
 
     # strip S3 prefix for DynamoDB key (files are stored without prefix)
-    input_prefix = get_s3_prefix_from_location(input_location)
-    ddb_key = object_key.removeprefix(f"{input_prefix}/") if input_prefix else object_key
+    ddb_key = os.path.basename(object_key)
 
     try:
         existing_record = get_ddb_record(ddb_key)

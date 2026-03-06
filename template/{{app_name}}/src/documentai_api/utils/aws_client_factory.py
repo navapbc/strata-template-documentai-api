@@ -24,8 +24,8 @@ class AWSClientFactory:
         return os.getenv("AWS_REGION", "us-east-1")
 
     @classmethod
-    def _get_documentai_region(cls) -> str:
-        return os.getenv(env.DOCUMENTAI_REGION, "us-east-1")
+    def _get_bda_region(cls) -> str:
+        return os.getenv(env.BDA_REGION, "us-east-1")
 
     @classmethod
     def _get_dynamodb_table(cls, table_name: str):
@@ -46,7 +46,7 @@ class AWSClientFactory:
     def get_bda_client(cls):
         """Get Bedrock Data Automation client for project/blueprint management."""
         return cls.get_session().client(
-            "bedrock-data-automation", region_name=cls._get_documentai_region()
+            "bedrock-data-automation", region_name=cls._get_bda_region()
         )
 
     @classmethod
@@ -54,7 +54,7 @@ class AWSClientFactory:
     def get_bda_runtime_client(cls):
         """Get Bedrock Data Automation Runtime client for job execution (invoke, get status)."""
         return cls.get_session().client(
-            "bedrock-data-automation-runtime", region_name=cls._get_documentai_region()
+            "bedrock-data-automation-runtime", region_name=cls._get_bda_region()
         )
 
     @classmethod
