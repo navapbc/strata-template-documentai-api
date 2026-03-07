@@ -58,7 +58,7 @@ def document_build_page_exists(build_id: str, page_number: int) -> bool:
 async def upsert_document_build_page(
     build_id: str,
     page_number: int,
-    s3_key: str,
+    unique_file_name: str,
     category: DocumentCategory | None = None,
 ):
     """Upsert multipage session page record."""
@@ -67,7 +67,7 @@ async def upsert_document_build_page(
     item = {
         "buildId": build_id,
         "pageNumber": page_number,
-        "s3Key": s3_key,
+        "s3Key": unique_file_name,
         "uploadedAt": datetime.now(UTC).isoformat(),
     }
 
@@ -80,7 +80,8 @@ async def upsert_document_build_page(
 def get_document_build_pages(build_id: str) -> list[PageMetadata]:
     """Get all pages for a multipage session."""
     table_name = get_document_build_table()
-    bucket_name = os.getenv("DDE_INPUT_LOCATION", "").replace("s3://", "")
+    s3_location = os.getenv(env.DOCUMENTAI_BUILD_INPUT_LOCATION, "")
+    bucket_name, _ = s3_utils.parse_s3_uri(s3_location)
 
     items = ddb_service.query_by_key(
         table_name=table_name,
@@ -93,7 +94,7 @@ def get_document_build_pages(build_id: str) -> list[PageMetadata]:
         PageMetadata(
             page_number=item.get("pageNumber", 0),
             s3_key=item.get("s3Key", ""),
-            s3_bucket_name=bucket_name,  # Note: renamed from s3_bucket
+            s3_bucket_name=bucket_name,
             category=item.get("category"),
             uploaded_at=item.get("uploadedAt"),
         )
@@ -136,7 +137,8 @@ def delete_document_build_page(build_id: str, page_number: int) -> bool:
         raise ValueError(f"Cannot delete - session {build_id} has already been submitted")
 
     table_name = get_document_build_table()
-    bucket_name = os.getenv(env.DOCUMENTAI_INPUT_LOCATION, "").replace("s3://", "")
+    s3_location = os.getenv(env.DOCUMENTAI_BUILD_INPUT_LOCATION, "")
+    bucket_name, _ = s3_utils.parse_s3_uri(s3_location)
 
     key = {"buildId": build_id, "pageNumber": page_number}
     item = ddb_service.get_item(table_name, key)
@@ -158,7 +160,8 @@ def delete_document_build(build_id: str) -> bool:
         raise ValueError(f"Cannot delete - session {build_id} has already been submitted")
 
     table_name = get_document_build_table()
-    bucket_name = os.getenv(env.DOCUMENTAI_INPUT_LOCATION, "").replace("s3://", "")
+    s3_location = os.getenv(env.DOCUMENTAI_BUILD_INPUT_LOCATION, "")
+    bucket_name, _ = s3_utils.parse_s3_uri(s3_location)
 
     items = ddb_service.query_by_key(
         table_name=table_name,

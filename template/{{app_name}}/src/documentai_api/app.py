@@ -36,6 +36,7 @@ from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
 DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
+DOCUMENTAI_BUILD_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_BUILD_INPUT_LOCATION)
 
 CONFIG_EXCLUDED_ROUTES = {
     "//config",
@@ -147,6 +148,7 @@ async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
+    s3_location: str | None = DOCUMENTAI_INPUT_LOCATION,
     user_provided_document_category: DocumentCategory = None,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -160,11 +162,9 @@ async def upload_document_for_processing(
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    if not DOCUMENTAI_INPUT_LOCATION:
-        raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
 
     # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    bucket_name, object_key = parse_s3_uri(f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}")
+    bucket_name, object_key = parse_s3_uri(f"{s3_location}/{unique_file_name}")
 
     try:
         metadata = {}
@@ -178,9 +178,6 @@ async def upload_document_for_processing(
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
-
-        if s3_prefix:
-            metadata[UPLOAD_METADATA_KEYS["s3_prefix"]] = s3_prefix.value
 
         if job_id:
             metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
@@ -272,7 +269,7 @@ async def create_document(
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
-    timeout: int = 180,  # accounts for ECS cold starts and BDA processing time
+    timeout: int = 120,  # accounts for ECS cold starts and BDA processing time
 ):
     """Upload a document for processing.
 
@@ -395,7 +392,7 @@ async def upload_document_build_page(
             file=file,
             unique_file_name=unique_file_name,
             content_type=actual_content_type,
-            s3_prefix=S3Prefix.BUILDS,
+            s3_location=DOCUMENTAI_BUILD_INPUT_LOCATION,
             user_provided_document_category=category,
             trace_id=trace_id,
         )
@@ -403,7 +400,7 @@ async def upload_document_build_page(
         await upsert_document_build_page(
             build_id=build_id,
             page_number=page_number,
-            s3_key=f"{S3Prefix.BUILDS.value}/{unique_file_name}",
+            unique_file_name=unique_file_name,
             category=category,
         )
 
@@ -466,7 +463,6 @@ async def submit_document_build(
             file=merged_file,
             unique_file_name=unique_file_name,
             content_type="application/pdf",
-            s3_prefix=S3Prefix.INPUT,
             user_provided_document_category=category,
             job_id=job_id,
             trace_id=trace_id,

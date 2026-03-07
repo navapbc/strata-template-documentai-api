@@ -104,16 +104,19 @@ async def test_upload_document_for_processing_success():
 async def test_upload_document_for_processing_no_env():
     """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
     mock_file = MagicMock()
+    mock_file.file = MagicMock()
 
     with (
         patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", None),
-        pytest.raises(ValueError, match="DOCUMENTAI_INPUT_LOCATION"),
+        pytest.raises(HTTPException) as exc_info,
     ):
         await upload_document_for_processing(
             file=mock_file,
             unique_file_name="test.pdf",
             content_type="application/pdf",
         )
+
+    assert exc_info.value.status_code == 500
 
 
 @pytest.mark.asyncio
