@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from documentai_api.utils import env
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
@@ -93,16 +94,16 @@ def test_get_region_from_env():
         assert region == "us-west-2"
 
 
-def test_get_dde_region_default(clear_env_vars):
-    """Test that _get_dde_region() returns default when DDE_REGION not set."""
-    region = AWSClientFactory._get_dde_region()
+def test_get_bda_region_default(clear_env_vars):
+    """Test that _get_bda_region() returns default when BDA_REGION not set."""
+    region = AWSClientFactory._get_bda_region()
     assert region == "us-east-1"
 
 
-def test_get_dde_region_from_env():
-    """Test that _get_dde_region() returns value from DDE_REGION env var."""
-    with patch.dict(os.environ, {"DDE_REGION": "eu-west-1"}):
-        region = AWSClientFactory._get_dde_region()
+def test_get_bda_region_from_env():
+    """Test that _get_bda_region() returns value from BDA_REGION env var."""
+    with patch.dict(os.environ, {env.BDA_REGION: "eu-west-1"}):
+        region = AWSClientFactory._get_bda_region()
         assert region == "eu-west-1"
 
 

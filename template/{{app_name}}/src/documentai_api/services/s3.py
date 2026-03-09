@@ -1,5 +1,7 @@
 """S3 Service methods."""
 
+from datetime import datetime
+
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
@@ -69,3 +71,9 @@ def is_password_protected(bucket: str, key: str) -> bool:
         return b"/Encrypt" in file_bytes[:2048]
 
     return False
+
+
+def get_last_modified_at(bucket: str, key: str) -> datetime:
+    """Get object's last modified timestamp."""
+    response = head_object(bucket, key)
+    return response["LastModified"]

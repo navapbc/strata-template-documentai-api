@@ -4,10 +4,12 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+from freezegun import freeze_time
 
 from documentai_api.config.constants import ProcessStatus
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils import ddb as ddb_util
+from documentai_api.utils import env
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
 
@@ -72,16 +74,12 @@ def test_calculate_bda_processing_times():
 
 def test_calculate_wait_time():
     """Test BDA wait time calculation."""
-    year = datetime.now().year
-    created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC)
+    created_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
         mock_get_ddb_record.return_value = {DocumentMetadata.CREATED_AT: created_at.isoformat()}
 
-        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
-            # mock current time to be 10 seconds later
-            mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 10, tzinfo=UTC)
-            mock_datetime.fromisoformat = datetime.fromisoformat
+        with freeze_time("2026-01-01 12:00:10+00:00"):
             wait_time = ddb_util._calculate_wait_time("test-file")
             assert wait_time == Decimal("10.0")
 
@@ -121,38 +119,42 @@ def test_calculate_field_metrics(
 @pytest.mark.parametrize("has_bda_started_at", [True, False])
 def test_build_completion_timing(has_bda_started_at):
     """Test completion timing updates."""
-    year = datetime.now().year
     ddb_record = {
-        DocumentMetadata.CREATED_AT: datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC).isoformat()
+        DocumentMetadata.CREATED_AT: datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC).isoformat()
     }
 
     if has_bda_started_at:
         ddb_record[DocumentMetadata.BDA_STARTED_AT] = datetime(
-            year, 1, 1, 12, 0, 5, tzinfo=UTC
+            2026, 1, 1, 12, 0, 5, tzinfo=UTC
         ).isoformat()
 
-    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with (
+        patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
+        patch("documentai_api.utils.ddb.s3_utils.parse_s3_uri") as mock_parse_uri,
+        patch("documentai_api.utils.ddb.s3_service.get_last_modified_at") as mock_get_modified,
+        freeze_time("2026-01-01 12:00:15+00:00"),
+    ):
         mock_get_ddb_record.return_value = ddb_record
+        mock_parse_uri.return_value = ("bucket", "key/job_metadata.json")
+        mock_get_modified.return_value = datetime(2026, 1, 1, 12, 0, 15, tzinfo=UTC)
 
-        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
-            mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 15, tzinfo=UTC)
-            mock_datetime.fromisoformat = datetime.fromisoformat
+        bda_output_s3_uri = "s3://bucket/key/job_metadata.json" if has_bda_started_at else None
+        updates, values = ddb_util._build_completion_timing("test-file", bda_output_s3_uri)
 
-            updates, values = ddb_util._build_completion_timing("test-file")
-
-            # updates is a list of database fields and associated placeholders:
-            # ['bdaCompletedAt = :bdaCompletedAt', 'processedDate = :processedDate', ...]
-            # use any() to check if field name appears in any list item
-            if has_bda_started_at:
-                assert any(DocumentMetadata.BDA_COMPLETED_AT in u for u in updates)
-                assert any(DocumentMetadata.PROCESSED_DATE in u for u in updates)
-                assert ":bdaCompletedAt" in values
-                assert ":processedDate" in values
-                assert values[":totalProcessingTime"] == Decimal("15.0")
-                assert values[":bdaProcessingTime"] == Decimal("10.0")
-            else:
-                assert updates == []
-                assert values == {}
+        if has_bda_started_at:
+            assert any(DocumentMetadata.BDA_COMPLETED_AT in u for u in updates)
+            assert any(DocumentMetadata.PROCESSED_DATE in u for u in updates)
+            assert ":bdaCompletedAt" in values
+            assert ":processedDate" in values
+            assert values[":totalProcessingTime"] == Decimal("15.0")
+            assert values[":bdaProcessingTime"] == Decimal("10.0")
+            mock_parse_uri.assert_called_once_with("s3://bucket/key/job_metadata.json")
+            mock_get_modified.assert_called_once_with("bucket", "key/job_metadata.json")
+        else:
+            assert updates == []
+            assert values == {}
+            mock_parse_uri.assert_not_called()
+            mock_get_modified.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -166,44 +168,51 @@ def test_build_completion_timing(has_bda_started_at):
 )
 def test_build_timing_updates(status):
     """Test timing updates for different statuses."""
-    year = datetime.now().year
     ddb_record = {
-        DocumentMetadata.CREATED_AT: datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC).isoformat()
+        DocumentMetadata.CREATED_AT: datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC).isoformat()
     }
 
     if status in [ProcessStatus.SUCCESS, ProcessStatus.FAILED]:
         ddb_record[DocumentMetadata.BDA_STARTED_AT] = datetime(
-            year, 1, 1, 12, 0, 5, tzinfo=UTC
+            2026, 1, 1, 12, 0, 5, tzinfo=UTC
         ).isoformat()
 
-    with patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record:
+    with (
+        patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
+        patch("documentai_api.utils.ddb.s3_utils.parse_s3_uri") as mock_parse_uri,
+        patch("documentai_api.utils.ddb.s3_service.get_last_modified_at") as mock_get_modified,
+        freeze_time("2026-01-01 12:00:10+00:00"),
+    ):
         mock_get_ddb_record.return_value = ddb_record
 
-        with patch("documentai_api.utils.ddb.datetime") as mock_datetime:
-            mock_datetime.now.return_value = datetime(year, 1, 1, 12, 0, 10, tzinfo=UTC)
-            mock_datetime.fromisoformat = datetime.fromisoformat
+        bda_output_s3_uri = (
+            "s3://bucket/key/result.json"
+            if status in [ProcessStatus.SUCCESS, ProcessStatus.FAILED]
+            else None
+        )
 
-            updates, values = ddb_util._build_timing_updates("test-file", status)
+        if bda_output_s3_uri:
+            mock_parse_uri.return_value = ("bucket", "key/result.json")
+            mock_get_modified.return_value = datetime(2026, 1, 1, 12, 0, 10, tzinfo=UTC)
 
-            # updates is a comma-joined string: "bdaStartedAt = :bdaStartedAt,
-            # bdaWaitTimeSeconds = :bdaWaitTimeSeconds". use 'in' to check if
-            # field name appears in string
-            if status == ProcessStatus.STARTED:
-                assert DocumentMetadata.BDA_STARTED_AT in updates
-                assert DocumentMetadata.BDA_WAIT_TIME_SECONDS in updates
-                assert DocumentMetadata.BDA_COMPLETED_AT not in updates
-                assert DocumentMetadata.PROCESSED_DATE not in updates
-                assert values[":bdaWaitTimeSeconds"] == Decimal("10.0")
-            elif status in [ProcessStatus.SUCCESS, ProcessStatus.FAILED]:
-                assert DocumentMetadata.BDA_COMPLETED_AT in updates
-                assert DocumentMetadata.PROCESSED_DATE in updates
-                assert DocumentMetadata.BDA_STARTED_AT not in updates
-                assert DocumentMetadata.BDA_WAIT_TIME_SECONDS not in updates
-                assert values[":totalProcessingTime"] == Decimal("10.0")
-                assert values[":bdaProcessingTime"] == Decimal("5.0")
-            else:
-                assert updates == ""
-                assert values == {}
+        updates, values = ddb_util._build_timing_updates("test-file", status, bda_output_s3_uri)
+
+        if status == ProcessStatus.STARTED:
+            assert DocumentMetadata.BDA_STARTED_AT in updates
+            assert DocumentMetadata.BDA_WAIT_TIME_SECONDS in updates
+            assert DocumentMetadata.BDA_COMPLETED_AT not in updates
+            assert DocumentMetadata.PROCESSED_DATE not in updates
+            assert values[":bdaWaitTimeSeconds"] == Decimal("10.0")
+        elif status in [ProcessStatus.SUCCESS, ProcessStatus.FAILED]:
+            assert DocumentMetadata.BDA_COMPLETED_AT in updates
+            assert DocumentMetadata.PROCESSED_DATE in updates
+            assert DocumentMetadata.BDA_STARTED_AT not in updates
+            assert DocumentMetadata.BDA_WAIT_TIME_SECONDS not in updates
+            assert values[":totalProcessingTime"] == Decimal("10.0")
+            assert values[":bdaProcessingTime"] == Decimal("5.0")
+        else:
+            assert updates == ""
+            assert values == {}
 
 
 @pytest.mark.parametrize(
@@ -292,7 +301,7 @@ def test_build_update_expression(
 def test_execute_ddb_update(mock_ddb_service):
     table_name = "test-table"
 
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": table_name}):
+    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: table_name}):
         object_key = "table-key"
         update_expression = "SET #status = :status"
         expression_values = {":status": "test"}
@@ -315,7 +324,7 @@ def test_get_user_provided_document_category(user_provided_document_category) ->
 
 
 def test_get_ddb_record(mock_ddb_service):
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
+    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table"}):
         mock_ddb_service.get_item.return_value = {
             DocumentMetadata.FILE_NAME: "test-file",
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
@@ -333,8 +342,8 @@ def test_get_ddb_by_job_id(mock_ddb_service):
     with patch.dict(
         os.environ,
         {
-            "DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table",
-            "DDE_DOCUMENT_METADATA_JOB_ID_INDEX_NAME": "job-id-index",
+            env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table",
+            env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME: "job-id-index",
         },
     ):
         job_id = "job-123"
@@ -391,7 +400,7 @@ def test_update_ddb(status, has_timing):
 
 def test_insert_ddb(mock_ddb_service):
     """Test DDB insert with all fields."""
-    with patch.dict(os.environ, {"DDE_DOCUMENT_METADATA_TABLE_NAME": "test-table"}):
+    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table"}):
         mock_raw_metrics = MagicMock()
         mock_raw_metrics.to_json_dict.return_value = {"raw": "data"}
         mock_normalized_metrics = MagicMock()
@@ -507,7 +516,8 @@ def test_insert_initial_ddb_record(
 
         ddb_util.insert_initial_ddb_record(
             source_bucket_name="test-bucket",
-            source_object_key="test-file",
+            source_object_key="input/test-file",
+            ddb_key="test-file",
             user_provided_document_category=user_provided_document_category,
             job_id="test-job-id",
             trace_id="test-trace-id",

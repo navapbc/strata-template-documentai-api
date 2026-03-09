@@ -29,7 +29,6 @@ BDA_JOB_STATUS_RUNNING = SETTINGS["bda_job_statuses"]["running"]
 BDA_JOB_STATUS_FAILED = SETTINGS["bda_job_statuses"]["failed"]
 BDA_JOB_STATUS_COMPLETED = SETTINGS["bda_job_statuses"]["completed"]
 
-BDA_PROCESSED_FILE_PREFIX = SETTINGS["bda_output_config"]["processed_file_prefix"]
 
 # cache
 CACHE_KEY_BLUEPRINT_SCHEMAS = SETTINGS["cache"]["blueprint_schemas"]["key"]
