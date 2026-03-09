@@ -21,12 +21,14 @@ from documentai_api.config.constants import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.utils import env
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
-DDE_INPUT_LOCATION = os.getenv("DDE_INPUT_LOCATION")
+DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
 
 app = FastAPI(
     title=API_TITLE,
@@ -115,14 +117,16 @@ async def upload_document_for_processing(
     logger.debug(
         "S3 upload started",
         extra={
+            "unique_file_name": unique_file_name,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    if not DDE_INPUT_LOCATION:
-        raise ValueError("DDE_INPUT_LOCATION environment variable not set")
+    if not DOCUMENTAI_INPUT_LOCATION:
+        raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
 
-    bucket_name = DDE_INPUT_LOCATION.replace("s3://", "")
+    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
+    bucket_name, object_key = parse_s3_uri(f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}")
 
     try:
         metadata = {}
@@ -153,7 +157,7 @@ async def upload_document_for_processing(
             },
         )
 
-        s3_service.upload_file(bucket_name, unique_file_name, file.file, content_type, metadata)
+        s3_service.upload_file(bucket_name, object_key, file.file, content_type, metadata)
         logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
@@ -224,7 +228,7 @@ async def create_document(
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
-    timeout: int = 120,  # optional timeout for synchronous processing, only used when wait=true
+    timeout: int = 180,  # accounts for ECS cold starts and BDA processing time
 ):
     """Upload a document for processing.
 

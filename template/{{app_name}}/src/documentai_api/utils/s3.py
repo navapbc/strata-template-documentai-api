@@ -1,45 +1,32 @@
-from collections.abc import Callable
-from functools import wraps
-from typing import Any
-
-from documentai_api.services import s3 as s3_service
+from urllib.parse import urlparse
 
 
-def validate_s3_event(handler_func: Callable) -> Callable:
-    """Decorator to validate S3 event structure before processing."""
+def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
+    """Parse S3 URI into bucket and key.
 
-    @wraps(handler_func)
-    def wrapper(event: dict[str, Any], context: Any) -> dict[str, Any]:
-        # validate required S3 event structure
-        if not event.get("detail"):
-            raise ValueError("Missing 'detail' in event")
+    Args:
+        s3_uri: S3 URI in format s3://bucket/key
 
-        detail = event["detail"]
-        if not detail.get("object", {}).get("key"):
-            raise ValueError("Missing object key in S3 event")
-
-        if not detail.get("bucket", {}).get("name"):
-            raise ValueError("Missing bucket name in S3 event")
-
-        return handler_func(event, context)
-
-    return wrapper
+    Returns:
+        Tuple of (bucket, key)
+    """
+    parts = urlparse(s3_uri)
+    bucket_name = parts.netloc
+    prefix = parts.path.lstrip("/")
+    return (bucket_name, prefix)
 
 
-__all__ = ["validate_s3_event"]
+def get_s3_prefix_from_location(s3_location: str) -> str:
+    """Extract S3 prefix from location environment variable.
 
+    Args:
+        s3_location: Environment variable value (e.g. "s3://bucket/input")
 
-def extract_s3_info_from_event(event, include_metadata=False):
-    """Extract file key and bucket name from EventBridge event."""
-    try:
-        file_key = event["detail"]["object"]["key"]
-        bucket_name = event["detail"]["bucket"]["name"]
+    Returns:
+        The prefix portion (e.g. "input"), or empty string if no prefix
+    """
+    if not s3_location:
+        return ""
 
-        if include_metadata:
-            metadata_response = s3_service.head_object(bucket_name, file_key)
-            metadata = metadata_response.get("Metadata", {})
-            return file_key, bucket_name, metadata
-
-        return file_key, bucket_name
-    except (KeyError, TypeError) as e:
-        raise ValueError("Invalid EventBridge event structure") from e
+    _, prefix = parse_s3_uri(s3_location)
+    return prefix
