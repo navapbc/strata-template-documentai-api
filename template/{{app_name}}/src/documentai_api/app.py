@@ -6,7 +6,17 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import magic
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 from documentai_api.config.constants import (
@@ -21,7 +31,9 @@ from documentai_api.config.constants import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
+from documentai_api.services import ssm as ssm_service
 from documentai_api.utils import env
+from documentai_api.utils.cache import get_cache
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import parse_s3_uri
@@ -45,6 +57,49 @@ app.add_middleware(
 )
 
 
+def get_api_key() -> str | None:
+    """Get API key from env var or SSM (cached)."""
+    # use direct value when executing in local development
+    token_or_arn = os.getenv(env.API_AUTH_TOKEN)
+
+    if not token_or_arn:
+        return None
+
+    # if it's an ssm arn, extract parameter name and fetch from ssm
+    if token_or_arn.startswith("arn:aws:ssm:"):
+        cache = get_cache()
+        cached = cache.get("api_auth_token")
+        if cached:
+            return cached
+
+        # extract parameter name from ARN
+        # arn:aws:ssm:us-east-1:430004246987:parameter/app-docai-dev/api-auth-token/token-name
+        # -> /app-docai-dev/api-auth-token/token-name
+        param_name = "/" + token_or_arn.split(":parameter/")[1]
+
+        key = ssm_service.get_parameter(param_name)
+        if key:
+            cache.add("api_auth_token", key, ttl_minutes=60)
+        return key
+
+    # otherwise, it's the direct token value - most likely local development
+    return token_or_arn
+
+
+def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
+    """Simple placeholder API key check."""
+    expected_key = get_api_key()
+
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="API key not configured"
+        )
+
+    if x_api_key != expected_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+
+# public endpoints (no auth required)
 @app.get("/")
 def root():
     return {"message": API_TITLE, "status": "healthy"}
@@ -218,7 +273,8 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
         }
 
 
-@app.post("/v1/documents")
+# protected endpoints (require authorization)
+@app.post("/v1/documents", dependencies=[Depends(verify_api_key)])
 async def create_document(
     request: Request,
     response: Response,
@@ -283,7 +339,7 @@ async def create_document(
         return results
 
 
-@app.get("/v1/documents/{job_id}")
+@app.get("/v1/documents/{job_id}", dependencies=[Depends(verify_api_key)])
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID."""
     try:
@@ -321,14 +377,14 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
-@app.get("/v1/schemas")
+@app.get("/v1/schemas", dependencies=[Depends(verify_api_key)])
 async def list_schemas():
     """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
-@app.get("/v1/schemas/{document_type}")
+@app.get("/v1/schemas/{document_type}", dependencies=[Depends(verify_api_key)])
 async def get_schema(document_type: str):
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)
