@@ -1,4 +1,4 @@
-# Document AI API
+# DocumentAI API
 
 This is the application code for DocumentAI.
 
@@ -12,19 +12,16 @@ The system follows an event-driven architecture with three main layers:
 
 - **API Layer** - Document upload and status endpoints  
 - **Processing** - Document classification and data extraction pipeline  
-- **Analytics** - Data aggregation and querying capabilities
 
 ![Architecture Diagram](../docs/{{app_name}}/media/architecture.png)
 
 **Processing Flow:**
-1. Client uploads document via ALB → FastAPI
-2. FastAPI validates and stores document in S3 Input bucket
-3. S3 event triggers Document Processor (Step Functions)
+1. A document is uploaded via DocumentAI API endpoint
+2. DocumentAI API validates and stores document in S3 bucket
+3. S3 event triggers `document_processor` job
 4. Document Processor invokes Bedrock Data Automation for classification/extraction
-5. BDA results stored in S3 Output bucket
-6. BDA Output Processor (Step Functions) processes results and updates DynamoDB
-7. Completed jobs sent to SQS for analytics processing
-8. Glue ETL jobs transform data for Athena queries
+5. BDA outputs results to S3 bucket
+6. S3 event triggers `bda_output_processor` job to process results and update DynamoDB
 
 For detailed component descriptions, see [Project Structure](#project-structure).
 
@@ -75,28 +72,6 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - AWS account with appropriate permissions
 - Infrastructure deployed (see [Deployment](#deployment) section)
 
-## Installation
-
-1\. **Clone the repository**
-```
-git clone <repository-url>
-cd <project-directory>
-```
-
-2\. **Install Python dependencies**
-```
-make init
-```
-
-_This installs all dependencies defined in pyproject.toml including development and test dependencies._
-
-3\. **Verify installation**
-```bash
-make test
-```
-
-_All tests should pass._
-
 
 ## Configuration
 
@@ -113,8 +88,8 @@ _All tests should pass._
 
 **Optional for local development:**
 
-- `APP_HOST` - FastAPI host (default: `localhost`)
-- `APP_PORT` - FastAPI port (default: `8000`)
+- `APP_HOST` - API host (default: `localhost`)
+- `APP_PORT` - API port (default: `8000`)
 - `ENVIRONMENT` - Environment name (e.g., `dev`, `prod`, `local`)
 - `IMAGE_TAG` - Docker image tag for version tracking
 
@@ -138,7 +113,7 @@ This project supports two development approaches:
 
 ### Option 1: Docker-based Development (Recommended)
 
-Uses Docker Compose to run the application and mock AWS services (LocalStack).
+Uses Docker Compose to run the application in a containerized environment.
 
 **Setup:**
 ```bash
@@ -147,7 +122,7 @@ make start         # Start services in detached mode
 make run-logs      # Start and follow logs
 ```
 
-***Running commands***:
+**Running commands**:
 ```bash
 make test          # Run tests in container
 make lint          # Lint code in container
@@ -158,9 +133,9 @@ The application will be available at http://localhost:8000.
 
 **Advantages**:
 - Consistent environment across team members
-- Includes LocalStack for AWS service mocking
 - No local Python environment needed
 - Closely matches production environment
+- Isolated dependencies
 
 ### Option 2: Native Development
 
@@ -174,16 +149,16 @@ export RUN_CMD_APPROACH=local      # Enable native mode
 
 **Running commands**:
 ```bash
-make start-local   # Run FastAPI server natively
+make start-local   # Run API server natively
 make test          # Run tests natively
 make lint          # Lint code natively
 make format        # Format code natively
 ```
 
 **Advantages**:
--Faster iteraton (no container overhead)
--Direct debugging in IDE
--Lower resource usage
+- Faster iteration (no container overhead)
+- Direct debugging in IDE
+- Lower resource usage
 
 *Note*: To persist native mode, add `export RUN_CMD_APPROACH=local` to your `~/.zshrc` or `~/.bashrc`.
 
@@ -212,10 +187,10 @@ For more details on API endpoints, see [openapi.json](../{{app_name}}/docs/opena
 
 ### Development Commands
 ```bash
+make check         # Run all checks (format, lint, test)
 make test          # Run all tests with coverage
 make lint          # Run ruff linter
 make format        # Format code with ruff
-make type-check    # Run mypy type checking
 ```
 
 ## Testing
@@ -254,21 +229,32 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 
 ```bash
 ├── src/
-│ └── documentai_api/
-│ ├── app.py                      # FastAPI application
-│ ├── main.py                     # CLI entry point
-│ ├── config/                     # Configuration and constants
-│ ├── jobs/                       # Background and scheduled jobs
-│ │ ├── bda_result_processor.py
-│ │ └── document_processor.py
-│ ├── schemas/                    # Data models
-│ ├── services/                   # AWS service clients (S3, DynamoDB, BDA)
-│ └── utils/                      # Utilities (document detection, response building, etc.)
-├── tests/                        # Unit and integration tests
-├── docker-compose.yml            # Local development environment
-├── Dockerfile                    # Container definition
-├── Makefile                      # Development commands
-└── pyproject.toml                # Python dependencies and configuration
+│   └── documentai_api/
+│       ├── app.py                        # FastAPI application
+│       ├── main.py                       # CLI entry point
+│       ├── config/                       # Configuration and constants
+│       │   ├── constants.json
+│       │   └── constants.py
+│       ├── jobs/                         # Background jobs and event handlers
+│       │   ├── bda_result_processor/     # Processes BDA output results
+│       │   └── document_processor/       # Handles document upload events
+│       ├── schemas/                      # Data models
+│       │   └── document_metadata.py
+│       ├── services/                     # AWS service clients
+│       │   ├── s3.py
+│       │   ├── ddb.py
+│       │   └── bda.py
+│       └── utils/                        # Utilities and helpers
+│           ├── document_detector.py
+│           ├── response_builder.py
+│           ├── bda_invoker.py
+│           ├── bda_output_processor.py
+│           └── ...
+├── tests/                                # Unit and integration tests
+├── docker-compose.yml                    # Local development environment
+├── Dockerfile                            # Container definition
+├── Makefile                              # Development commands
+└── pyproject.toml                        # Python dependencies and configuration
 ```
 
 ### Key Components

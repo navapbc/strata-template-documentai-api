@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DOCS_DIR = ROOT_DIR / "docs" / "{{app_name}}"
-OUTPUT_LOCATION = DOCS_DIR / "openapi.json"
+DEFAULT_FILE_NAME = "openapi.json"
 sys.path.append(str(ROOT_DIR / "src"))
 
 try:
@@ -15,12 +15,15 @@ except ImportError as e:
 
 
 def generate_spec():
-    DOCS_DIR.mkdir(exist_ok=True)
+    filename = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_FILE_NAME
 
-    with open(OUTPUT_LOCATION, "w", encoding="utf-8") as f:
+    DOCS_DIR.mkdir(exist_ok=True)
+    output_location = DOCS_DIR / filename
+
+    with open(output_location, "w", encoding="utf-8") as f:
         json.dump(app.openapi(), f, indent=2, sort_keys=True)
 
-    print(f"OpenAPI spec exported to: {OUTPUT_LOCATION}")
+    print(f"OpenAPI spec exported to: {output_location}")
 
 
 if __name__ == "__main__":

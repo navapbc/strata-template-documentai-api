@@ -11,6 +11,7 @@
 	lint-ruff \
 	lint-uv \
 	login \
+	openapi-spec \
 	release-build \
 	run-logs \
 	start \
@@ -91,7 +92,7 @@ stop: ## Stop containers
 	docker compose down
 
 check: ## Run all checks
-check: format lint test export-openapi
+check: format lint test
 
 release-build: ## Build production Docker image
 	docker buildx build \
@@ -139,8 +140,8 @@ clean: ## Clean build artifacts
 	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
-export-openapi: ## Export openapi spec
-	uv run python scripts/export_openapi.py
+openapi-spec: ## Export openapi spec
+	$(PY_RUN_CMD) export-openapi
 
 help: ## Show help
 	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
