@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 
@@ -9,6 +9,11 @@ def load_settings():
         return json.load(f)
 
 
+# maximum batch upload size - set to match BDA concurrent job limit (~25) to
+# prevent throttling. can be increased if BDA quota is raised.
+# TODO: Make configurable via environment variable for different deployments
+MAX_BATCH_SIZE = 25
+
 SETTINGS = load_settings()
 API_VERSION = SETTINGS["api"]["version"]
 API_TITLE = SETTINGS["api"]["title"]
@@ -17,6 +22,14 @@ DEFAULT_TIMEOUT = SETTINGS["api"]["default_timeout"]
 SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
 UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
+
+# S3 metadata keys (for reading from S3 objects)
+S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY = UPLOAD_METADATA_KEYS[
+    "user_provided_document_category"
+]
+S3_METADATA_KEY_JOB_ID = UPLOAD_METADATA_KEYS["job_id"]
+S3_METADATA_KEY_TRACE_ID = UPLOAD_METADATA_KEYS["trace_id"]
+S3_METADATA_KEY_BATCH_ID = UPLOAD_METADATA_KEYS["batch_id"]
 
 # grouped processing statuses
 PROCESSING_STATUSES_SUCCESSFUL = SETTINGS["processing_statuses"]["successful"]
@@ -64,3 +77,10 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
+
+
+class BatchStatus(StrEnum):
+    UPLOADING = "uploading"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"

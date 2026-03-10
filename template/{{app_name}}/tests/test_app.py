@@ -53,14 +53,14 @@ def test_get_job_status_found():
         mock_get_ddb.return_value = {
             "fileName": "test.pdf",
             "processStatus": "success",
-            "v1ApiResponseJson": '{"status": "success"}',
+            "v1ApiResponseJson": '{"jobStatus": "success"}',
         }
 
         result = _get_job_status("job-123")
 
     assert result.object_key == "test.pdf"
     assert result.process_status == "success"
-    assert result.v1_response_json == '{"status": "success"}'
+    assert result.v1_response_json == '{"jobStatus": "success"}'
 
 
 def test_get_job_status_not_found():
@@ -124,12 +124,12 @@ async def test_get_v1_document_processing_results_success():
             ddb_record={"fileName": "test.pdf"},
             object_key="test.pdf",
             process_status="success",
-            v1_response_json='{"status": "success", "data": {}}',
+            v1_response_json='{"jobStatus": "success", "data": {}}',
         )
 
         result = await get_v1_document_processing_results("job-123", timeout=10)
 
-    assert result == {"status": "success", "data": {}}
+    assert result == {"jobStatus": "success", "data": {}}
 
 
 @pytest.mark.asyncio
@@ -145,12 +145,12 @@ async def test_get_v1_document_processing_results_timeout():
             process_status="started",
             v1_response_json=None,
         )
-        mock_classify_as_failed.return_value = {"status": "failed", "message": "timeout"}
+        mock_classify_as_failed.return_value = {"jobStatus": "failed", "message": "timeout"}
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
     mock_classify_as_failed.assert_called_once()
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
 
 
 @pytest.mark.asyncio
@@ -166,7 +166,7 @@ async def test_get_v1_document_processing_results_timeout_no_object_key():
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
     assert "timeout" in result["message"]
 
 
@@ -182,9 +182,9 @@ def test_get_document_results_with_extracted_data():
             ddb_record={"fileName": "test.pdf"},
             object_key="test.pdf",
             process_status="success",
-            v1_response_json='{"status": "success"}',
+            v1_response_json='{"jobStatus": "success"}',
         )
-        mock_build_api_response.return_value = {"status": "success", "extractedData": {}}
+        mock_build_api_response.return_value = {"jobStatus": "success", "extractedData": {}}
 
         response = client.get("/v1/documents/job-123?include_extracted_data=true")
 
@@ -210,7 +210,7 @@ def test_get_document_results_in_progress():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "started"
+    assert data["jobStatus"] == "started"
     assert "in progress" in data["message"].lower()
 
 
@@ -297,13 +297,13 @@ async def test_get_v1_document_processing_results_polling_error():
                 ddb_record={"fileName": "test.pdf"},
                 object_key="test.pdf",
                 process_status="success",
-                v1_response_json='{"status": "success"}',
+                v1_response_json='{"jobStatus": "success"}',
             ),
         ]
 
         result = await get_v1_document_processing_results("job-123", timeout=10)
 
-    assert result == {"status": "success"}
+    assert result == {"jobStatus": "success"}
 
 
 def test_create_document_invalid_file_type():
@@ -332,7 +332,7 @@ def test_create_document_asynchronous():
     assert response.status_code == 200
     data = response.json()
     assert "jobId" in data
-    assert data["status"] == "not_started"
+    assert data["jobStatus"] == "not_started"
     assert "uploaded successfully" in data["message"].lower()
 
 
@@ -344,13 +344,13 @@ def test_create_document_synchronous():
         patch("documentai_api.app.get_v1_document_processing_results") as mock_get_results,
     ):
         mock_magic.return_value = "application/pdf"
-        mock_get_results.return_value = {"status": "success", "data": {}}
+        mock_get_results.return_value = {"jobStatus": "success", "data": {}}
 
         files = {"file": ("test.pdf", b"fake pdf", "application/pdf")}
         response = client.post("/v1/documents?wait=true", files=files)
 
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    assert response.json()["jobStatus"] == "success"
 
 
 def test_get_document_results_error_handling():

@@ -197,6 +197,7 @@ def test_main_first_time_pdf():
     """Test first time processing PDF (no grayscale needed)."""
     with (
         patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.main.s3_service.head_object") as mock_head,
         patch(
             "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
         ) as mock_insert,
@@ -206,6 +207,7 @@ def test_main_first_time_pdf():
             ValueError("Record not found"),
             {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
         ]
+        mock_head.return_value = {"Metadata": {}}
 
         main("input/test.pdf", "test-bucket")
 
@@ -217,6 +219,7 @@ def test_main_first_time_image():
     """Test first time processing image (needs grayscale)."""
     with (
         patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.main.s3_service.head_object") as mock_head,
         patch(
             "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
         ) as mock_insert,
@@ -233,6 +236,7 @@ def test_main_first_time_image():
             {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
         ]
         mock_convert.return_value = True
+        mock_head.return_value = {"Metadata": {}}
 
         main("input/test.jpg", "test-bucket")
 
@@ -246,6 +250,7 @@ def test_main_grayscale_conversion_fails():
     """Test grayscale conversion failure marks as not implemented."""
     with (
         patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.main.s3_service.head_object") as mock_head,
         patch("documentai_api.jobs.document_processor.main.insert_initial_ddb_record"),
         patch(
             "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
@@ -260,6 +265,7 @@ def test_main_grayscale_conversion_fails():
             {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
         ]
         mock_convert.return_value = False
+        mock_head.return_value = {"Metadata": {}}
 
         main("input/test.jpg", "test-bucket")
 
@@ -304,3 +310,33 @@ def test_main_idempotent_on_duplicate_events():
         main("input/test.pdf", "test-bucket")
 
     mock_invoke.assert_not_called()
+
+
+def test_main_reads_metadata_from_s3():
+    """Test metadata is read from S3 when not provided."""
+    with (
+        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
+        patch("documentai_api.jobs.document_processor.main.s3_service.head_object") as mock_head,
+        patch(
+            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
+        ) as mock_insert,
+        patch("documentai_api.jobs.document_processor.main.invoke_bda"),
+    ):
+        mock_get.side_effect = [
+            ValueError("Record not found"),
+            {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
+        ]
+        mock_head.return_value = {
+            "Metadata": {
+                "job-id": "test-job-123",
+                "trace-id": "test-trace-456",
+                "batch-id": "test-batch-789",
+            }
+        }
+
+        main("input/test.pdf", "test-bucket")
+
+        mock_head.assert_called_once_with("test-bucket", "input/test.pdf")
+        assert mock_insert.call_args.kwargs["job_id"] == "test-job-123"
+        assert mock_insert.call_args.kwargs["trace_id"] == "test-trace-456"
+        assert mock_insert.call_args.kwargs["batch_id"] == "test-batch-789"

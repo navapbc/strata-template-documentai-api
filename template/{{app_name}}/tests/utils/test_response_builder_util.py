@@ -218,7 +218,7 @@ def test_build_v1_api_response(
 
         expected_response = {
             "jobId": "test-job-id",
-            "status": expected_status,
+            "jobStatus": expected_status,
             "createdAt": created_at.isoformat(),
             "completedAt": bda_completed_at.isoformat(),
             "totalProcessingTimeSeconds": 10.0,

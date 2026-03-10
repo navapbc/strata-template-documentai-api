@@ -109,7 +109,7 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {"jobId": job_id, "status": status, "createdAt": created_at}
+    base_response = {"jobId": job_id, "jobStatus": status, "createdAt": created_at}
 
     if completed_at:
         base_response["completedAt"] = completed_at
@@ -122,7 +122,7 @@ def build_v1_api_response(
 
     # success response with full results
     if status in PROCESSING_STATUSES_SUCCESSFUL:
-        base_response["status"] = "completed"
+        base_response["jobStatus"] = "completed"
 
         if status == ProcessStatus.SUCCESS.value:
             base_response["message"] = "Document processed successfully"
@@ -135,7 +135,7 @@ def build_v1_api_response(
     elif status == ProcessStatus.FAILED.value:
         base_response.update(
             {
-                "status": "failed",
+                "jobStatus": "failed",
                 "error": error_message or "Processing failed",
                 "additionalInfo": data.additional_info if data else None,
             }
@@ -144,7 +144,7 @@ def build_v1_api_response(
     elif status == ProcessStatus.NO_DOCUMENT_DETECTED.value:
         base_response.update(
             {
-                "status": "not_supported",
+                "jobStatus": "not_supported",
                 "message": "Unable to extract meaningful document content",
                 "additionalInfo": data.additional_info if data else None,
             }
@@ -153,14 +153,16 @@ def build_v1_api_response(
     elif status in PROCESSING_STATUS_NOT_SUPPORTED:
         base_response.update(
             {
-                "status": "not_supported",
+                "jobStatus": "not_supported",
                 "message": "Document type not supported",
                 "additionalInfo": data.additional_info if data else None,
             }
         )
 
     else:
-        base_response.update({"status": "processing", "message": "Document processing in progress"})
+        base_response.update(
+            {"jobStatus": "processing", "message": "Document processing in progress"}
+        )
 
     # Remove None values for cleaner response
     return {k: v for k, v in base_response.items() if v is not None}

@@ -7,7 +7,14 @@ import typer
 from botocore.exceptions import ClientError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from documentai_api.config.constants import ConfigDefaults, ProcessStatus
+from documentai_api.config.constants import (
+    S3_METADATA_KEY_BATCH_ID,
+    S3_METADATA_KEY_JOB_ID,
+    S3_METADATA_KEY_TRACE_ID,
+    S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY,
+    ConfigDefaults,
+    ProcessStatus,
+)
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
@@ -139,15 +146,22 @@ def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
         raise
 
 
-def main(object_key: str, bucket_name: str | None = None):
+def main(
+    object_key: str,
+    bucket_name: str | None = None,
+    user_provided_document_category: str | None = None,
+    job_id: str | None = None,
+    trace_id: str | None = None,
+    batch_id: str | None = None,
+):
     """Process uploaded document and invoke BDA.
-
-    This job combines DDB insertion, grayscale conversion, and BDA invocation
-    into a single workflow triggered by S3 upload events.
 
     Args:
         object_key: S3 object key (e.g. "input/document.pdf")
         bucket_name: Optional S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)
+        job_id: Optional job ID (will be read from S3 metadata if not provided)
+        trace_id: Optional trace ID (will be read from S3 metadata if not provided)
+        batch_id: Optional batch ID (will be read from S3 metadata if not provided)
     """
     input_location = os.getenv(DOCUMENTAI_INPUT_LOCATION, "")
 
@@ -155,6 +169,19 @@ def main(object_key: str, bucket_name: str | None = None):
         bucket_name, _ = parse_s3_uri(input_location)
 
     logger.info(f"Processing document: s3://{bucket_name}/{object_key}")
+
+    if not all([job_id, trace_id]):
+        try:
+            response = s3_service.head_object(bucket_name, object_key)
+            metadata = response.get("Metadata", {})
+            job_id = job_id or metadata.get(S3_METADATA_KEY_JOB_ID)
+            trace_id = trace_id or metadata.get(S3_METADATA_KEY_TRACE_ID)
+            batch_id = batch_id or metadata.get(S3_METADATA_KEY_BATCH_ID)
+            user_provided_document_category = user_provided_document_category or metadata.get(
+                S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY
+            )
+        except Exception as e:
+            logger.warning(f"Could not read S3 metadata: {e}")
 
     # strip S3 prefix for DynamoDB key (files are stored without prefix)
     ddb_key = os.path.basename(object_key)
@@ -168,9 +195,10 @@ def main(object_key: str, bucket_name: str | None = None):
             source_bucket_name=bucket_name,
             source_object_key=object_key,
             ddb_key=ddb_key,
-            user_provided_document_category=None,
-            job_id=None,
-            trace_id=None,
+            user_provided_document_category=user_provided_document_category,
+            job_id=job_id,
+            trace_id=trace_id,
+            batch_id=batch_id,
         )
 
         existing_record = get_ddb_record(ddb_key)
@@ -201,10 +229,20 @@ def cli(
     bucket_name: str | None = typer.Argument(
         None, help="S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)"
     ),
+    user_provided_document_category: str | None = typer.Option(
+        None, help="User-provided document category (read from S3 metadata if not provided)"
+    ),
+    job_id: str | None = typer.Option(None, help="Job ID (read from S3 metadata if not provided)"),
+    trace_id: str | None = typer.Option(
+        None, help="Trace ID (read from S3 metadata if not provided)"
+    ),
+    batch_id: str | None = typer.Option(
+        None, help="Batch ID (read from S3 metadata if not provided)"
+    ),
 ):
     """Process uploaded document and invoke BDA."""
     try:
-        main(object_key, bucket_name)
+        main(object_key, bucket_name, job_id, trace_id, batch_id)
     except Exception:
         raise typer.Exit(1) from None
 
