@@ -132,3 +132,36 @@ def test_get_last_modified_at(s3_client, s3_bucket):
 
     assert isinstance(result, datetime)
     assert result.tzinfo is not None  # boto3 returns tzutc() which is timezone-aware
+
+
+def test_generate_presigned_url(s3_client, s3_bucket):
+    """Test generating presigned URL for PUT operation."""
+    metadata = {"job-id": "job-123", "trace-id": "trace-456"}
+
+    url = s3_service.generate_presigned_url(
+        bucket=s3_bucket.name,
+        key="test-key",
+        content_type="application/pdf",
+        metadata=metadata,
+        expiration=7200,
+    )
+
+    assert url.startswith("https://")
+    assert s3_bucket.name in url
+    assert "test-key" in url
+    assert "Expires=" in url
+    assert "x-amz-meta-job-id=job-123" in url
+    assert "x-amz-meta-trace-id=trace-456" in url
+
+
+def test_generate_presigned_url_default_expiration(s3_client, s3_bucket):
+    """Test generating presigned URL with default expiration."""
+    url = s3_service.generate_presigned_url(
+        bucket=s3_bucket.name,
+        key="test-key",
+        content_type="application/pdf",
+        metadata={},
+    )
+
+    assert url.startswith("https://")
+    assert "Expires=" in url

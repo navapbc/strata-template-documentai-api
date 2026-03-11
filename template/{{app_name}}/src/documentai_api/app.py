@@ -8,6 +8,7 @@ from typing import Annotated
 import magic
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from documentai_api.config.constants import (
     API_DESCRIPTION,
@@ -43,6 +44,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class PresignedUpload(BaseModel):
+    filename: str
+    content_type: str
+    user_provided_document_category: str | None = None
+    trace_id: str | None = None
+
+
+def generate_unique_filename(filename: str):
+    """Generate a unique filename with UUID prefix."""
+    if not filename:
+        raise ValueError("Invalid filename")
+
+    file_extension = filename.split(".")[-1]
+    file_name = filename.split(".")[0]
+    return f"{file_name}-{uuid.uuid4()}.{file_extension}"
 
 
 @app.get("/")
@@ -257,9 +275,7 @@ async def create_document(
     )
 
     file.file.seek(0)
-    file_extension = file.filename.split(".")[-1]
-    file_name = file.filename.split(".")[0]
-    unique_file_name = f"{file_name}-{uuid.uuid4()}.{file_extension}"
+    unique_file_name = generate_unique_filename(file.filename)
     job_id = str(uuid.uuid4())
 
     await upload_document_for_processing(
@@ -319,6 +335,61 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         msg = f"Error retrieving results for job {job_id}: {e}"
         logger.error(msg)
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
+
+
+@app.post("/v1/documents/presigned-url")
+async def create_upload_url(payload: PresignedUpload):
+    """Generate a presigned URL for document upload."""
+    trace_id = payload.trace_id or str(uuid.uuid4())
+
+    if payload.content_type not in SUPPORTED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported content type. Must be one of: {', '.join(SUPPORTED_CONTENT_TYPES)}",
+        )
+
+    if not DOCUMENTAI_INPUT_LOCATION:
+        raise HTTPException(status_code=500, detail="Upload location not configured")
+
+    unique_file_name = generate_unique_filename(payload.filename)
+    bucket_name, object_key = parse_s3_uri(f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}")
+    job_id = str(uuid.uuid4())
+    metadata = {}
+    metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
+    metadata[UPLOAD_METADATA_KEYS["trace_id"]] = trace_id
+
+    if payload.user_provided_document_category:
+        metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
+            payload.user_provided_document_category
+        )
+
+    try:
+        presigned_url = s3_service.generate_presigned_url(
+            bucket=bucket_name,
+            key=object_key,
+            content_type=payload.content_type,
+            metadata=metadata,
+        )
+
+        headers = {"Content-Type": payload.content_type, "x-amz-meta-job-id": job_id}
+
+        if payload.trace_id:
+            headers["x-amz-meta-trace-id"] = payload.trace_id
+
+        if payload.user_provided_document_category:
+            headers["x-amz-meta-user-provided-document-category"] = (
+                payload.user_provided_document_category
+            )
+
+        return {
+            "uploadUrl": presigned_url,
+            "method": "PUT",
+            "headers": headers,
+            "jobId": job_id,
+        }
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate upload URL") from e
 
 
 @app.get("/v1/schemas")
