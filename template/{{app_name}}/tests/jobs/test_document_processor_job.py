@@ -177,20 +177,27 @@ def test_invoke_bda_success():
 
 def test_invoke_bda_failure():
     """Test BDA invocation failure updates DDB and raises exception."""
+    from botocore.exceptions import ClientError
+    from tenacity import RetryError
+
     with (
         patch(
             "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
         ) as mock_invoke,
         patch("documentai_api.jobs.document_processor.main.classify_as_failed") as mock_classify,
     ):
-        mock_invoke.side_effect = Exception("BDA service error")
+        # raise ClientError so retry decorator actually retries
+        mock_invoke.side_effect = ClientError(
+            {"Error": {"Code": "ServiceException", "Message": "BDA invocation failed"}},
+            "invoke_bedrock_data_automation",
+        )
 
-        with pytest.raises(Exception, match="BDA service error"):
+        with pytest.raises(RetryError):
             invoke_bda("test-bucket", "input/test.pdf", "test.pdf")
 
         mock_classify.assert_called_once()
         assert mock_classify.call_args.kwargs["object_key"] == "test.pdf"
-        assert "BDA invocation failed" in mock_classify.call_args.kwargs["error_message"]
+        assert mock_classify.call_args.kwargs["error_message"] == "BDA invocation failed"
 
 
 def test_main_first_time_pdf():
@@ -328,15 +335,15 @@ def test_main_reads_metadata_from_s3():
         ]
         mock_head.return_value = {
             "Metadata": {
-                "job-id": "test-job-123",
-                "trace-id": "test-trace-456",
-                "batch-id": "test-batch-789",
+                "job-id": "test-job-id",
+                "trace-id": "test-trace-id",
+                "batch-id": "test-batch-id",
             }
         }
 
         main("input/test.pdf", "test-bucket")
 
         mock_head.assert_called_once_with("test-bucket", "input/test.pdf")
-        assert mock_insert.call_args.kwargs["job_id"] == "test-job-123"
-        assert mock_insert.call_args.kwargs["trace_id"] == "test-trace-456"
-        assert mock_insert.call_args.kwargs["batch_id"] == "test-batch-789"
+        assert mock_insert.call_args.kwargs["job_id"] == "test-job-id"
+        assert mock_insert.call_args.kwargs["trace_id"] == "test-trace-id"
+        assert mock_insert.call_args.kwargs["batch_id"] == "test-batch-id"

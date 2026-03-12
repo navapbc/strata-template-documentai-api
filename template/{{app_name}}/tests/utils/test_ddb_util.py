@@ -417,6 +417,7 @@ def test_insert_ddb(mock_ddb_service):
 
         ddb_util.insert_ddb(
             object_key="test-file",
+            original_file_name="original-test.pdf",
             user_provided_document_category="income",
             process_status=ProcessStatus.NOT_STARTED.value,
             internal_api_response=internal_response,
@@ -438,6 +439,7 @@ def test_insert_ddb(mock_ddb_service):
 
         # base fields
         assert item[DocumentMetadata.FILE_NAME] == "test-file"
+        assert item[DocumentMetadata.ORIGINAL_FILE_NAME] == "original-test.pdf"
         assert item[DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY] == "income"
         assert item[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED.value
         assert item[DocumentMetadata.FILE_SIZE_BYTES] == 1024
@@ -513,11 +515,13 @@ def test_insert_initial_ddb_record(
         mock_s3_service.get_content_type.return_value = content_type
         mock_s3_service.get_file_size_bytes.return_value = 1024
         mock_s3_service.get_file_bytes.return_value = b"bytes"
+        mock_s3_service.get_metadata.return_value = {"original-file-name": "original-test.pdf"}
         mock_get_internal_api_response.return_value = MagicMock()
 
         ddb_util.insert_initial_ddb_record(
             source_bucket_name="test-bucket",
             source_object_key="input/test-file",
+            original_file_name="original-test.pdf",
             ddb_key="test-file",
             user_provided_document_category=user_provided_document_category,
             job_id="test-job-id",
@@ -527,6 +531,7 @@ def test_insert_initial_ddb_record(
 
         mock_insert_ddb.assert_called_once_with(
             object_key="test-file",
+            original_file_name="original-test.pdf",
             user_provided_document_category=user_provided_document_category or "unknown",
             process_status=expected_status,
             internal_api_response=(
@@ -650,6 +655,8 @@ def test_classify_functions(function, response_code, status, matched_document_cl
 
         if error_msg:
             expected_call["error_message"] = error_msg
+        else:
+            expected_call["error_message"] = ""
 
         mock_update.assert_called_once_with(**expected_call)
 

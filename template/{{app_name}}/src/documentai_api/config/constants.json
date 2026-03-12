@@ -73,6 +73,7 @@
       "not_started": "not_started",
       "password_protected": "password_protected",
       "pending_grayscale_conversion": "pending_grayscale_conversion",
+      "retrying": "retrying",
       "started": "started",
       "success": "success"
     },
@@ -109,6 +110,7 @@
     "user_provided_document_category": "user-provided-document-category",
     "job_id": "job-id",
     "trace_id": "trace-id",
-    "batch_id": "batch-id"
+    "batch_id": "batch-id",
+    "original_file_name": "original-file-name"
   }
 }

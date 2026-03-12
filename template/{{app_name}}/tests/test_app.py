@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -56,7 +56,7 @@ def test_get_job_status_found():
             "v1ApiResponseJson": '{"jobStatus": "success"}',
         }
 
-        result = _get_job_status("job-123")
+        result = _get_job_status("test-job-id")
 
     assert result.object_key == "test.pdf"
     assert result.process_status == "success"
@@ -68,7 +68,7 @@ def test_get_job_status_not_found():
     with patch("documentai_api.app.get_ddb_by_job_id") as mock_get_ddb:
         mock_get_ddb.return_value = None
 
-        result = _get_job_status("job-123")
+        result = _get_job_status("test-job-id")
 
     assert result.ddb_record is None
     assert result.object_key is None
@@ -81,20 +81,29 @@ async def test_upload_document_for_processing_success():
     """Test successful document upload."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
-        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket/input"),
+        patch(
+            "documentai_api.app.DOCUMENTAI_PREPROCESSING_LOCATION", "s3://test-bucket/preprocessing"
+        ),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
+        patch("documentai_api.utils.document_detector.DocumentDetector") as mock_detector_class,
     ):
         from documentai_api.config.constants import DocumentCategory
 
+        mock_detector = mock_detector_class.return_value
+        mock_detector.get_page_count.return_value = 1
+
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
             user_provided_document_category=DocumentCategory.INCOME,
-            job_id="job-123",
-            trace_id="trace-456",
+            job_id="test-job-id",
+            trace_id="test-trace-id",
         )
 
     mock_upload.assert_called_once()
@@ -111,6 +120,7 @@ async def test_upload_document_for_processing_no_env():
     ):
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
         )
@@ -127,7 +137,7 @@ async def test_get_v1_document_processing_results_success():
             v1_response_json='{"jobStatus": "success", "data": {}}',
         )
 
-        result = await get_v1_document_processing_results("job-123", timeout=10)
+        result = await get_v1_document_processing_results("test-job-id", timeout=10)
 
     assert result == {"jobStatus": "success", "data": {}}
 
@@ -147,7 +157,7 @@ async def test_get_v1_document_processing_results_timeout():
         )
         mock_classify_as_failed.return_value = {"jobStatus": "failed", "message": "timeout"}
 
-        result = await get_v1_document_processing_results("job-123", timeout=1)
+        result = await get_v1_document_processing_results("test-job-id", timeout=1)
 
     mock_classify_as_failed.assert_called_once()
     assert result["jobStatus"] == "failed"
@@ -164,7 +174,7 @@ async def test_get_v1_document_processing_results_timeout_no_object_key():
             v1_response_json=None,
         )
 
-        result = await get_v1_document_processing_results("job-123", timeout=1)
+        result = await get_v1_document_processing_results("test-job-id", timeout=1)
 
     assert result["jobStatus"] == "failed"
     assert "timeout" in result["message"]
@@ -186,7 +196,7 @@ def test_get_document_results_with_extracted_data():
         )
         mock_build_api_response.return_value = {"jobStatus": "success", "extractedData": {}}
 
-        response = client.get("/v1/documents/job-123?include_extracted_data=true")
+        response = client.get("/v1/documents/test-job-id?include_extracted_data=true")
 
     assert response.status_code == 200
     mock_build_api_response.assert_called_once_with(
@@ -206,7 +216,7 @@ def test_get_document_results_in_progress():
             v1_response_json=None,
         )
 
-        response = client.get("/v1/documents/job-123")
+        response = client.get("/v1/documents/test-job-id")
 
     assert response.status_code == 200
     data = response.json()
@@ -250,6 +260,7 @@ async def test_upload_document_for_processing_s3_failure():
     """Test S3 upload failure raises HTTPException."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
         patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
@@ -260,6 +271,7 @@ async def test_upload_document_for_processing_s3_failure():
         with pytest.raises(HTTPException) as exc_info:
             await upload_document_for_processing(
                 file=mock_file,
+                original_file_name="test.pdf",
                 unique_file_name="test.pdf",
                 content_type="application/pdf",
             )
@@ -273,6 +285,7 @@ async def test_upload_document_for_processing_invalid_category_type():
     """Test invalid document category type raises ValueError."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
         patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket"),
@@ -280,6 +293,7 @@ async def test_upload_document_for_processing_invalid_category_type():
     ):
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
             user_provided_document_category="invalid_string",  # should be enum
@@ -301,7 +315,7 @@ async def test_get_v1_document_processing_results_polling_error():
             ),
         ]
 
-        result = await get_v1_document_processing_results("job-123", timeout=10)
+        result = await get_v1_document_processing_results("test-job-id", timeout=10)
 
     assert result == {"jobStatus": "success"}
 
@@ -358,7 +372,7 @@ def test_get_document_results_error_handling():
     with patch("documentai_api.app._get_job_status") as mock_get_job_status:
         mock_get_job_status.side_effect = Exception("Unexpected error")
 
-        response = client.get("/v1/documents/job-123")
+        response = client.get("/v1/documents/test-job-id")
 
     assert response.status_code == 500
     assert "Failed to retrieve results" in response.json()["detail"]

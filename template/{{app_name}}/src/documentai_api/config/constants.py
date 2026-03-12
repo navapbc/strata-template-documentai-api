@@ -9,11 +9,6 @@ def load_settings():
         return json.load(f)
 
 
-# maximum batch upload size - set to match BDA concurrent job limit (~25) to
-# prevent throttling. can be increased if BDA quota is raised.
-# TODO: Make configurable via environment variable for different deployments
-MAX_BATCH_SIZE = 25
-
 SETTINGS = load_settings()
 API_VERSION = SETTINGS["api"]["version"]
 API_TITLE = SETTINGS["api"]["title"]
@@ -30,6 +25,7 @@ S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY = UPLOAD_METADATA_KEYS[
 S3_METADATA_KEY_JOB_ID = UPLOAD_METADATA_KEYS["job_id"]
 S3_METADATA_KEY_TRACE_ID = UPLOAD_METADATA_KEYS["trace_id"]
 S3_METADATA_KEY_BATCH_ID = UPLOAD_METADATA_KEYS["batch_id"]
+S3_METADATA_KEY_ORIGINAL_FILE_NAME = UPLOAD_METADATA_KEYS["original_file_name"]
 
 # grouped processing statuses
 PROCESSING_STATUSES_SUCCESSFUL = SETTINGS["processing_statuses"]["successful"]

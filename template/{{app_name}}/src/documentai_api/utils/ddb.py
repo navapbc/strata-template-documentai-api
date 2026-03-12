@@ -273,6 +273,7 @@ def _build_update_expression(
     v1_api_response: str | None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
+    retry_attempts: int | None = None,
 ) -> tuple[str, dict]:
     """Build DynamoDB update expression and values."""
     updates = [
@@ -333,9 +334,13 @@ def _build_update_expression(
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
 
-    if error_message:
+    if error_message is not None:
         updates.append(f"{DocumentMetadata.ERROR_MESSAGE} = :errorMessage")
         values[":errorMessage"] = error_message
+
+    if retry_attempts is not None:
+        updates.append(f"{DocumentMetadata.RETRY_ATTEMPTS} = :retryAttempts")
+        values[":retryAttempts"] = retry_attempts
 
     return "SET " + ", ".join(updates), values
 
@@ -402,6 +407,7 @@ def update_ddb(
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
+    retry_attempts: int | None = None,
 ):
     """Update DynamoDB processing status for a file."""
     try:
@@ -413,6 +419,7 @@ def update_ddb(
             v1_api_response=None,  # built after ddb update
             bda_invocation_arn=bda_invocation_arn,
             error_message=error_message,
+            retry_attempts=retry_attempts,
         )
 
         # add timing updates
@@ -440,6 +447,7 @@ def update_ddb(
 
 def insert_ddb(
     object_key: str,
+    original_file_name: str,
     user_provided_document_category: str | None = None,
     process_status: str | None = None,
     internal_api_response: InternalApiResponse | None = None,
@@ -460,6 +468,7 @@ def insert_ddb(
 
         item = {
             DocumentMetadata.FILE_NAME: object_key,
+            DocumentMetadata.ORIGINAL_FILE_NAME: original_file_name,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
                 user_provided_document_category
@@ -471,6 +480,7 @@ def insert_ddb(
 
         if file_size_bytes is not None:
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
+
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
 
@@ -519,6 +529,7 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     ddb_key: str,
+    original_file_name: str,
     user_provided_document_category: str,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -618,6 +629,7 @@ def insert_initial_ddb_record(
 
     insert_ddb(
         object_key=ddb_key,
+        original_file_name=original_file_name,
         user_provided_document_category=user_provided_document_category,
         process_status=process_status,
         internal_api_response=internal_api_response,
@@ -669,6 +681,7 @@ def classify_as_success(object_key: str, response_code: str, data: Classificatio
         status=ProcessStatus.SUCCESS,
         internal_api_response=internal_api_response,
         data=data,
+        error_message="",
     )
 
     # convert dataclass to dict for JSON serialization
@@ -708,6 +721,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
         status=ProcessStatus.SUCCESS,
         internal_api_response=internal_api_response,
         data=data,
+        error_message="",
     )
 
     # convert dataclass to dict for JSON serialization
@@ -727,6 +741,7 @@ def classify_as_no_document_detected(object_key: str, data: ClassificationData):
         status=ProcessStatus.NO_DOCUMENT_DETECTED,
         internal_api_response=internal_api_response,
         data=data,
+        error_message="",
     )
 
     # convert dataclass to dict for JSON serialization
@@ -746,7 +761,22 @@ def classify_as_no_custom_blueprint_matched(object_key: str, data: Classificatio
         status=ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED,
         internal_api_response=internal_api_response,
         data=data,
+        error_message="",
     )
 
     # convert dataclass to dict for JSON serialization
     return internal_api_response.__dict__
+
+
+def classify_as_retry(
+    object_key: str, retry_attempts: int, error_message: str, data: ClassificationData
+):
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.RETRYING,
+        internal_api_response=None,
+        error_message=error_message,
+        retry_attempts=retry_attempts,
+        data=data,
+    )

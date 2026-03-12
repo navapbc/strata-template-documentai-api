@@ -29,6 +29,7 @@ def test_batch_upload_success(pdf_file):
     """Test successful batch upload."""
     with (
         patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
+        patch("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 50),
         patch("documentai_api.app.magic.from_buffer", return_value="application/pdf"),
         patch("documentai_api.app.upload_document_for_processing"),
         patch("documentai_api.app.validate_batch_id"),
@@ -62,6 +63,7 @@ def test_batch_upload_invalid_file_type():
     """Test batch upload with invalid file type."""
     with (
         patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
+        patch("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 50),
         patch("documentai_api.app.magic.from_buffer", return_value="text/plain"),
         patch("documentai_api.app.validate_batch_id"),
         patch("documentai_api.utils.ddb.create_batch"),
@@ -76,7 +78,8 @@ def test_batch_upload_invalid_file_type():
 def test_zip_upload_success(ddb_table, zip_with_pdfs):
     """Test successful ZIP upload."""
     with (
-        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-table"}),
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
+        patch("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 50),
         patch(
             "documentai_api.utils.zip.extract_files_from_zip", new_callable=AsyncMock
         ) as mock_extract,
@@ -110,7 +113,8 @@ def test_zip_upload_success(ddb_table, zip_with_pdfs):
 def test_zip_upload_empty(ddb_table):
     """Test ZIP upload with no valid files."""
     with (
-        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-table"}),
+        patch.dict(os.environ, {env.DOCUMENTAI_BATCH_TABLE_NAME: "test-batches-table"}),
+        patch("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 50),
         patch(
             "documentai_api.utils.zip.extract_files_from_zip", new_callable=AsyncMock
         ) as mock_extract,
@@ -133,9 +137,10 @@ def test_get_batch_status_success():
         patch("documentai_api.utils.ddb.query_jobs_by_batch_id") as mock_query_jobs,
     ):
         mock_get_batch.return_value = {
-            "batchId": "test-batch-id",
-            "batchStatus": "processing",
-            "createdAt": "2026-02-27",
+            Batch.BATCH_ID: "test-batch-id",
+            Batch.BATCH_STATUS: "processing",
+            Batch.TOTAL_FILES: 2,
+            Batch.CREATED_AT: "2026-02-27",
         }
         mock_query_jobs.return_value = [
             {"fileName": "doc1.pdf", "jobId": "job-1", "processStatus": "success"},
@@ -148,7 +153,8 @@ def test_get_batch_status_success():
     data = response.json()
     assert data["batchId"] == "test-batch-id"
     assert data["batchStatus"] == BatchStatus.PROCESSING.value
-    assert data["totalJobs"] == 2
+    assert data["totalJobsExpected"] == 2
+    assert data["totalJobsSubmitted"] == 2
     assert data["completed"] == 1
     assert data["inProgress"] == 1
 
@@ -171,6 +177,7 @@ def test_get_batch_status_lazy_completion():
         mock_get_batch.return_value = {
             Batch.BATCH_ID: "test-batch",
             Batch.BATCH_STATUS: "processing",
+            Batch.TOTAL_FILES: 2,
             Batch.CREATED_AT: "2026-02-27",
         }
         mock_query_jobs.return_value = [
@@ -182,7 +189,9 @@ def test_get_batch_status_lazy_completion():
 
         assert response.status_code == 200
         data = response.json()
-        assert data["batchStatus"] == "completed"
+        assert data["batchStatus"] == BatchStatus.COMPLETED.value
+        assert data["totalJobsExpected"] == 2
+        assert data["totalJobsSubmitted"] == 2
         mock_update.assert_called_once_with("test-batch", status=BatchStatus.COMPLETED)
 
 
@@ -195,6 +204,7 @@ def test_get_batch_status_with_failed_count():
         mock_get_batch.return_value = {
             Batch.BATCH_ID: "test-batch",
             Batch.BATCH_STATUS: "processing",
+            Batch.TOTAL_FILES: 3,
             Batch.CREATED_AT: "2026-02-27",
         }
         mock_query_jobs.return_value = [
@@ -207,7 +217,8 @@ def test_get_batch_status_with_failed_count():
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalJobs"] == 3
+        assert data["totalJobsExpected"] == 3
+        assert data["totalJobsSubmitted"] == 3
         assert data["completed"] == 2
         assert data["failed"] == 1
         assert data["inProgress"] == 1
@@ -223,6 +234,7 @@ def test_get_batch_status_no_lazy_completion_when_incomplete():
         mock_get_batch.return_value = {
             Batch.BATCH_ID: "test-batch",
             Batch.BATCH_STATUS: "processing",
+            Batch.TOTAL_FILES: 2,
             Batch.CREATED_AT: "2026-02-27",
         }
         mock_query_jobs.return_value = [
@@ -235,6 +247,8 @@ def test_get_batch_status_no_lazy_completion_when_incomplete():
         assert response.status_code == 200
         data = response.json()
         assert data["batchStatus"] == "processing"
+        assert data["totalJobsExpected"] == 2
+        assert data["totalJobsSubmitted"] == 2
         mock_update.assert_not_called()
 
 
@@ -247,8 +261,8 @@ def test_validate_batch_id_no_existing_batch():
 
 @pytest.mark.asyncio
 async def test_upload_document_batch_exceeds_max_size(monkeypatch):
-    """Test batch upload fails when exceeding MAX_BATCH_SIZE."""
-    monkeypatch.setattr("documentai_api.app.MAX_BATCH_SIZE", 2)
+    """Test batch upload fails when exceeding DOCUMENTAI_MAX_BATCH_SIZE."""
+    monkeypatch.setattr("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 2)
 
     files = [
         ("files", ("file1.pdf", b"content1", "application/pdf")),
@@ -264,8 +278,8 @@ async def test_upload_document_batch_exceeds_max_size(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_upload_zip_batch_exceeds_max_size(monkeypatch, zip_with_pdfs):
-    """Test ZIP batch upload fails when exceeding MAX_BATCH_SIZE."""
-    monkeypatch.setattr("documentai_api.app.MAX_BATCH_SIZE", 2)
+    """Test ZIP batch upload fails when exceeding DOCUMENTAI_MAX_BATCH_SIZE."""
+    monkeypatch.setattr("documentai_api.app.DOCUMENTAI_MAX_BATCH_SIZE", 2)
 
     mock_files = []
     for i in range(3):
