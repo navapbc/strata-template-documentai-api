@@ -31,9 +31,11 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.image_processing import convert_to_grayscale
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
+from documentai_api.utils.strings import get_natural_sort_key
 
 logger = get_logger(__name__)
 DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
@@ -221,6 +223,18 @@ async def upload_document_for_processing(
             f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}"
         )
 
+        file_content = await file.read()
+
+        # Convert images to grayscale before upload (reduces memory usage and S3 costs)
+        # Note: Original color files are not preserved (cost optimization)
+        if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
+            from io import BytesIO
+
+            file_content, content_type = convert_to_grayscale(
+                original_file_name, file_content, content_type
+            )
+            logger.info(f"Converted {original_file_name} to grayscale before upload")
+
         # pdfs and tiffs can have multiple pages
         # 1. upload to preprocessing
         # 2. check page count
@@ -234,7 +248,6 @@ async def upload_document_for_processing(
                 DocumentDetector,
             )
 
-            file_content = await file.read()
             detector = DocumentDetector()
             page_count = detector.get_page_count(file_content)
             logger.info(f"{original_file_name}: detected {page_count} pages")
@@ -273,8 +286,10 @@ async def upload_document_for_processing(
             )
             logger.info(f"Uploaded {original_file_name} to input location for processing")
         else:
-            # upload non-pdfs directly to input
-            s3_service.upload_file(input_bucket_name, object_key, file.file, content_type, metadata)
+            # upload grayscale file directly to input bucket
+            s3_service.upload_file(
+                input_bucket_name, object_key, BytesIO(file_content), content_type, metadata
+            )
 
         logger.info(f"S3 UPLOAD SUCCESS: {original_file_name}")
 
@@ -658,9 +673,13 @@ async def get_batch_status(batch_id: str):
             }
             for record in job_records
         ]
+        jobs.sort(key=lambda x: get_natural_sort_key(x["fileName"] or ""))
 
         classification_summary = dict(
-            Counter(job["documentClass"] or "unclassified" for job in jobs)
+            Counter(job["documentClass"] or "Not Classified" for job in jobs)
+        )
+        classification_summary = dict(
+            sorted(classification_summary.items(), key=lambda x: get_natural_sort_key(x[0]))
         )
 
         completed = sum(1 for j in jobs if j["jobStatus"] in PROCESSING_STATUS_COMPLETED)

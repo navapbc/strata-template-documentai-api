@@ -92,8 +92,8 @@ class DocumentProfile:
     normalization_ranges: NormalizationRanges
     overall_blur_score: float
     is_blurry: bool
-    is_multipage: bool
     is_password_protected: bool
+    has_multiple_documents_in_single_page: bool
 
 
 class DocumentDetector:
@@ -103,7 +103,7 @@ class DocumentDetector:
     but was kept as to not disturb current processing
     """
 
-    def __init__(self):
+    def __init__(self, is_multidoc_per_page_detection_enabled: bool = False):
         ##################################
         # configuration parameters
         ##################################
@@ -137,6 +137,7 @@ class DocumentDetector:
         # opencv GaussianBlur
         self._gaussianblur_ksize = (5, 5)
         self._gaussianblur_sigmaX = 0
+        self._is_multidoc_per_page_detection_enabled = is_multidoc_per_page_detection_enabled
 
     def detect_file_type(self, image_file):
         """Detect file type from binary header bytes."""
@@ -166,6 +167,9 @@ class DocumentDetector:
             logger.error(f"An error occurred: {e}")
             return None
 
+    def is_multidoc_per_page_detection_enabled(self):
+        return self._is_multidoc_per_page_detection_enabled
+
     def is_pdf(self, image_file):
         """Detect if file is a PDF."""
         return self.detect_file_type(image_file) == "PDF"
@@ -192,10 +196,10 @@ class DocumentDetector:
             # only convert up to max_pages if specified
             if max_pages:
                 pdf_images = convert_from_bytes(
-                    file_bytes, first_page=1, last_page=max_pages, poppler_path=poppler_path
+                    file_bytes, first_page=1, last_page=max_pages, poppler_path=poppler_path, dpi=50
                 )
             else:
-                pdf_images = convert_from_bytes(file_bytes, poppler_path=poppler_path)
+                pdf_images = convert_from_bytes(file_bytes, poppler_path=poppler_path, dpi=50)
 
             for page in pdf_images:
                 # convert the PIL image to a numpy array
@@ -254,7 +258,7 @@ class DocumentDetector:
         # Convert PDF to images (first N pages only)
         poppler_path = "/opt/bin" if os.path.exists("/opt/bin") else None
         images = convert_from_bytes(
-            file_bytes, first_page=1, last_page=max_pages, poppler_path=poppler_path
+            file_bytes, first_page=1, last_page=max_pages, poppler_path=poppler_path, dpi=50
         )
 
         if not images:
@@ -786,10 +790,13 @@ class DocumentDetector:
 
         return False
 
-    def _is_multipage_document(self, file_bytes, file_name):
+    def is_multidoc_in_single_page(self, file_bytes, file_name) -> bool:
         """Returns True if document contains multiple pages/documents."""
+        if not self._is_multidoc_per_page_detection_enabled:
+            return False
+
         file_type = self.detect_file_type(file_bytes)
-        logger.info(f"DocumentDetector: Processing {file_type} file")
+        logger.info(f"Checking {file_name} for multiple documents on a single page")
 
         if file_type in IMAGE_FILE_TYPES:
             documents_in_image = self._process_image_bytes(
@@ -850,12 +857,16 @@ class DocumentDetector:
 
         return np.nan, np.nan
 
-    def get_document_profile(self, file_bytes, file_name) -> DocumentProfile:
+    def get_document_profile(
+        self, file_bytes, file_name, skip_quality_metrics=False
+    ) -> DocumentProfile:
         """Analyze document and return comprehensive quality and content metrics.
 
         Args:
             file_bytes: Raw document/image bytes
             file_name: Filename for debugging
+            skip_quality_metrics: If True, skip expensive quality metrics calculation
+                (TEMPORARY: workaround for memory exhaustion issues)
 
         Returns:
             DocumentProfile: Complete analysis including blur metrics,
@@ -872,13 +883,20 @@ class DocumentDetector:
                 normalization_ranges=None,
                 overall_blur_score=None,
                 is_blurry=False,  # no document provided, cannot be blurry
-                is_multipage=False,  # no document provided, cannot be multipage
                 is_password_protected=False,  # no document provided
+                has_multiple_documents_in_single_page=False,  # no document provided
             )
 
         page_count = self.get_page_count(file_bytes)
         is_password_protected = self.is_password_protected(file_bytes)
-        quality_metrics = self._calculate_quality_metrics(file_bytes, file_name)
+
+        # TEMPORARY: Skip expensive quality metrics to avoid memory exhaustion
+        # TODO: Fix root cause - quality metrics calculation causes OOM for colorful/complex PDFs
+        # Need to optimize _calculate_quality_metrics to use less memory or process in chunks
+        if skip_quality_metrics:
+            quality_metrics = None
+        else:
+            quality_metrics = self._calculate_quality_metrics(file_bytes, file_name)
 
         raw_metrics = quality_metrics[0] if quality_metrics else None
         normalized_metrics = quality_metrics[1] if quality_metrics else None
@@ -895,10 +913,10 @@ class DocumentDetector:
                 not is_password_protected
                 and self._is_blurry(raw_metrics, normalized_metrics, overall_blur_score)
             ),
-            is_multipage=bool(
-                not is_password_protected and self._is_multipage_document(file_bytes, file_name)
-            ),
             is_password_protected=bool(is_password_protected),
+            has_multiple_documents_in_single_page=bool(
+                not is_password_protected and self.is_multidoc_in_single_page(file_bytes, file_name)
+            ),
         )
 
     def truncate_to_pages(self, file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES):

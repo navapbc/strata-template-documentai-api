@@ -164,7 +164,6 @@ def test_build_completion_timing(has_bda_started_at):
         ProcessStatus.STARTED,
         ProcessStatus.SUCCESS,
         ProcessStatus.FAILED,
-        ProcessStatus.PENDING_GRAYSCALE_CONVERSION,
     ],
 )
 def test_build_timing_updates(status):
@@ -472,7 +471,6 @@ def test_insert_ddb(mock_ddb_service):
         ("income", "image/bmp", False, False, ProcessStatus.NOT_IMPLEMENTED, True),
         ("income", "application/pdf", True, False, ProcessStatus.PASSWORD_PROTECTED, True),
         ("income", "application/pdf", False, True, ProcessStatus.BLURRY_DOCUMENT_DETECTED, True),
-        ("income", "image/jpeg", False, False, ProcessStatus.PENDING_GRAYSCALE_CONVERSION, False),
         ("income", "application/pdf", False, False, ProcessStatus.NOT_STARTED, False),
         (None, "application/pdf", False, False, ProcessStatus.NOT_STARTED, False),
     ],
@@ -510,8 +508,11 @@ def test_insert_initial_ddb_record(
             overall_blur_score=0.0,
         )
 
-        mock_document_detector = mock_document_detector_class.return_value
-        mock_document_detector.get_document_profile.return_value = mock_document_profile
+        mock_document_detector_instance = MagicMock()
+        mock_document_detector_class.return_value = mock_document_detector_instance
+        mock_document_detector_instance.get_document_profile.return_value = mock_document_profile
+        mock_document_detector_instance.is_multidoc_in_single_page.return_value = False
+
         mock_s3_service.get_content_type.return_value = content_type
         mock_s3_service.get_file_size_bytes.return_value = 1024
         mock_s3_service.get_file_bytes.return_value = b"bytes"
@@ -527,6 +528,10 @@ def test_insert_initial_ddb_record(
             job_id="test-job-id",
             trace_id="test-trace-id",
             batch_id="test-batch-id",
+        )
+
+        mock_document_detector_instance.get_document_profile.assert_called_once_with(
+            b"bytes", "input/test-file", skip_quality_metrics=True
         )
 
         mock_insert_ddb.assert_called_once_with(

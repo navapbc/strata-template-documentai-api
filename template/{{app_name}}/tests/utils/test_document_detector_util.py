@@ -163,7 +163,7 @@ def test_get_document_profile_empty(detector):
     profile = detector.get_document_profile(b"", "empty.pdf")
     assert profile.page_count is None
     assert profile.is_blurry is False
-    assert profile.is_multipage is False
+    assert profile.has_multiple_documents_in_single_page is False
     assert profile.is_password_protected is False
 
 
@@ -209,7 +209,7 @@ def test_get_document_profile_with_document(detector):
 
     # blur detection should work (blank white page is not blurry)
     assert isinstance(profile.is_blurry, bool)
-    assert isinstance(profile.is_multipage, bool)
+    assert isinstance(profile.has_multiple_documents_in_single_page, bool)
 
 
 def test_get_document_profile_password_protected(detector):
@@ -230,4 +230,4 @@ def test_get_document_profile_password_protected(detector):
 
     # should not be marked as blurry or multipage (can't analyze)
     assert profile.is_blurry is False
-    assert profile.is_multipage is False
+    assert profile.has_multiple_documents_in_single_page is False

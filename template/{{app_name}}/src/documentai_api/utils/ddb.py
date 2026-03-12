@@ -556,15 +556,27 @@ def insert_initial_ddb_record(
     file_size_bytes = s3_service.get_file_size_bytes(source_bucket_name, source_object_key)
     file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_key)
 
+    # note: file_bytes are already grayscale for images (converted during upload)
+    # this reduces memory usage during quality metrics calculation
+
     bda_percentage = 1.0  # TODO: fetch from SSM
-    is_multipage_detection_enabled = False  # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
     internal_api_response = None
-    process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
+    process_status = ProcessStatus.NOT_STARTED
     pages_detected = None
 
-    document_detector = DocumentDetector()
-    profile = document_detector.get_document_profile(file_bytes, source_object_key)
+    is_multidoc_per_page_detection_enabled = False  # TODO: add SSM configuration
+    document_detector = DocumentDetector(
+        is_multidoc_per_page_detection_enabled=is_multidoc_per_page_detection_enabled
+    )
+
+    # TEMPORARY: Skip expensive quality metrics to avoid memory exhaustion
+    # TODO: Fix root cause - quality metrics calculation causes OOM for colorful/complex PDFs
+    # Need to optimize _calculate_quality_metrics to use less memory or process in chunks
+    profile = document_detector.get_document_profile(
+        file_bytes, source_object_key, skip_quality_metrics=True
+    )
+
     pages_detected = profile.page_count
     is_password_protected = profile.is_password_protected
     is_document_blurry = profile.is_blurry
@@ -590,29 +602,18 @@ def insert_initial_ddb_record(
             response_code = ResponseCodes.BLURRY_DOCUMENT_DETECTED
 
         else:
-            if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
-                # image file - needs grayscale conversion first
-                process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
-            else:
-                # non-image file - can go directly to BDA
-                process_status = ProcessStatus.NOT_STARTED
+            # all files are ready for BDA (images already converted to grayscale during upload)
+            process_status = ProcessStatus.NOT_STARTED
 
-            if is_multipage_detection_enabled and file_bytes:
-                logger.info("=== Starting multi-page detection validation ===")
-
+            if file_bytes:
                 try:
-                    if document_detector.is_multipage_document(file_bytes):
-                        logger.info(f"{ddb_key} is a multipage doc")
+                    if document_detector.is_multidoc_in_single_page(file_bytes, source_object_key):
+                        logger.info(f"Detected multiple documents on a single page {ddb_key}")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
 
-                    else:
-                        logger.info(f"{ddb_key} is a single page doc")
-
-                except Exception as e:
-                    logger.info(f"=== Multipage detection failed: {e} ===")
-
-            logger.info("=== Finished multi-page detection validation ===")
+                except Exception:
+                    logger.info(f"Failed detecting multiple documents on a single page {ddb_key}")
 
     else:
         process_status = ProcessStatus.NOT_SAMPLED

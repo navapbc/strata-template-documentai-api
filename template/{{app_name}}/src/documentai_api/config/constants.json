@@ -72,7 +72,6 @@
       "not_implemented": "not_implemented",
       "not_started": "not_started",
       "password_protected": "password_protected",
-      "pending_grayscale_conversion": "pending_grayscale_conversion",
       "retrying": "retrying",
       "started": "started",
       "success": "success"
@@ -88,8 +87,7 @@
         "password_protected"
     ],
     "pending_extraction": [
-      "not_started",
-      "pending_grayscale_conversion"
+      "not_started"
     ],
     "successful": [
       "success",
