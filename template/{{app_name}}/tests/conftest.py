@@ -7,6 +7,16 @@ from moto import mock_aws
 
 
 @pytest.fixture
+def api_client():
+    """Create test client."""
+    from fastapi.testclient import TestClient
+
+    from documentai_api.app import app
+
+    return TestClient(app)
+
+
+@pytest.fixture
 def aws_credentials(monkeypatch):
     """Mock AWS credentials for moto."""
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")

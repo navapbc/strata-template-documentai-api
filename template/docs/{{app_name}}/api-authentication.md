@@ -104,7 +104,7 @@ openssl rand -hex 32
 
 **Local Development**:
 ```bash
-export API_AUTH_TOKEN="your-generated-token"
+export API_AUTH_INSECURE_SHARED_KEY="your-generated-token"
 ```
 
 **AWS Environments (Recommended)**:

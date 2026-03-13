@@ -1,59 +1,37 @@
 """Tests for API authentication."""
 
-import os
 from unittest.mock import patch
 
-from documentai_api.app import get_api_key
-from documentai_api.utils import env
+
+def test_verify_api_key_missing_env_var(api_client):
+    """Test returns 500 when API_AUTH_INSECURE_SHARED_KEY not set."""
+    with patch("documentai_api.app.os.getenv", return_value=None):
+        response = api_client.get("/v1/schemas")
+        assert response.status_code == 500
+        assert "API key not configured" in response.json()["detail"]
 
 
-def test_get_api_key_returns_none_when_not_set():
-    """Test returns None when API_AUTH_TOKEN not set."""
-    with patch.dict(os.environ, {}, clear=True):
-        assert get_api_key() is None
+def test_verify_api_key_invalid_key(api_client):
+    """Test returns 401 when API key is invalid."""
+    with patch("documentai_api.app.os.getenv", return_value="correct-key"):
+        response = api_client.get("/v1/schemas", headers={"X-API-Key": "wrong-key"})
+        assert response.status_code == 401
+        assert "Invalid API key" in response.json()["detail"]
 
 
-def test_get_api_key_returns_direct_value():
-    """Test returns direct token value for local dev."""
-    with patch.dict(os.environ, {env.API_AUTH_TOKEN: "my-secret-token"}):
-        assert get_api_key() == "my-secret-token"
+def test_verify_api_key_missing_header(api_client):
+    """Test returns 401 when API key header is missing."""
+    with patch("documentai_api.app.os.getenv", return_value="correct-key"):
+        response = api_client.get("/v1/schemas")
+        assert response.status_code == 401
+        assert "Invalid API key" in response.json()["detail"]
 
 
-def test_get_api_key_fetches_from_ssm_with_arn():
-    """Test fetches from SSM when ARN is provided."""
-    arn = "arn:aws:ssm:us-east-1:123456789012:parameter/app/api-token"
-
+def test_verify_api_key_valid(api_client):
+    """Test allows request with valid API key."""
     with (
-        patch.dict(os.environ, {env.API_AUTH_TOKEN: arn}),
-        patch("documentai_api.app.get_cache") as mock_cache,
-        patch("documentai_api.app.ssm_service.get_parameter") as mock_ssm,
+        patch("documentai_api.app.os.getenv", return_value="correct-key"),
+        patch("documentai_api.app.get_all_schemas", return_value={"test": {}}),
     ):
-        mock_cache_instance = mock_cache.return_value
-        mock_cache_instance.get.return_value = None
-        mock_ssm.return_value = "secret-from-ssm"
-
-        result = get_api_key()
-
-        assert result == "secret-from-ssm"
-        mock_ssm.assert_called_once_with("/app/api-token")
-        mock_cache_instance.add.assert_called_once_with(
-            "api_auth_token", "secret-from-ssm", ttl_minutes=60
-        )
-
-
-def test_get_api_key_returns_cached_value():
-    """Test returns cached value without calling SSM."""
-    arn = "arn:aws:ssm:us-east-1:123456789012:parameter/app/api-token"
-
-    with (
-        patch.dict(os.environ, {env.API_AUTH_TOKEN: arn}),
-        patch("documentai_api.app.get_cache") as mock_cache,
-        patch("documentai_api.app.ssm_service.get_parameter") as mock_ssm,
-    ):
-        mock_cache_instance = mock_cache.return_value
-        mock_cache_instance.get.return_value = "cached-token"
-
-        result = get_api_key()
-
-        assert result == "cached-token"
-        mock_ssm.assert_not_called()
+        response = api_client.get("/v1/schemas", headers={"X-API-Key": "correct-key"})
+        assert response.status_code == 200

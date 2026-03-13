@@ -18,8 +18,10 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 
 from documentai_api.config.constants import (
+    API_AUTH_KEY_HEADER_NAME,
     API_DESCRIPTION,
     API_TITLE,
     API_VERSION,
@@ -31,9 +33,7 @@ from documentai_api.config.constants import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
-from documentai_api.services import ssm as ssm_service
 from documentai_api.utils import env
-from documentai_api.utils.cache import get_cache
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import parse_s3_uri
@@ -57,45 +57,21 @@ app.add_middleware(
 )
 
 
-def get_api_key() -> str | None:
-    """Get API key from env var or SSM (cached)."""
-    # use direct value when executing in local development
-    token_or_arn = os.getenv(env.API_AUTH_TOKEN)
-
-    if not token_or_arn:
-        return None
-
-    # if it's an ssm arn, extract parameter name and fetch from ssm
-    if token_or_arn.startswith("arn:aws:ssm:"):
-        cache = get_cache()
-        cached = cache.get("api_auth_token")
-        if cached:
-            return cached
-
-        # extract parameter name from ARN
-        # arn:aws:ssm:us-east-1:430004246987:parameter/app-docai-dev/api-auth-token/token-name
-        # -> /app-docai-dev/api-auth-token/token-name
-        param_name = "/" + token_or_arn.split(":parameter/")[1]
-
-        key = ssm_service.get_parameter(param_name)
-        if key:
-            cache.add("api_auth_token", key, ttl_minutes=60)
-        return key
-
-    # otherwise, it's the direct token value - most likely local development
-    return token_or_arn
+api_key_header = APIKeyHeader(name=API_AUTH_KEY_HEADER_NAME, auto_error=False)
 
 
-def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
+def verify_api_key(api_key: str = Depends(api_key_header)):
     """Simple placeholder API key check."""
-    expected_key = get_api_key()
+    expected_key = os.getenv(env.API_AUTH_INSECURE_SHARED_KEY)
 
     if not expected_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="API key not configured"
         )
 
-    if x_api_key != expected_key:
+    print(api_key, expected_key)
+
+    if not api_key or api_key != expected_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 

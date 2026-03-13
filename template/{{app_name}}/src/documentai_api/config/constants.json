@@ -5,7 +5,9 @@
     "title": "Document AI API",
     "description": "API for document processing",
     "auth": {
-      "header_name": "X-API-Key"
+      "key": {
+        "header_name": "API-Key"
+      }
     }
   },
   "bda_job_statuses": {
