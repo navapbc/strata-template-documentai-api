@@ -21,11 +21,11 @@ Contact your system administrator to obtain an API token for your environment.
 
 ### Making Authenticated Requests
 
-Include the API token in the `X-API-Key` header with every request:
+Include the API token in the `API-Key` header with every request:
 
 **Example with curl:**
 ```bash
-curl -H "X-API-Key: your-token-here" \
+curl -H "API-Key: your-token-here" \
      -F "file=@document.pdf" \
      https://documentai.example.com/v1/documents
 ```
@@ -35,7 +35,7 @@ curl -H "X-API-Key: your-token-here" \
 ```python
 import requests
 
-headers = {"X-API-Key": "your-token-here"}
+headers = {"API-Key": "your-token-here"}
 files = {"file": open("document.pdf", "rb")}
 
 response = requests.post(
@@ -61,14 +61,14 @@ All other endpoints require authentication:
 
 
 ### Error Responses
-**422 Unprocessable Entity** - Missing X-API-Key header
+**422 Unprocessable Entity** - Missing API-Key header
 
 ```json
 {
   "detail": [
     {
       "type": "missing",
-      "loc": ["header", "X-API-Key"],
+      "loc": ["header", "API-Key"],
       "msg": "Field required"
     }
   ]

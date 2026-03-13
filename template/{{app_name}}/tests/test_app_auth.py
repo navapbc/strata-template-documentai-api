@@ -14,7 +14,7 @@ def test_verify_api_key_missing_env_var(api_client):
 def test_verify_api_key_invalid_key(api_client):
     """Test returns 401 when API key is invalid."""
     with patch("documentai_api.app.os.getenv", return_value="correct-key"):
-        response = api_client.get("/v1/schemas", headers={"X-API-Key": "wrong-key"})
+        response = api_client.get("/v1/schemas", headers={"X-API-Key": "incorrect-key"})
         assert response.status_code == 401
         assert "Invalid API key" in response.json()["detail"]
 
@@ -33,5 +33,5 @@ def test_verify_api_key_valid(api_client):
         patch("documentai_api.app.os.getenv", return_value="correct-key"),
         patch("documentai_api.app.get_all_schemas", return_value={"test": {}}),
     ):
-        response = api_client.get("/v1/schemas", headers={"X-API-Key": "correct-key"})
+        response = api_client.get("/v1/schemas", headers={"API-Key": "correct-key"})
         assert response.status_code == 200
