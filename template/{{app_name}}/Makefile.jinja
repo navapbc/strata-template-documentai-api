@@ -140,8 +140,8 @@ clean: ## Clean build artifacts
 	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
-openapi-spec: ## Export openapi spec
-	$(PY_RUN_CMD) export-openapi
+openapi-spec: ## Export openapi spec to docs directory
+	$(PY_RUN_CMD) export-openapi > ../docs/{{app_name}}/openapi.json
 
 help: ## Show help
 	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
