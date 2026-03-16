@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 
@@ -64,3 +64,20 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
+
+
+class FormatType(StrEnum):
+    JSON = "json"
+    CSV = "csv"
+
+
+class DictionaryBlueprintSchema(StrEnum):
+    DOCUMENT_TYPE = "documentType"
+    FIELDS = "fields"
+
+
+class DictionaryBlueprintField(StrEnum):
+    NAME = "name"
+    TYPE = "type"
+    DESCRIPTION = "description"
+    DOCUMENT_TYPE = "documentType"
