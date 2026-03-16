@@ -166,4 +166,16 @@ def build_v1_api_response(
     return {k: v for k, v in base_response.items() if v is not None}
 
 
-__all__ = ["build_v1_api_response", "get_internal_api_response"]
+def build_flat_file(field_names: list[dict], data: list[dict], delim: str = ",") -> str:
+    def escape_value(s: str) -> str:
+        escaped = s.replace('"', '""')
+        return f'"{escaped}"'
+
+    header = delim.join(escape_value(name) for name in field_names)
+
+    rows = [delim.join(escape_value(row.get(col, "")) for col in field_names) for row in data]
+
+    return "\n".join([header, *rows])
+
+
+__all__ = ["build_flat_file", "build_v1_api_response", "get_internal_api_response"]

@@ -16,7 +16,10 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
+    DictionaryBlueprintField,
+    DictionaryBlueprintSchema,
     DocumentCategory,
+    FormatType,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -24,6 +27,7 @@ from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.response_builder import build_flat_file
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
@@ -43,6 +47,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _get_all_fields() -> list[dict]:
+    schemas = get_all_schemas()
+    data = []
+    for doc_type, schema in schemas.items():
+        data.extend(
+            {DictionaryBlueprintField.DOCUMENT_TYPE.value: doc_type, **field}
+            for field in schema[DictionaryBlueprintSchema.FIELDS]
+        )
+
+    data.sort(key=lambda f: f[DictionaryBlueprintField.DOCUMENT_TYPE])
+    return data
 
 
 @app.get("/")
@@ -321,24 +338,57 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
-@app.get("/v1/schemas")
+@app.get("/v1/dictionary/schemas")
 async def list_schemas():
     """List all supported document types."""
     schemas = get_all_schemas()
-    return {"schemas": list(schemas.keys())}
+    return {"schemas": sorted(schemas.keys())}
 
 
-@app.get("/v1/schemas/{document_type}")
-async def get_schema(document_type: str):
+@app.get("/v1/dictionary/schemas/{document_type}")
+async def get_schema(document_type: str, format: FormatType = FormatType.JSON):
     """Get field schema for a specific document type."""
-    schema = get_document_schema(document_type)
+    data = []
 
-    if not schema:
-        raise HTTPException(
-            status_code=404, detail=f"Schema not found for document type: {document_type}"
-        )
+    if document_type == "all":
+        data = _get_all_fields()
+    else:
+        schema = get_document_schema(document_type)
 
-    return schema
+        if not schema:
+            raise HTTPException(status_code=404, detail=f"Schema not found: {document_type}")
+
+        data = schema[DictionaryBlueprintSchema.FIELDS]
+
+    if format == FormatType.CSV:
+        field_names = list(data[0].keys()) if data else []
+
+        return Response(content=build_flat_file(field_names, data), media_type="text/csv")
+
+    return {DictionaryBlueprintSchema.FIELDS: data}
+
+
+@app.get("/v1/dictionary/search")
+async def search_fields(
+    q: str | None = None,
+    field: DictionaryBlueprintField | None = None,
+    format: FormatType = FormatType.JSON,
+):
+    """Search fields across all blueprints."""
+    data = _get_all_fields()
+
+    if q:
+        query = q.lower()
+        if field:
+            data = [f for f in data if query in f.get(field, "").lower()]
+        else:
+            data = [f for f in data if any(query in str(v).lower() for v in f.values())]
+
+    if format == FormatType.CSV:
+        field_names = list(data[0].keys()) if data else []
+        return Response(content=build_flat_file(field_names, data), media_type="text/csv")
+
+    return {DictionaryBlueprintSchema.FIELDS: data}
 
 
 if __name__ == "__main__":
