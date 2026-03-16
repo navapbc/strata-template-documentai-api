@@ -143,6 +143,14 @@ clean: ## Clean build artifacts
 openapi-spec: ## Export openapi spec to docs directory
 	$(PY_RUN_CMD) export-openapi > ../docs/{{app_name}}/openapi.json
 
+architecture-diagram:
+	docker run --rm \
+	-v $(CURDIR)/..:/data \
+	ghcr.io/mermaid-js/mermaid-cli/mermaid-cli:latest \
+	-i ./docs/{{app_name}}/diagrams/architecture.mmd \
+	-o ./docs/{{app_name}}/media/architecture.png \
+	--iconPacks '@iconify-json/logos'
+
 help: ## Show help
 	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
