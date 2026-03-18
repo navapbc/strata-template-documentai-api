@@ -17,6 +17,13 @@ def api_client():
 
 
 @pytest.fixture
+def api_skeleton_key(monkeypatch):
+    key = "foobar"
+    monkeypatch.setenv("API_AUTH_INSECURE_SHARED_KEY", key)
+    return key
+
+
+@pytest.fixture
 def aws_credentials(monkeypatch):
     """Mock AWS credentials for moto."""
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
@@ -69,9 +70,7 @@ def verify_api_key(api_key: str = Depends(api_key_header)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="API key not configured"
         )
 
-    print(api_key, expected_key)
-
-    if not api_key or api_key != expected_key:
+    if not api_key or not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 

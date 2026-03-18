@@ -1,15 +1,15 @@
 # API Authentication
 
-The DocumentAI API uses a simple token-based authentication system for securing endpoints.
+The DocumentAI API currently supports a single shared API key for authentication.
 
 ## For API Users
 
-### Getting Your API Token
+### Getting Your API Key
 
 **If you have AWS access:**
 ```bash
 aws ssm get-parameter \
-  --name "/app-docai-{env}/api-auth-token" \
+  --name "/{app_name}-{env}/api-auth-insecure-shared-key" \
   --with-decryption \
   --query "Parameter.Value" \
   --output text
@@ -17,15 +17,15 @@ aws ssm get-parameter \
 
 **If you do not have AWS access:**
 
-Contact your system administrator to obtain an API token for your environment.
+Contact your system administrator to obtain an API Key for your environment.
 
 ### Making Authenticated Requests
 
-Include the API token in the `API-Key` header with every request:
+Include the API key in the `API-Key` header with every request:
 
 **Example with curl:**
 ```bash
-curl -H "API-Key: your-token-here" \
+curl -H "API-Key: your-api-key-here" \
      -F "file=@document.pdf" \
      https://documentai.example.com/v1/documents
 ```
@@ -35,7 +35,7 @@ curl -H "API-Key: your-token-here" \
 ```python
 import requests
 
-headers = {"API-Key": "your-token-here"}
+headers = {"API-Key": "your-api-key-here"}
 files = {"file": open("document.pdf", "rb")}
 
 response = requests.post(
@@ -46,18 +46,10 @@ response = requests.post(
 print(response.json())
 ```
 
-### Public Endpoints (No Auth Required)
-- `GET /` - Root/status
-- `GET /health` - Health check
-- `GET /config` - API configuration
+### Endpoint Authentication
+Visit `/docs` to view all available endpoints. 
 
-### Protected Endpoints (Auth Required)
-All other endpoints require authentication:
-
-- `POST /v1/documents` - Upload document
-- `GET /v1/documents/{job_id}` - Get job status
-- `GET /v1/schemas` - List schemas
-- `GET /v1/schemas/{document_type}` - Get schema details
+Protected routes are indicated by the lock icon (🔒). Public routes (e.g., `/health`) do not require authentication.
 
 
 ### Error Responses
@@ -92,59 +84,33 @@ All other endpoints require authentication:
 ```
 
 ## For Maintainers
-Generating the API Token
-Generate a secure random token:
+The DocumentAI API uses the value from `API_AUTH_INSECURE_SHARED_KEY` env var to compare against the `API-Key` header in requests.
 
-```bash
-# Generate a 32-character random token
-openssl rand -hex 32
-```
-
-### Storing the Token
+### Storing the Key
 
 **Local Development**:
 ```bash
-export API_AUTH_INSECURE_SHARED_KEY="your-generated-token"
+export API_AUTH_INSECURE_SHARED_KEY="your-generated-api-key"
 ```
 
-**AWS Environments (Recommended)**:
+**Hosted Environments**:
 
-1. Store token in AWS Systems Manager Parameter Store:
+Store the key securely at rest and inject the env var into the API server environment. If you are using template-infra, add this to your app config:
 
-```bash
-aws ssm put-parameter \
-  --name "/app-docai-{env}/api-auth-token" \
-  --value "your-generated-token" \
-  --type "SecureString" \
-  --description "API authentication token for DocumentAI"
+```hcl
+API_AUTH_TOKEN = {
+  manage_method     = "manual"
+  secret_store_name = "/${var.app_name}-${var.environment}/api-auth-insecure-shared-key"
+}
 ```
 
-**Note:** The initial API token is created as part of the infrastructure
+### Rotating the Key
+1. Update the value in your secret store
+2. Restart/redeploy the server to pick up the new value
 
-
-### Rotating the Token
-1. Generate a new token (see above)
-
-2. Update the SSM parameter:
-```
-aws ssm put-parameter \
-  --name "/app-docai-{env}/api-auth-token" \
-  --value "new-generated-token" \
-  --type "SecureString" \
-  --overwrite
-```
-
-
-**Note**: The token is cached for 60 minutes. After rotation, the old token will continue to work for up to 60 minutes until the cache expires.
-
-### How It Works
-- **Local Dev**: `API_AUTH_TOKEN` contains the actual token value
-- **AWS**: `API_AUTH_TOKEN` contains an SSM parameter ARN
-- The app detects ARN format and fetches the token from SSM
-- Tokens are cached for 60 minutes to reduce SSM API calls
 
 ### Security Considerations
-**This is a skeleton key implementation** - all users share the same token. This is suitable for:
+**This is a skeleton key implementation** - all users share the same API key. This is suitable for:
 
 - Demo environments
 - Internal tools
