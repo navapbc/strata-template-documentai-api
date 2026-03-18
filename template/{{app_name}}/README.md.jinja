@@ -85,6 +85,8 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - `BDA_PROJECT_ARN` - AWS Bedrock Data Automation project ARN
 - `BDA_PROFILE_ARN` - AWS Bedrock Data Automation profile ARN
 - `BDA_REGION` - AWS region for BDA service
+- `API_AUTH_INSECURE_SHARED_KEY` - API authentication key (see [API Authentication](../docs/{{app_name}}/api-authentication.md))
+
 
 **Optional for local development:**
 
@@ -93,6 +95,14 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - `ENVIRONMENT` - Environment name (e.g., `dev`, `prod`, `local`)
 - `IMAGE_TAG` - Docker image tag for version tracking
 
+
+### Authentication
+API endpoints require an `API-Key` header. A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started:
+```bash
+cp local.env.example .env
+```
+
+See [API Authentication](../docs/{{app_name}}/api-authentication.md) for details.
 
 ### Application Constants
 
@@ -171,6 +181,7 @@ The Makefile automatically detects the `RUN_CMD_APPROACH` environment variable:
 **Upload a document (async)** - returns immediately with `jobId` for polling:
 ```
 curl -X POST http://localhost:8000/v1/documents \
+  -H "API-Key: your-key" \
   -F "file=@/path/to/document.pdf" \
   -F "category=income"
 ```
@@ -179,6 +190,7 @@ curl -X POST http://localhost:8000/v1/documents \
 
 ```
 curl -X POST "http://localhost:8000/v1/documents?wait=true&timeout=120" \
+  -H "API-Key: your-key" \
   -F "file=@/path/to/document.pdf" \
   -F "category=income"
 ```
@@ -232,6 +244,8 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 │   └── documentai_api/
 │       ├── app.py                        # FastAPI application
 │       ├── main.py                       # CLI entry point
+│       ├── cli/                          # Miscellaneous cli scripts
+│       │   ├── export_openapi.py
 │       ├── config/                       # Configuration and constants
 │       │   ├── constants.json
 │       │   └── constants.py
