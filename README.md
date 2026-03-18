@@ -19,20 +19,17 @@
   </a>
 </h4>
 
-# Template Python FastAPI application
+# Template DocumentAI API application
 
-This is a template repository for a Python FastAPI application.
+This is a template repository for a DocumentAI API application. Unlike some
+other Strata templates, this is more of a complete application intended for use
+almost out of the box.
 
 See [`navapbc/platform`](https://github.com/navapbc/strata) for other template repos.
 
 ## Features
 
-- Python FastAPI framework for high-performance APIs
-- Docker containerization for consistent deployment
-- Environment-based configuration
-- Testing framework setup
-- CI/CD workflow templates
-- Security scanning with container tools
+- API for identifying and extracting data from "document" files
 
 ## Repo structure
 ```text
