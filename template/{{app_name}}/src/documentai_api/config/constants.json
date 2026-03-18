@@ -3,7 +3,12 @@
     "version": "v1",
     "default_timeout": 30,
     "title": "Document AI API",
-    "description": "API for document processing"
+    "description": "API for document processing",
+    "auth": {
+      "key": {
+        "header_name": "API-Key"
+      }
+    }
   },
   "bda_job_statuses": {
     "all": {

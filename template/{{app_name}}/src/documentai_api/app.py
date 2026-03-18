@@ -1,15 +1,28 @@
 import asyncio
 import json
 import os
+import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
 import magic
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 
 from documentai_api.config.constants import (
+    API_AUTH_KEY_HEADER_NAME,
     API_DESCRIPTION,
     API_TITLE,
     API_VERSION,
@@ -45,6 +58,23 @@ app.add_middleware(
 )
 
 
+api_key_header = APIKeyHeader(name=API_AUTH_KEY_HEADER_NAME, auto_error=False)
+
+
+def verify_api_key(api_key: str = Depends(api_key_header)):
+    """Simple placeholder API key check."""
+    expected_key = os.getenv(env.API_AUTH_INSECURE_SHARED_KEY)
+
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="API key not configured"
+        )
+
+    if not api_key or not secrets.compare_digest(api_key, expected_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+
+# public endpoints (no auth required)
 @app.get("/")
 def root():
     return {"message": API_TITLE, "status": "healthy"}
@@ -218,7 +248,8 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
         }
 
 
-@app.post("/v1/documents")
+# protected endpoints (require authorization)
+@app.post("/v1/documents", dependencies=[Depends(verify_api_key)])
 async def create_document(
     request: Request,
     response: Response,
@@ -283,7 +314,7 @@ async def create_document(
         return results
 
 
-@app.get("/v1/documents/{job_id}")
+@app.get("/v1/documents/{job_id}", dependencies=[Depends(verify_api_key)])
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID."""
     try:
@@ -321,14 +352,14 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
-@app.get("/v1/schemas")
+@app.get("/v1/schemas", dependencies=[Depends(verify_api_key)])
 async def list_schemas():
     """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
-@app.get("/v1/schemas/{document_type}")
+@app.get("/v1/schemas/{document_type}", dependencies=[Depends(verify_api_key)])
 async def get_schema(document_type: str):
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)
