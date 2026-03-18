@@ -7,13 +7,18 @@ The DocumentAI API currently supports a single shared API key for authentication
 ### Getting Your API Key
 
 **If you have AWS access:**
+
+The API key is stored in AWS SSM Parameter Store at `/{app_name}-{env}/api-auth-insecure-shared-key`. 
+
+You can retrieve it via the AWS Console or CLI:
+
 ```bash
 aws ssm get-parameter \
   --name "/{app_name}-{env}/api-auth-insecure-shared-key" \
   --with-decryption \
   --query "Parameter.Value" \
   --output text
- ```
+```
 
 **If you do not have AWS access:**
 
@@ -53,19 +58,6 @@ Protected routes are indicated by the lock icon (🔒). Public routes (e.g., `/h
 
 
 ### Error Responses
-**422 Unprocessable Entity** - Missing API-Key header
-
-```json
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": ["header", "API-Key"],
-      "msg": "Field required"
-    }
-  ]
-}
-```
 
 **401 Unauthorized** - Invalid API Key
 
@@ -89,17 +81,26 @@ The DocumentAI API uses the value from `API_AUTH_INSECURE_SHARED_KEY` env var to
 ### Storing the Key
 
 **Local Development**:
+
+A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started (_you can change the value in .env if desired_):
+
+```
+cp local.env.example .env
+```
+
+If running natively (outside Docker), export the variable:
+
 ```bash
-export API_AUTH_INSECURE_SHARED_KEY="your-generated-api-key"
+export API_AUTH_INSECURE_SHARED_KEY=your-generated-api-key
 ```
 
 **Hosted Environments**:
 
-Store the key securely at rest and inject the env var into the API server environment. If you are using template-infra, add this to your app config:
+Store the key securely at rest and inject the env var into the API server environment. If you are using template-infra, add this to your [app env-config](https://github.com/navapbc/template-infra/blob/main/docs/infra/environment-variables-and-secrets.md#secrets):
 
 ```hcl
-API_AUTH_TOKEN = {
-  manage_method     = "manual"
+API_AUTH_INSECURE_SHARED_KEY = {
+  manage_method     = "generated"
   secret_store_name = "/${var.app_name}-${var.environment}/api-auth-insecure-shared-key"
 }
 ```

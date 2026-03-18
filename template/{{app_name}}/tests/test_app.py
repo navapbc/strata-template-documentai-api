@@ -20,7 +20,7 @@ def mock_verify_api_key():
 
 @pytest.fixture(autouse=True)
 def disable_auth():
-    """Disable API key authentication for all tests."""
+    """Disable API key authentication for all tests in this file."""
     app.dependency_overrides[verify_api_key] = mock_verify_api_key
     yield
     app.dependency_overrides.clear()
