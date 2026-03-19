@@ -8,7 +8,7 @@ A document processing system built on AWS that uses Amazon Bedrock Data Automati
 
 ## Architecture
 
-The system follows an event-driven architecture with three main layers:
+The system follows an event-driven architecture with two main layers:
 
 - **API Layer** - Document upload and status endpoints  
 - **Processing** - Document classification and data extraction pipeline  
@@ -29,7 +29,7 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 
 - **AWS Bedrock Data Automation (BDA) Integration** - Automated document classification and data extraction
 - **Intelligent Document Detection** - Quality analysis, blur detection, and document validation
-- **Multi-format Support** - Process PDF, JPEG, PNG, TIFF, and BMP documents
+- **Multi-format Support** - Process PDF, JPEG, PNG, and TIFF documents
 - **Event-driven Processing** - S3-triggered pipeline for scalable document processing
 - **Testing** - 87% test coverage with unit and integration tests
 - **Local Development** - Docker Compose environment for testing without AWS deployment
@@ -90,19 +90,10 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 
 **Optional for local development:**
 
-- `APP_HOST` - API host (default: `localhost`)
-- `APP_PORT` - API port (default: `8000`)
+- `HOST` - API host (default: `localhost`)
+- `PORT` - API port (default: `{{app_local_port}}`)
 - `ENVIRONMENT` - Environment name (e.g., `dev`, `prod`, `local`)
-- `IMAGE_TAG` - Docker image tag for version tracking
 
-
-### Authentication
-API endpoints require an `API-Key` header. A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started:
-```bash
-cp local.env.example .env
-```
-
-See [API Authentication](../docs/{{app_name}}/api-authentication.md) for details.
 
 ### Application Constants
 
@@ -132,15 +123,6 @@ make start         # Start services in detached mode
 make run-logs      # Start and follow logs
 ```
 
-**Running commands**:
-```bash
-make test          # Run tests in container
-make lint          # Lint code in container
-make format        # Format code in container
-```
-
-The application will be available at http://localhost:8000.
-
 **Advantages**:
 - Consistent environment across team members
 - No local Python environment needed
@@ -155,14 +137,7 @@ Run the application directly on your machine without Docker.
 ```bash
 make init-local                    # Install dependencies with uv
 export RUN_CMD_APPROACH=local      # Enable native mode
-```
-
-**Running commands**:
-```bash
-make start-local   # Run API server natively
-make test          # Run tests natively
-make lint          # Lint code natively
-make format        # Format code natively
+make start-local                   # Run API server natively
 ```
 
 **Advantages**:
@@ -178,9 +153,16 @@ The Makefile automatically detects the `RUN_CMD_APPROACH` environment variable:
 - **Set to `local`**: Commands run natively on your machine
 
 ### API Endpoints
+
+The application will be available at http://localhost:{{app_local_port}}.
+
+API endpoints require an `API-Key` header. See [API Authentication](../docs/{{app_name}}/api-authentication.md) for details. 
+A default key is preconfigured in `local.env.example` and is copied to `.env` during `make init`/`init-local`.
+
+
 **Upload a document (async)** - returns immediately with `jobId` for polling:
 ```
-curl -X POST http://localhost:8000/v1/documents \
+curl -X POST http://localhost:{{app_local_port}}/v1/documents \
   -H "API-Key: your-key" \
   -F "file=@/path/to/document.pdf" \
   -F "category=income"
@@ -189,7 +171,7 @@ curl -X POST http://localhost:8000/v1/documents \
 **Upload a document (sync)** - waits for processing to complete:
 
 ```
-curl -X POST "http://localhost:8000/v1/documents?wait=true&timeout=120" \
+curl -X POST "http://localhost:{{app_local_port}}/v1/documents?wait=true&timeout=120" \
   -H "API-Key: your-key" \
   -F "file=@/path/to/document.pdf" \
   -F "category=income"
@@ -200,7 +182,7 @@ For more details on API endpoints, see [openapi.json](../{{app_name}}/docs/opena
 ### Development Commands
 ```bash
 make check         # Run all checks (format, lint, test)
-make test          # Run all tests with coverage
+make test          # Run test suite
 make lint          # Run ruff linter
 make format        # Format code with ruff
 ```
