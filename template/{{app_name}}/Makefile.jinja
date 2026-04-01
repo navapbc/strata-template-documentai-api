@@ -1,4 +1,5 @@
 .PHONY: \
+	architecture-diagram \
 	build \
 	check \
 	clean \
@@ -11,8 +12,10 @@
 	lint-ruff \
 	lint-uv \
 	login \
+	openapi-spec \
 	release-build \
 	run-logs \
+	setup-env \
 	start \
 	start-local \
 	stop \
@@ -41,6 +44,7 @@ __check_defined = \
 ##################################################
 
 APP_NAME := {{app_name}}
+APP_DOCS_DIR := $(CURDIR)/../docs/$(APP_NAME)
 
 # By default, all python/uv commands will run inside of the docker container
 # if you wish to run this natively, add RUN_CMD_APPROACH=local to your environment vars
@@ -65,6 +69,8 @@ endif
 ##################################################
 # Build & Run
 ##################################################
+setup-env: ## Set up local environment file
+	@test -f .env || cp local.env.example .env
 
 build: ## Build Docker containers
 	docker compose build
@@ -78,10 +84,10 @@ start-local: ## Run the application server natively
 run-logs: start ## Start containers and follow logs
 	docker compose logs --follow --no-color $(APP_NAME)
 
-init: ## Initialize project (container-based)
+init: setup-env ## Initialize project (container-based)
 	docker compose build
 
-init-local: ## Initialize project for native development
+init-local: setup-env ## Initialize project for native development
 	uv sync --all-extras --frozen
 
 clean-volumes: ## Remove project docker volumes
@@ -138,6 +144,17 @@ login: start ## Start shell in running container
 clean: ## Clean build artifacts
 	rm -rf .pytest_cache .coverage_report .coverage __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+openapi-spec: ## Export openapi spec to docs directory
+	$(PY_RUN_CMD) export-openapi > $(APP_DOCS_DIR)/openapi.json
+
+architecture-diagram:
+	docker run --rm \
+	-v $(APP_DOCS_DIR):/data \
+	ghcr.io/mermaid-js/mermaid-cli/mermaid-cli:latest \
+	-i diagrams/architecture.mmd \
+	-o media/architecture.png \
+	--iconPacks '@iconify-json/logos'
 
 help: ## Show help
 	@grep -Eh '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
