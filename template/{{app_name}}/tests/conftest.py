@@ -5,6 +5,36 @@ from unittest.mock import patch
 import pytest
 from moto import mock_aws
 
+from documentai_api.app import app, verify_api_key
+
+
+def _mock_verify_api_key():
+    return None
+
+
+@pytest.fixture(autouse=True)
+def disable_auth():
+    app.dependency_overrides[verify_api_key] = _mock_verify_api_key
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def api_client():
+    """Create test client."""
+    from fastapi.testclient import TestClient
+
+    from documentai_api.app import app
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def api_skeleton_key(monkeypatch):
+    key = "foobar"
+    monkeypatch.setenv("API_AUTH_INSECURE_SHARED_KEY", key)
+    return key
+
 
 @pytest.fixture
 def aws_credentials(monkeypatch):
@@ -72,7 +102,7 @@ def ddb_table(aws_credentials):
 
 
 @pytest.fixture
-def document_builds_ddb_table(aws_credentials):
+def document_build_ddb_table(aws_credentials):
     """Create a test document builds DynamoDB table."""
     import boto3
 

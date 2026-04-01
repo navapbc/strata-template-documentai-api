@@ -1,16 +1,29 @@
 import asyncio
 import json
 import os
+import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
 import magic
-from fastapi import FastAPI, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
+from fastapi.security import APIKeyHeader
 
 from documentai_api.config.constants import (
+    API_AUTH_KEY_HEADER_NAME,
     API_DESCRIPTION,
     API_TITLE,
     API_VERSION,
@@ -36,10 +49,11 @@ from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
 DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
-DOCUMENTAI_BUILD_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_BUILD_INPUT_LOCATION)
+DOCUMENTAI_PREPROCESSING_LOCATION = os.getenv(env.DOCUMENTAI_PREPROCESSING_LOCATION)
 
 CONFIG_EXCLUDED_ROUTES = {
-    "//config",
+    "/",
+    "/config",
     "/openapi.json",
     "/docs",
     "/redoc",
@@ -59,6 +73,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+api_key_header = APIKeyHeader(name=API_AUTH_KEY_HEADER_NAME, auto_error=False)
+
+
+def verify_api_key(api_key: str = Depends(api_key_header)):
+    """Simple placeholder API key check."""
+    expected_key = os.getenv(env.API_AUTH_INSECURE_SHARED_KEY)
+
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="API key not configured"
+        )
+
+    if not api_key or not secrets.compare_digest(api_key, expected_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
 
 def discover_endpoints(app):
     endpoints = {}
@@ -70,6 +99,7 @@ def discover_endpoints(app):
     return dict(sorted(endpoints.items()))
 
 
+# public endpoints (no auth required)
 @app.get("/")
 def root():
     return {"message": API_TITLE, "status": "healthy"}
@@ -83,7 +113,7 @@ async def health():
 @app.get("/config", name="config")
 def get_config(request: Request):
     endpoints = discover_endpoints(app)
-    endpoints["uploadSync"] = f"{endpoints['upload']}?wait=true"
+    endpoints["postUploadDocumentAsync"] = f"{endpoints['postUploadDocumentSyncronous']}?wait=true"
 
     return {
         "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
@@ -163,7 +193,9 @@ async def upload_document_for_processing(
         },
     )
 
-    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
+    if not s3_location:
+        raise ValueError("S3 location not configured")
+
     bucket_name, object_key = parse_s3_uri(f"{s3_location}/{unique_file_name}")
 
     try:
@@ -259,7 +291,10 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
         }
 
 
-@app.post("/v1/documents", name="upload")
+# protected endpoints (require authorization)
+@app.post(
+    "/v1/documents", name="postUploadDocumentSyncronous", dependencies=[Depends(verify_api_key)]
+)
 async def create_document(
     request: Request,
     response: Response,
@@ -314,7 +349,7 @@ async def create_document(
         return results
 
 
-@app.get("/v1/documents/{job_id}", name="getUploadstatus")
+@app.get("/v1/documents/{job_id}", name="getUploadstatus", dependencies=[Depends(verify_api_key)])
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID."""
     try:
@@ -352,7 +387,9 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
-@app.post("/v1/document-builds/pages", name="createDocumentBuild")
+@app.post(
+    "/v1/document-builds/pages", name="createDocumentBuild", dependencies=[Depends(verify_api_key)]
+)
 async def upload_document_build_page(
     request: Request,
     response: Response,
@@ -392,7 +429,7 @@ async def upload_document_build_page(
             file=file,
             unique_file_name=unique_file_name,
             content_type=actual_content_type,
-            s3_location=DOCUMENTAI_BUILD_INPUT_LOCATION,
+            s3_location=DOCUMENTAI_PREPROCESSING_LOCATION,
             user_provided_document_category=category,
             trace_id=trace_id,
         )
@@ -417,7 +454,9 @@ async def upload_document_build_page(
         raise HTTPException(status_code=500, detail="Failed to upload page") from e
 
 
-@app.post("/v1/document-builds/submit", name="submitDocumentBuild")
+@app.post(
+    "/v1/document-builds/submit", name="submitDocumentBuild", dependencies=[Depends(verify_api_key)]
+)
 async def submit_document_build(
     request: Request,
     response: Response,
@@ -491,7 +530,11 @@ async def submit_document_build(
         raise HTTPException(status_code=500, detail="Failed to submit document build") from e
 
 
-@app.get("/v1/document-builds/{build_id}", name="getDocumentBuildStatus")
+@app.get(
+    "/v1/document-builds/{build_id}",
+    name="getDocumentBuildStatus",
+    dependencies=[Depends(verify_api_key)],
+)
 async def get_document_build(build_id: str):
     """Get document build details including all uploaded pages."""
     from documentai_api.utils.ddb import get_document_build_pages
@@ -521,7 +564,11 @@ async def get_document_build(build_id: str):
         raise HTTPException(status_code=500, detail="Failed to retrieve build") from e
 
 
-@app.delete("/v1/document-builds/{build_id}/pages/{page_number}", name="deleteDocumentBuildPage")
+@app.delete(
+    "/v1/document-builds/{build_id}/pages/{page_number}",
+    name="deleteDocumentBuildPage",
+    dependencies=[Depends(verify_api_key)],
+)
 async def delete_document_build_page(build_id: str, page_number: int):
     """Delete a specific page from a document build."""
     from documentai_api.utils.ddb import delete_document_build_page
@@ -545,7 +592,11 @@ async def delete_document_build_page(build_id: str, page_number: int):
         raise HTTPException(status_code=500, detail="Failed to delete page") from e
 
 
-@app.delete("/v1/document-builds/{build_id}", name="deleteDocumentBuild")
+@app.delete(
+    "/v1/document-builds/{build_id}",
+    name="deleteDocumentBuild",
+    dependencies=[Depends(verify_api_key)],
+)
 async def delete_document_build(build_id: str):
     """Delete an entire document build and all its pages."""
     from documentai_api.utils.ddb import delete_document_build
@@ -566,14 +617,16 @@ async def delete_document_build(build_id: str):
         raise HTTPException(status_code=500, detail="Failed to delete build") from e
 
 
-@app.get("/v1/schemas", name="listSchemas")
+@app.get("/v1/schemas", name="getSchemaList", dependencies=[Depends(verify_api_key)])
 async def list_schemas():
     """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
-@app.get("/v1/schemas/{document_type}", name="getSchemaDetail")
+@app.get(
+    "/v1/schemas/{document_type}", name="getSchemaDetail", dependencies=[Depends(verify_api_key)]
+)
 async def get_schema(document_type: str):
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)

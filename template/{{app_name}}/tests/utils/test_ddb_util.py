@@ -675,9 +675,7 @@ def test_classify_functions(function, response_code, status, matched_document_cl
 )
 def test_is_document_build_submitted(mock_ddb_service, query_result, expected):
     """Test checking if document build is submitted in various scenarios."""
-    with patch.dict(
-        os.environ, {"DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME": "test-document-builds-table"}
-    ):
+    with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
         mock_ddb_service.query_by_key.return_value = query_result
 
         result = ddb_util.is_document_build_submitted("build-123")
@@ -687,9 +685,7 @@ def test_is_document_build_submitted(mock_ddb_service, query_result, expected):
 
 def test_mark_document_build_submitted(mock_ddb_service):
     """Test marking all pages in a document build as submitted."""
-    with patch.dict(
-        os.environ, {"DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME": "test-document-builds-table"}
-    ):
+    with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
         mock_ddb_service.query_by_key.return_value = [
             {"buildId": "build-123", "pageNumber": 1},
             {"buildId": "build-123", "pageNumber": 2},

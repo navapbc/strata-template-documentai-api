@@ -1,0 +1,23 @@
+architecture-beta
+    group api(logos:aws-vpc)[API Layer]
+    group processing(logos:aws-vpc)[Processing]
+
+    service alb(logos:aws-elb)[ALB] in api
+    service ecs(logos:aws-ecs)[DocumentAI API] in api
+    
+    service s3input(logos:aws-s3)[S3 Input] in processing
+    service document-processor(logos:aws-step-functions)[Document Processor] in processing
+    service ddb(logos:aws-dynamodb)[DynamoDB] in processing
+    service bedrock(server)[Bedrock Data Analytics] in processing
+    service s3output(logos:aws-s3)[S3 Output] in processing
+    service bda-output-processor(logos:aws-step-functions)[BDA Output Processor] in processing
+
+    alb:R --> L:ecs
+    ecs:R --> L:s3input
+    ecs:R <--> L:ddb
+    s3input:R --> L:document-processor
+    document-processor:B --> T:ddb
+    document-processor:R --> L:bedrock
+    bedrock:B --> T:s3output
+    s3output:L --> R:bda-output-processor
+    bda-output-processor:T --> B:ddb

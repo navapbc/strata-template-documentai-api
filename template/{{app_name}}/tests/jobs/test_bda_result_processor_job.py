@@ -1,10 +1,10 @@
-"""Tests for jobs/bda_result_processor/cli.py."""
+"""Tests for jobs/bda_result_processor/main.py."""
 
 from unittest.mock import patch
 
 import pytest
 
-from documentai_api.jobs.bda_result_processor.cli import extract_uploaded_filename, main
+from documentai_api.jobs.bda_result_processor.main import extract_uploaded_filename, main
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +31,7 @@ def test_extract_uploaded_filename_success(object_key, expected_filename):
 
 def test_main_success():
     """Test successful BDA output processing."""
-    with patch("documentai_api.jobs.bda_result_processor.cli.process_bda_output") as mock_get_data:
+    with patch("documentai_api.jobs.bda_result_processor.main.process_bda_output") as mock_get_data:
         mock_get_data.return_value = {"status": "success", "data": {"field1": "value1"}}
         result = main("test-bucket", "processed/input/test-file.pdf/job_metadata.json")
 
@@ -43,7 +43,7 @@ def test_main_success():
 
 def test_main_with_truncated_filename():
     """Test processing BDA output with truncated filename."""
-    with patch("documentai_api.jobs.bda_result_processor.cli.process_bda_output") as mock_get_data:
+    with patch("documentai_api.jobs.bda_result_processor.main.process_bda_output") as mock_get_data:
         mock_get_data.return_value = {"status": "success"}
         main("test-bucket", "processed/input/long_truncated.pdf/job_metadata.json")
 
@@ -54,7 +54,7 @@ def test_main_with_truncated_filename():
 
 def test_main_skips_non_metadata_files():
     """Test that non-metadata files are skipped."""
-    with patch("documentai_api.jobs.bda_result_processor.cli.process_bda_output") as mock_process:
+    with patch("documentai_api.jobs.bda_result_processor.main.process_bda_output") as mock_process:
         result = main("test-bucket", "processed/input/test-file.pdf/.s3_access_check")
 
     assert result == {}

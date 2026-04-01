@@ -16,7 +16,7 @@ client = TestClient(app)
 @pytest.fixture
 def mock_document_build_upload(monkeypatch):
     """Mock common document build upload dependencies."""
-    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
 
     with (
         patch("documentai_api.app.magic.from_buffer") as mock_magic,
@@ -38,7 +38,7 @@ def mock_document_build_upload(monkeypatch):
 @pytest.fixture
 def mock_document_build_submit(monkeypatch):
     """Mock common document build submit dependencies."""
-    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
 
     with (
         patch("documentai_api.utils.ddb.is_document_build_submitted") as mock_is_submitted,
@@ -81,7 +81,7 @@ def create_page_metadata(
     ],
 )
 def test_upload_document_build_page_builds(
-    document_builds_ddb_table, mock_document_build_upload, build_id, page_number, expected_build
+    document_build_ddb_table, mock_document_build_upload, build_id, page_number, expected_build
 ):
     """Test uploading pages to new and existing builds."""
     files = {"file": ("page.pdf", b"fake pdf", "application/pdf")}
@@ -109,7 +109,7 @@ def test_upload_document_build_page_builds(
     ],
 )
 def test_upload_document_build_page_invalid_file_type(
-    document_builds_ddb_table, mock_document_build_upload, file_type, file_name
+    document_build_ddb_table, mock_document_build_upload, file_type, file_name
 ):
     """Test document build upload with invalid file types."""
     mock_document_build_upload["magic"].return_value = file_type
@@ -132,7 +132,7 @@ def test_upload_document_build_page_invalid_file_type(
     ],
 )
 def test_upload_document_build_page_overwrite_scenarios(
-    document_builds_ddb_table, mock_document_build_upload, page_exists, overwrite, expected_status
+    document_build_ddb_table, mock_document_build_upload, page_exists, overwrite, expected_status
 ):
     """Test document build upload duplicate/overwrite scenarios."""
     mock_document_build_upload["page_exists"].return_value = page_exists
@@ -147,7 +147,7 @@ def test_upload_document_build_page_overwrite_scenarios(
 
 
 def test_upload_document_build_page_with_category(
-    document_builds_ddb_table, mock_document_build_upload
+    document_build_ddb_table, mock_document_build_upload
 ):
     """Test document build upload with document category."""
     files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
@@ -158,7 +158,7 @@ def test_upload_document_build_page_with_category(
     mock_document_build_upload["upsert"].assert_called_once()
 
 
-def test_submit_document_build_not_found(document_builds_ddb_table, mock_document_build_submit):
+def test_submit_document_build_not_found(document_build_ddb_table, mock_document_build_submit):
     """Test submitting non-existent build."""
     mock_document_build_submit["get_pages"].return_value = []
 
@@ -169,7 +169,7 @@ def test_submit_document_build_not_found(document_builds_ddb_table, mock_documen
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_submit_document_build_synchronous(document_builds_ddb_table, mock_document_build_submit):
+def test_submit_document_build_synchronous(document_build_ddb_table, mock_document_build_submit):
     """Test synchronous document build submission (wait=true)."""
     with patch("documentai_api.app.get_v1_document_processing_results") as mock_get_results:
         mock_document_build_submit["get_pages"].return_value = [
@@ -184,7 +184,7 @@ def test_submit_document_build_synchronous(document_builds_ddb_table, mock_docum
     assert response.json()["status"] == "success"
 
 
-def test_submit_document_build_with_category(document_builds_ddb_table, mock_document_build_submit):
+def test_submit_document_build_with_category(document_build_ddb_table, mock_document_build_submit):
     """Test submit uses category from first page."""
     from documentai_api.config.constants import DocumentCategory
 
@@ -212,7 +212,7 @@ def test_submit_document_build_with_category(document_builds_ddb_table, mock_doc
     ],
 )
 def test_submit_document_build_errors(
-    document_builds_ddb_table, mock_document_build_submit, mock_method, error
+    document_build_ddb_table, mock_document_build_submit, mock_method, error
 ):
     """Test error handling during document build submit."""
     mock_document_build_submit["get_pages"].return_value = [
@@ -228,7 +228,7 @@ def test_submit_document_build_errors(
 
 
 def test_submit_document_build_already_submitted(
-    document_builds_ddb_table, mock_document_build_submit
+    document_build_ddb_table, mock_document_build_submit
 ):
     """Test submitting a build that was already submitted."""
     mock_document_build_submit["is_submitted"].return_value = True
@@ -244,7 +244,7 @@ def test_submit_document_build_already_submitted(
     mock_document_build_submit["merge"].assert_not_called()
 
 
-def test_submit_document_build_success(document_builds_ddb_table, mock_document_build_submit):
+def test_submit_document_build_success(document_build_ddb_table, mock_document_build_submit):
     """Test successful document build submission."""
     mock_document_build_submit["get_pages"].return_value = [
         create_page_metadata(1, category="income"),
@@ -266,7 +266,7 @@ def test_submit_document_build_success(document_builds_ddb_table, mock_document_
 
 
 def test_upload_document_build_page_error_handling(
-    document_builds_ddb_table, mock_document_build_upload
+    document_build_ddb_table, mock_document_build_upload
 ):
     """Test error handling during document build page upload."""
     mock_document_build_upload["upload"].side_effect = Exception("S3 upload failed")
@@ -279,7 +279,7 @@ def test_upload_document_build_page_error_handling(
     assert "Failed to upload page" in response.json()["detail"]
 
 
-def test_get_document_build_success(document_builds_ddb_table, mock_document_build_submit):
+def test_get_document_build_success(document_build_ddb_table, mock_document_build_submit):
     """Test getting build details."""
     mock_document_build_submit["get_pages"].return_value = [
         create_page_metadata(1, category="income"),
@@ -309,10 +309,10 @@ def test_get_document_build_success(document_builds_ddb_table, mock_document_bui
     ],
 )
 def test_delete_document_build_page(
-    document_builds_ddb_table, monkeypatch, mock_side_effect, expected_status
+    document_build_ddb_table, monkeypatch, mock_side_effect, expected_status
 ):
     """Test deleting a page."""
-    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
 
     with patch("documentai_api.utils.ddb.delete_document_build_page") as mock_delete:
         if isinstance(mock_side_effect, Exception):
@@ -336,10 +336,10 @@ def test_delete_document_build_page(
     ],
 )
 def test_delete_document_build(
-    document_builds_ddb_table, monkeypatch, mock_side_effect, expected_status
+    document_build_ddb_table, monkeypatch, mock_side_effect, expected_status
 ):
     """Test deleting entire document build."""
-    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
 
     with patch("documentai_api.utils.ddb.delete_document_build") as mock_delete:
         if isinstance(mock_side_effect, Exception):

@@ -41,9 +41,9 @@ def get_document_metadata_table() -> str:
 
 def get_document_build_table() -> str:
     """Get multipage upload sessions table name from environment."""
-    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME)
+    table_name = os.getenv(env.DOCUMENTAI_BUILD_TABLE_NAME)
     if not table_name:
-        raise ValueError(f"{env.DOCUMENTAI_DOCUMENT_BUILDS_TABLE_NAME} not set")
+        raise ValueError(f"{env.DOCUMENTAI_BUILD_TABLE_NAME} not set")
     return table_name
 
 
