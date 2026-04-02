@@ -416,6 +416,7 @@ def test_insert_ddb(mock_ddb_service):
 
         ddb_util.insert_ddb(
             object_key="test-file",
+            original_file_name="original-test.pdf",
             user_provided_document_category="income",
             process_status=ProcessStatus.NOT_STARTED.value,
             internal_api_response=internal_response,
@@ -507,24 +508,34 @@ def test_insert_initial_ddb_record(
             overall_blur_score=0.0,
         )
 
-        mock_document_detector = mock_document_detector_class.return_value
-        mock_document_detector.get_document_profile.return_value = mock_document_profile
+        mock_document_detector_instance = MagicMock()
+        mock_document_detector_class.return_value = mock_document_detector_instance
+        mock_document_detector_instance.get_document_profile.return_value = mock_document_profile
+        mock_document_detector_instance.is_multidoc_in_single_page.return_value = False
+
         mock_s3_service.get_content_type.return_value = content_type
         mock_s3_service.get_file_size_bytes.return_value = 1024
         mock_s3_service.get_file_bytes.return_value = b"bytes"
+        mock_s3_service.get_metadata.return_value = {"original-file-name": "original-test.pdf"}
         mock_get_internal_api_response.return_value = MagicMock()
 
         ddb_util.insert_initial_ddb_record(
             source_bucket_name="test-bucket",
             source_object_key="input/test-file",
+            original_file_name="original-test.pdf",
             ddb_key="test-file",
             user_provided_document_category=user_provided_document_category,
             job_id="test-job-id",
             trace_id="test-trace-id",
         )
 
+        mock_document_detector_instance.get_document_profile.assert_called_once_with(
+            b"bytes", "input/test-file"
+        )
+
         mock_insert_ddb.assert_called_once_with(
             object_key="test-file",
+            original_file_name="original-test.pdf",
             user_provided_document_category=user_provided_document_category or "unknown",
             process_status=expected_status,
             internal_api_response=(

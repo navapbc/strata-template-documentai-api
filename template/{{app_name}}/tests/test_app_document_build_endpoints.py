@@ -263,7 +263,7 @@ def test_submit_document_build_success(document_build_ddb_table, mock_document_b
     result = response.json()
     assert "jobId" in result
     assert result["buildId"] == "test-build-id"
-    assert result["status"] == "not_started"
+    assert result["jobStatus"] == "not_started"
     assert result["pageCount"] == 2
 
     # verify build was marked as submitted

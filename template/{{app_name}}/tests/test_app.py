@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -77,37 +77,45 @@ async def test_upload_document_for_processing_success():
     """Test successful document upload."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
+        patch("documentai_api.app.DOCUMENTAI_INPUT_LOCATION", "s3://test-bucket/input"),
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
+        patch("documentai_api.utils.document_detector.DocumentDetector") as mock_detector_class,
     ):
         from documentai_api.config.constants import DocumentCategory
 
+        mock_detector = mock_detector_class.return_value
+        mock_detector.get_page_count.return_value = 1
+
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
+            s3_location="s3://test-bucket/input",
             user_provided_document_category=DocumentCategory.INCOME,
-            job_id="job-123",
-            trace_id="trace-456",
-            s3_location="s3://test-bucket",
+            job_id="test-job-id",
+            trace_id="test-trace-id",
         )
 
     mock_upload.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_upload_document_for_processing_no_input_location():
-    """Test upload fails when s3_location not set."""
+async def test_upload_document_for_processing_no_env():
+    """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
     mock_file = MagicMock()
-    mock_file.file = MagicMock()
 
-    with pytest.raises(ValueError, match="S3 location not configured"):
+    with (
+        pytest.raises(ValueError, match="S3 location not configured"),
+    ):
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
-            s3_location=None,
         )
 
 
@@ -140,12 +148,12 @@ async def test_get_v1_document_processing_results_timeout():
             process_status="started",
             v1_response_json=None,
         )
-        mock_classify_as_failed.return_value = {"status": "failed", "message": "timeout"}
+        mock_classify_as_failed.return_value = {"jobStatus": "failed", "message": "timeout"}
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
     mock_classify_as_failed.assert_called_once()
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
 
 
 @pytest.mark.asyncio
@@ -161,7 +169,7 @@ async def test_get_v1_document_processing_results_timeout_no_object_key():
 
         result = await get_v1_document_processing_results("job-123", timeout=1)
 
-    assert result["status"] == "failed"
+    assert result["jobStatus"] == "failed"
     assert "timeout" in result["message"]
 
 
@@ -205,7 +213,7 @@ def test_get_document_results_in_progress(api_client):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "started"
+    assert data["jobStatus"] == "started"
     assert "in progress" in data["message"].lower()
 
 
@@ -245,6 +253,7 @@ async def test_upload_document_for_processing_s3_failure():
     """Test S3 upload failure raises HTTPException."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
         patch("documentai_api.app.s3_service.upload_file") as mock_upload,
@@ -254,9 +263,10 @@ async def test_upload_document_for_processing_s3_failure():
         with pytest.raises(HTTPException) as exc_info:
             await upload_document_for_processing(
                 file=mock_file,
+                original_file_name="test.pdf",
                 unique_file_name="test.pdf",
                 content_type="application/pdf",
-                s3_location="s3://test-bucket",
+                s3_location="s3://test-bucket/input",
             )
 
     assert exc_info.value.status_code == 500
@@ -268,16 +278,18 @@ async def test_upload_document_for_processing_invalid_category_type():
     """Test invalid document category type raises ValueError."""
     mock_file = MagicMock()
     mock_file.file = MagicMock()
+    mock_file.read = AsyncMock(return_value=b"pdf content")
 
     with (
         pytest.raises(HTTPException),
     ):
         await upload_document_for_processing(
             file=mock_file,
+            original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
+            s3_location="s3://test-bucket/input",
             user_provided_document_category="invalid_string",  # should be enum
-            s3_location="s3://test-bucket",
         )
 
 
@@ -327,7 +339,7 @@ def test_create_document_asynchronous(api_client):
     assert response.status_code == 200
     data = response.json()
     assert "jobId" in data
-    assert data["status"] == "not_started"
+    assert data["jobStatus"] == "not_started"
     assert "uploaded successfully" in data["message"].lower()
 
 
@@ -339,13 +351,13 @@ def test_create_document_synchronous(api_client):
         patch("documentai_api.app.get_v1_document_processing_results") as mock_get_results,
     ):
         mock_magic.return_value = "application/pdf"
-        mock_get_results.return_value = {"status": "success", "data": {}}
+        mock_get_results.return_value = {"jobStatus": "success", "data": {}}
 
         files = {"file": ("test.pdf", b"fake pdf", "application/pdf")}
         response = api_client.post("/v1/documents?wait=true", files=files)
 
     assert response.status_code == 200
-    assert response.json()["status"] == "success"
+    assert response.json()["jobStatus"] == "success"
 
 
 def test_get_document_results_error_handling(api_client):
