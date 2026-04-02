@@ -33,14 +33,17 @@ from documentai_api.config.constants import (
     DocumentCategory,
     ProcessStatus,
 )
+from documentai_api.schemas.build_metadata import BuildMetadata
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils.ddb import (
     ClassificationData,
     classify_as_failed,
+    create_document_build,
     document_build_page_exists,
     get_ddb_by_job_id,
+    get_document_build_pages,
     upsert_document_build_page,
 )
 from documentai_api.utils.logger import get_logger
@@ -108,21 +111,6 @@ def root():
 @app.get("/health", name="health")
 async def health():
     return {"message": "healthy"}
-
-
-@app.get("/config", name="config")
-def get_config(request: Request):
-    endpoints = discover_endpoints(app)
-    endpoints["postUploadDocumentAsync"] = f"{endpoints['postUploadDocumentSyncronous']}?wait=true"
-
-    return {
-        "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
-        "version": API_VERSION,
-        "imageTag": os.getenv("IMAGE_TAG"),
-        "environment": os.getenv("ENVIRONMENT", "local"),
-        "endpoints": endpoints,
-        "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
-    }
 
 
 @dataclass
@@ -292,9 +280,22 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
 
 
 # protected endpoints (require authorization)
-@app.post(
-    "/v1/documents", name="postUploadDocumentSyncronous", dependencies=[Depends(verify_api_key)]
-)
+@app.get("/config", name="config", dependencies=[Depends(verify_api_key)])
+def get_config(request: Request):
+    endpoints = discover_endpoints(app)
+    endpoints["postDocumentSynchronous"] = f"{endpoints['postDocument']}?wait=true"
+
+    return {
+        "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
+        "version": API_VERSION,
+        "imageTag": os.getenv("IMAGE_TAG"),
+        "environment": os.getenv("ENVIRONMENT", "local"),
+        "endpoints": endpoints,
+        "supportedFileTypes": SUPPORTED_CONTENT_TYPES,
+    }
+
+
+@app.post("/v1/documents", name="postDocument", dependencies=[Depends(verify_api_key)])
 async def create_document(
     request: Request,
     response: Response,
@@ -349,7 +350,7 @@ async def create_document(
         return results
 
 
-@app.get("/v1/documents/{job_id}", name="getUploadstatus", dependencies=[Depends(verify_api_key)])
+@app.get("/v1/documents/{job_id}", name="getJobStatus", dependencies=[Depends(verify_api_key)])
 async def get_document_results(job_id: str, include_extracted_data: bool = False):
     """Get processing results by job ID."""
     try:
@@ -387,15 +388,39 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         raise HTTPException(status_code=500, detail="Failed to retrieve results") from e
 
 
+@app.post("/v1/builds", name="postDocumentBuild", dependencies=[Depends(verify_api_key)])
+async def create_build(
+    response: Response,
+    category: Annotated[
+        DocumentCategory | None, Form(description="Type of document being uploaded")
+    ] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Create a new document build for multi-page upload."""
+    if not trace_id:
+        trace_id = str(uuid.uuid4())
+
+    build_id = str(uuid.uuid4())
+    create_document_build(build_id, category)
+
+    response.headers["X-Trace-ID"] = trace_id
+    return {
+        "buildId": build_id,
+        "message": "Build created successfully",
+    }
+
+
 @app.post(
-    "/v1/document-builds/pages", name="createDocumentBuild", dependencies=[Depends(verify_api_key)]
+    "/v1/builds/{build_id}/pages",
+    name="postDocumentBuildPage",
+    dependencies=[Depends(verify_api_key)],
 )
 async def upload_document_build_page(
     request: Request,
     response: Response,
     file: UploadFile,
-    build_id: Annotated[str | None, Form(description="Build ID for multi-page upload")] = None,
-    page_number: Annotated[int, Form(description="Page number (1-indexed)")] = 1,
+    build_id: str,
+    page_number: Annotated[int | None, Form(description="Page number (1-indexed)")] = None,
     overwrite: Annotated[bool, Form(description="Allow overwriting existing page")] = False,
     category: Annotated[
         DocumentCategory | None, Form(description="Type of document being uploaded")
@@ -407,8 +432,9 @@ async def upload_document_build_page(
         if not trace_id:
             trace_id = str(uuid.uuid4())
 
-        if not build_id:
-            build_id = str(uuid.uuid4())
+        if page_number is None:
+            pages = get_document_build_pages(build_id)
+            page_number = max((p.page_number for p in pages), default=0) + 1
 
         if document_build_page_exists(build_id, page_number) and not overwrite:
             raise HTTPException(
@@ -434,10 +460,14 @@ async def upload_document_build_page(
             trace_id=trace_id,
         )
 
+        s3_location = DOCUMENTAI_PREPROCESSING_LOCATION
+        _, prefix = parse_s3_uri(s3_location)
+        s3_path = f"{prefix}/{unique_file_name}" if prefix else unique_file_name
+
         await upsert_document_build_page(
             build_id=build_id,
             page_number=page_number,
-            unique_file_name=unique_file_name,
+            s3_path=s3_path,
             category=category,
         )
 
@@ -455,12 +485,14 @@ async def upload_document_build_page(
 
 
 @app.post(
-    "/v1/document-builds/submit", name="submitDocumentBuild", dependencies=[Depends(verify_api_key)]
+    "/v1/builds/{build_id}/submit",
+    name="postDocumentBuildSubmit",
+    dependencies=[Depends(verify_api_key)],
 )
 async def submit_document_build(
     request: Request,
     response: Response,
-    build_id: Annotated[str, Form(description="Build ID to submit")],
+    build_id: str,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,
     timeout: int = 120,
@@ -531,28 +563,28 @@ async def submit_document_build(
 
 
 @app.get(
-    "/v1/document-builds/{build_id}",
+    "/v1/builds/{build_id}",
     name="getDocumentBuildStatus",
     dependencies=[Depends(verify_api_key)],
 )
 async def get_document_build(build_id: str):
     """Get document build details including all uploaded pages."""
-    from documentai_api.utils.ddb import get_document_build_pages
+    from documentai_api.utils.ddb import document_build_exists
 
     try:
-        pages = get_document_build_pages(build_id)
-
-        if not pages:
+        if not document_build_exists(build_id):
             raise HTTPException(status_code=404, detail=f"Build {build_id} not found")
 
+        pages = get_document_build_pages(build_id)
+
         return {
-            "buildId": build_id,
+            BuildMetadata.BUILD_ID: build_id,
             "pageCount": len(pages),
             "pages": [
                 {
-                    "pageNumber": page.page_number,
-                    "uploadedAt": page.uploaded_at,
-                    "category": page.category,
+                    BuildMetadata.PAGE_NUMBER: page.page_number,
+                    BuildMetadata.CREATED_AT: page.created_at,
+                    BuildMetadata.CATEGORY: page.category,
                 }
                 for page in pages
             ],
@@ -565,7 +597,7 @@ async def get_document_build(build_id: str):
 
 
 @app.delete(
-    "/v1/document-builds/{build_id}/pages/{page_number}",
+    "/v1/builds/{build_id}/pages/{page_number}",
     name="deleteDocumentBuildPage",
     dependencies=[Depends(verify_api_key)],
 )
@@ -593,7 +625,7 @@ async def delete_document_build_page(build_id: str, page_number: int):
 
 
 @app.delete(
-    "/v1/document-builds/{build_id}",
+    "/v1/builds/{build_id}",
     name="deleteDocumentBuild",
     dependencies=[Depends(verify_api_key)],
 )

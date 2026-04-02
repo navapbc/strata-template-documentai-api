@@ -23,6 +23,9 @@ def mock_document_build_upload(monkeypatch):
         patch("documentai_api.app.document_build_page_exists") as mock_page_exists,
         patch("documentai_api.app.upload_document_for_processing") as mock_upload,
         patch("documentai_api.app.upsert_document_build_page") as mock_upsert,
+        patch(
+            "documentai_api.app.DOCUMENTAI_PREPROCESSING_LOCATION", "s3://test-bucket/preprocessing"
+        ),
     ):
         mock_magic.return_value = "application/pdf"
         mock_page_exists.return_value = False
@@ -61,8 +64,19 @@ def mock_document_build_submit(monkeypatch):
         }
 
 
+def test_create_build(document_build_ddb_table):
+    with patch("documentai_api.app.create_document_build") as mock_create:
+        mock_create.return_value = "fake-build-id"
+        response = client.post("/v1/builds")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "buildId" in result
+    assert result["message"] == "Build created successfully"
+
+
 def create_page_metadata(
-    page_number: int, build_id: str = "build-123", category: str | None = None
+    page_number: int, build_id: str = "test-build-id", category: str | None = None
 ) -> PageMetadata:
     """Helper to create PageMetadata for tests."""
     return PageMetadata(
@@ -77,7 +91,7 @@ def create_page_metadata(
     ("build_id", "page_number", "expected_build"),
     [
         (None, 1, None),  # new build - buildId will be generated
-        ("build-123", 2, "build-123"),  # existing build
+        ("test-build-id", 2, "test-build-id"),  # existing build
     ],
 )
 def test_upload_document_build_page_builds(
@@ -86,10 +100,7 @@ def test_upload_document_build_page_builds(
     """Test uploading pages to new and existing builds."""
     files = {"file": ("page.pdf", b"fake pdf", "application/pdf")}
     data = {"page_number": page_number}
-    if build_id:
-        data["build_id"] = build_id
-
-    response = client.post("/v1/document-builds/pages", files=files, data=data)
+    response = client.post("/v1/builds/test-build-id/pages", files=files, data=data)
 
     assert response.status_code == 200
     result = response.json()
@@ -116,7 +127,7 @@ def test_upload_document_build_page_invalid_file_type(
 
     files = {"file": (file_name, b"fake content", file_type)}
     data = {"page_number": 1}
-    response = client.post("/v1/document-builds/pages", files=files, data=data)
+    response = client.post("/v1/builds/test-build-id/pages", files=files, data=data)
 
     assert response.status_code == 400
     assert "Invalid file type" in response.json()["detail"]
@@ -138,8 +149,8 @@ def test_upload_document_build_page_overwrite_scenarios(
     mock_document_build_upload["page_exists"].return_value = page_exists
 
     files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
-    data = {"build_id": "build-123", "page_number": 1, "overwrite": overwrite}
-    response = client.post("/v1/document-builds/pages", files=files, data=data)
+    data = {"page_number": 1, "overwrite": overwrite}
+    response = client.post("/v1/builds/test-build-id/pages", files=files, data=data)
 
     assert response.status_code == expected_status
     if expected_status == 409:
@@ -152,7 +163,7 @@ def test_upload_document_build_page_with_category(
     """Test document build upload with document category."""
     files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
     data = {"page_number": 1, "category": "income"}
-    response = client.post("/v1/document-builds/pages", files=files, data=data)
+    response = client.post("/v1/builds/test-build-id/pages", files=files, data=data)
 
     assert response.status_code == 200
     mock_document_build_upload["upsert"].assert_called_once()
@@ -162,8 +173,7 @@ def test_submit_document_build_not_found(document_build_ddb_table, mock_document
     """Test submitting non-existent build."""
     mock_document_build_submit["get_pages"].return_value = []
 
-    data = {"build_id": "nonexistent-build"}
-    response = client.post("/v1/document-builds/submit", data=data)
+    response = client.post("/v1/builds/nonexistent-build/submit")
 
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
@@ -177,8 +187,7 @@ def test_submit_document_build_synchronous(document_build_ddb_table, mock_docume
         ]
         mock_get_results.return_value = {"status": "success", "data": {}}
 
-        data = {"build_id": "build-123"}
-        response = client.post("/v1/document-builds/submit?wait=true", data=data)
+        response = client.post("/v1/builds/test-build-id/submit?wait=true")
 
     assert response.status_code == 200
     assert response.json()["status"] == "success"
@@ -193,8 +202,7 @@ def test_submit_document_build_with_category(document_build_ddb_table, mock_docu
         create_page_metadata(2),
     ]
 
-    data = {"build_id": "build-123"}
-    response = client.post("/v1/document-builds/submit", data=data)
+    response = client.post("/v1/builds/test-build-id/submit")
 
     assert response.status_code == 200
     mock_document_build_submit["upload"].assert_called_once()
@@ -221,8 +229,7 @@ def test_submit_document_build_errors(
     ]
     mock_document_build_submit[mock_method].side_effect = error
 
-    data = {"build_id": "build-123"}
-    response = client.post("/v1/document-builds/submit", data=data)
+    response = client.post("/v1/builds/test-build-id/submit")
 
     assert response.status_code == 500
 
@@ -233,8 +240,7 @@ def test_submit_document_build_already_submitted(
     """Test submitting a build that was already submitted."""
     mock_document_build_submit["is_submitted"].return_value = True
 
-    data = {"build_id": "build-123"}
-    response = client.post("/v1/document-builds/submit", data=data)
+    response = client.post("/v1/builds/test-build-id/submit")
 
     assert response.status_code == 400
     assert "already been submitted" in response.json()["detail"]
@@ -251,18 +257,17 @@ def test_submit_document_build_success(document_build_ddb_table, mock_document_b
         create_page_metadata(2),
     ]
 
-    data = {"build_id": "build-123"}
-    response = client.post("/v1/document-builds/submit", data=data)
+    response = client.post("/v1/builds/test-build-id/submit")
 
     assert response.status_code == 200
     result = response.json()
     assert "jobId" in result
-    assert result["buildId"] == "build-123"
+    assert result["buildId"] == "test-build-id"
     assert result["status"] == "not_started"
     assert result["pageCount"] == 2
 
     # verify build was marked as submitted
-    mock_document_build_submit["mark_submitted"].assert_called_once_with("build-123")
+    mock_document_build_submit["mark_submitted"].assert_called_once_with("test-build-id")
 
 
 def test_upload_document_build_page_error_handling(
@@ -273,7 +278,7 @@ def test_upload_document_build_page_error_handling(
 
     files = {"file": ("page1.pdf", b"fake pdf", "application/pdf")}
     data = {"page_number": 1}
-    response = client.post("/v1/document-builds/pages", files=files, data=data)
+    response = client.post("/v1/builds/test-build-id/pages", files=files, data=data)
 
     assert response.status_code == 500
     assert "Failed to upload page" in response.json()["detail"]
@@ -281,20 +286,24 @@ def test_upload_document_build_page_error_handling(
 
 def test_get_document_build_success(document_build_ddb_table, mock_document_build_submit):
     """Test getting build details."""
-    mock_document_build_submit["get_pages"].return_value = [
+    pages = [
         create_page_metadata(1, category="income"),
         create_page_metadata(2),
     ]
 
-    response = client.get("/v1/document-builds/build-123")
+    with (
+        patch("documentai_api.utils.ddb.document_build_exists", return_value=True),
+        patch("documentai_api.app.get_document_build_pages", return_value=pages),
+    ):
+        response = client.get("/v1/builds/test-build-id")
 
-    assert response.status_code == 200
-    result = response.json()
-    assert result["buildId"] == "build-123"
-    assert result["pageCount"] == 2
-    assert len(result["pages"]) == 2
-    assert result["pages"][0]["pageNumber"] == 1
-    assert result["pages"][0]["category"] == "income"
+        assert response.status_code == 200
+        result = response.json()
+        assert result["buildId"] == "test-build-id"
+        assert result["pageCount"] == 2
+        assert len(result["pages"]) == 2
+        assert result["pages"][0]["pageNumber"] == 1
+        assert result["pages"][0]["category"] == "income"
 
 
 @pytest.mark.parametrize(
@@ -320,7 +329,7 @@ def test_delete_document_build_page(
         else:
             mock_delete.return_value = mock_side_effect
 
-        response = client.delete("/v1/document-builds/build-123/pages/1")
+        response = client.delete("/v1/builds/test-build-id/pages/1")
 
         assert response.status_code == expected_status
         if expected_status == 400:
@@ -347,7 +356,7 @@ def test_delete_document_build(
         else:
             mock_delete.return_value = mock_side_effect
 
-        response = client.delete("/v1/document-builds/build-123")
+        response = client.delete("/v1/builds/test-build-id")
 
         assert response.status_code == expected_status
         if expected_status == 400:

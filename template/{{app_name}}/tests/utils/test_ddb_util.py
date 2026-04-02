@@ -655,16 +655,16 @@ def test_classify_functions(function, response_code, status, matched_document_cl
     ("query_result", "expected"),
     [
         (
-            [{"buildId": "build-123", "pageNumber": 1, "submittedAt": "2026-02-26T12:00:00Z"}],
+            [{"buildId": "test-build-id", "pageNumber": 1, "submittedAt": "2026-02-26T12:00:00Z"}],
             True,
         ),
-        ([{"buildId": "build-123", "pageNumber": 1}], False),
+        ([{"buildId": "test-build-id", "pageNumber": 1}], False),
         ([], False),
         (
             [
-                {"buildId": "build-123", "pageNumber": 1},
+                {"buildId": "test-build-id", "pageNumber": 1},
                 {
-                    "buildId": "build-123",
+                    "buildId": "test-build-id",
                     "pageNumber": 2,
                     "submittedAt": "2026-02-26T12:00:00Z",
                 },
@@ -678,7 +678,7 @@ def test_is_document_build_submitted(mock_ddb_service, query_result, expected):
     with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
         mock_ddb_service.query_by_key.return_value = query_result
 
-        result = ddb_util.is_document_build_submitted("build-123")
+        result = ddb_util.is_document_build_submitted("test-build-id")
 
         assert result is expected
 
@@ -687,22 +687,22 @@ def test_mark_document_build_submitted(mock_ddb_service):
     """Test marking all pages in a document build as submitted."""
     with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
         mock_ddb_service.query_by_key.return_value = [
-            {"buildId": "build-123", "pageNumber": 1},
-            {"buildId": "build-123", "pageNumber": 2},
+            {"buildId": "test-build-id", "pageNumber": 1},
+            {"buildId": "test-build-id", "pageNumber": 2},
         ]
 
-        ddb_util.mark_document_build_submitted("build-123")
+        ddb_util.mark_document_build_submitted("test-build-id")
 
         assert mock_ddb_service.update_item.call_count == 2
 
         calls = mock_ddb_service.update_item.call_args_list
 
         assert calls[0].kwargs["table_name"] == "test-document-builds-table"
-        assert calls[0].kwargs["key"] == {"buildId": "build-123", "pageNumber": 1}
+        assert calls[0].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 1}
         assert calls[0].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
-        assert ":submittedAt" in calls[0].kwargs["expression_attribute_values"]
+        assert ":submittedAt" in calls[0].kwargs["expression_values"]
 
         assert calls[1].kwargs["table_name"] == "test-document-builds-table"
-        assert calls[1].kwargs["key"] == {"buildId": "build-123", "pageNumber": 2}
+        assert calls[1].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 2}
         assert calls[1].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
-        assert ":submittedAt" in calls[1].kwargs["expression_attribute_values"]
+        assert ":submittedAt" in calls[1].kwargs["expression_values"]

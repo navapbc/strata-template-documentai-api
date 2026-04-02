@@ -55,4 +55,4 @@ class PageMetadata:
     s3_key: str
     s3_bucket_name: str
     category: str | None = None
-    uploaded_at: str | None = None
+    created_at: str | None = None
