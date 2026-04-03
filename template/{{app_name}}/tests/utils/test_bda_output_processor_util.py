@@ -130,3 +130,36 @@ def test_process_bda_output_no_matching_blueprint(text, expected_status, expecte
 
         mock_classify_method.assert_called_once()
         assert result == expected_status
+
+
+@pytest.mark.parametrize(
+    ("segment_count", "expected_classify"),
+    [
+        (1, "classify_as_success"),
+        (2, "classify_as_multi_segment"),
+    ],
+)
+def test_process_bda_output_segment_routing(segment_count, expected_classify):
+    """Test single segment uses classify_as_success, multiple uses classify_as_multi_segment."""
+    with (
+        patch(
+            "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
+        ) as mock_get_category,
+        patch(
+            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uris"
+        ) as mock_extract_uris,
+        patch("documentai_api.utils.bda_output_processor.get_bda_result_json") as mock_get_json,
+        patch(f"documentai_api.utils.bda_output_processor.{expected_classify}") as mock_classify,
+    ):
+        mock_get_category.return_value = "invoice"
+        mock_extract_uris.return_value = [f"s3://bucket/segment/{i}" for i in range(segment_count)]
+        mock_get_json.return_value = {
+            "matched_blueprint": {"name": "Payslip", "confidence": "0.99"},
+            "document_class": {"type": "Payslip"},
+            "explainability_info": [{"field1": {"confidence": 0.9, "value": "data"}}],
+        }
+        mock_classify.return_value = {"status": "success"}
+
+        bda_output_processor_util.process_bda_output("test.pdf", "bucket", "key")
+
+        mock_classify.assert_called_once()

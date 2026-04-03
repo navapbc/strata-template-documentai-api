@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -298,18 +297,17 @@ def test_build_update_expression(
         assert ":errorMessage" not in values
 
 
-def test_execute_ddb_update(mock_ddb_service):
+def test_execute_ddb_update(mock_ddb_service, monkeypatch):
     table_name = "test-table"
+    object_key = "table-key"
+    update_expression = "SET #status = :status"
+    expression_values = {":status": "test"}
 
-    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: table_name}):
-        object_key = "table-key"
-        update_expression = "SET #status = :status"
-        expression_values = {":status": "test"}
-
-        ddb_util._execute_ddb_update(object_key, update_expression, expression_values)
-        mock_ddb_service.update_item.assert_called_once_with(
-            table_name, {"fileName": object_key}, update_expression, expression_values
-        )
+    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME, table_name)
+    ddb_util._execute_ddb_update(object_key, update_expression, expression_values)
+    mock_ddb_service.update_item.assert_called_once_with(
+        table_name, {"fileName": object_key}, update_expression, expression_values
+    )
 
 
 @pytest.mark.parametrize("user_provided_document_category", ["income", None])
@@ -323,42 +321,39 @@ def test_get_user_provided_document_category(user_provided_document_category) ->
         assert category == user_provided_document_category
 
 
-def test_get_ddb_record(mock_ddb_service):
-    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table"}):
-        mock_ddb_service.get_item.return_value = {
-            DocumentMetadata.FILE_NAME: "test-file",
-            DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
-            DocumentMetadata.PROCESS_STATUS: "completed",
-        }
+def test_get_ddb_record(mock_ddb_service, monkeypatch):
+    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME, "test-table")
 
-        ddb_record = ddb_util.get_ddb_record("test-file")
+    mock_ddb_service.get_item.return_value = {
+        DocumentMetadata.FILE_NAME: "test-file",
+        DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
+        DocumentMetadata.PROCESS_STATUS: "completed",
+    }
 
-        for k, v in mock_ddb_service.get_item.return_value.items():
-            assert ddb_record[k] == v
+    ddb_record = ddb_util.get_ddb_record("test-file")
+
+    for k, v in mock_ddb_service.get_item.return_value.items():
+        assert ddb_record[k] == v
 
 
-def test_get_ddb_by_job_id(mock_ddb_service):
+def test_get_ddb_by_job_id(mock_ddb_service, monkeypatch):
     """Test getting DDB record by job ID."""
-    with patch.dict(
-        os.environ,
-        {
-            env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table",
-            env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME: "job-id-index",
-        },
-    ):
-        job_id = "job-123"
-        file_name = "test-file"
-        ddb_record = {DocumentMetadata.JOB_ID: job_id, DocumentMetadata.FILE_NAME: file_name}
+    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME, "test-table")
+    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME, "job-id-index")
 
-        mock_ddb_service.query_by_key.return_value = [ddb_record]
-        result = ddb_util.get_ddb_by_job_id(job_id)
+    job_id = "job-123"
+    file_name = "test-file"
+    ddb_record = {DocumentMetadata.JOB_ID: job_id, DocumentMetadata.FILE_NAME: file_name}
 
-        for k, v in ddb_record.items():
-            assert result[k] == v
+    mock_ddb_service.query_by_key.return_value = [ddb_record]
+    result = ddb_util.get_ddb_by_job_id(job_id)
 
-        mock_ddb_service.query_by_key.assert_called_once_with(
-            "test-table", "job-id-index", "jobId", job_id
-        )
+    for k, v in ddb_record.items():
+        assert result[k] == v
+
+    mock_ddb_service.query_by_key.assert_called_once_with(
+        "test-table", "job-id-index", "jobId", job_id
+    )
 
 
 @pytest.mark.parametrize(
@@ -398,63 +393,64 @@ def test_update_ddb(status, has_timing):
         assert mock_execute.call_count == 2
 
 
-def test_insert_ddb(mock_ddb_service):
+def test_insert_ddb(mock_ddb_service, monkeypatch):
     """Test DDB insert with all fields."""
-    with patch.dict(os.environ, {env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME: "test-table"}):
-        mock_raw_metrics = MagicMock()
-        mock_raw_metrics.to_json_dict.return_value = {"raw": "data"}
-        mock_normalized_metrics = MagicMock()
-        mock_normalized_metrics.to_json_dict.return_value = {"normalized": "data"}
+    monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME, "test-table")
 
-        internal_response = InternalApiResponse(
-            validation_passed=True,
-            document_category="income",
-            matched_document_class="paystub",
-            response_code=ResponseCodes.SUCCESS,
-            response_message="Success",
-        )
+    mock_raw_metrics = MagicMock()
+    mock_raw_metrics.to_json_dict.return_value = {"raw": "data"}
+    mock_normalized_metrics = MagicMock()
+    mock_normalized_metrics.to_json_dict.return_value = {"normalized": "data"}
 
-        ddb_util.insert_ddb(
-            object_key="test-file",
-            original_file_name="original-test.pdf",
-            user_provided_document_category="income",
-            process_status=ProcessStatus.NOT_STARTED.value,
-            internal_api_response=internal_response,
-            file_size_bytes=1024,
-            content_type="application/pdf",
-            pages_detected=5,
-            job_id="job-123",
-            trace_id="trace-456",
-            is_password_protected=True,
-            is_document_blurry=False,
-            document_profile_raw_metrics=mock_raw_metrics,
-            document_profile_normalized_metrics=mock_normalized_metrics,
-            overall_blur_score=0.85,
-        )
+    internal_response = InternalApiResponse(
+        validation_passed=True,
+        document_category="income",
+        matched_document_class="paystub",
+        response_code=ResponseCodes.SUCCESS,
+        response_message="Success",
+    )
 
-        # confirm put_item called with correct table name and item
-        mock_ddb_service.put_item.assert_called_once()
-        item = mock_ddb_service.put_item.call_args[0][1]
+    ddb_util.insert_ddb(
+        object_key="test-file",
+        original_file_name="original-test.pdf",
+        user_provided_document_category="income",
+        process_status=ProcessStatus.NOT_STARTED.value,
+        internal_api_response=internal_response,
+        file_size_bytes=1024,
+        content_type="application/pdf",
+        pages_detected=5,
+        job_id="job-123",
+        trace_id="trace-456",
+        is_password_protected=True,
+        is_document_blurry=False,
+        document_profile_raw_metrics=mock_raw_metrics,
+        document_profile_normalized_metrics=mock_normalized_metrics,
+        overall_blur_score=0.85,
+    )
 
-        # base fields
-        assert item[DocumentMetadata.FILE_NAME] == "test-file"
-        assert item[DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY] == "income"
-        assert item[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED.value
-        assert item[DocumentMetadata.FILE_SIZE_BYTES] == 1024
-        assert item[DocumentMetadata.CONTENT_TYPE] == "application/pdf"
-        assert DocumentMetadata.CREATED_AT in item
-        assert DocumentMetadata.UPDATED_AT in item
+    # confirm put_item called with correct table name and item
+    mock_ddb_service.put_item.assert_called_once()
+    item = mock_ddb_service.put_item.call_args[0][1]
 
-        # optional fields
-        assert item[DocumentMetadata.PAGES_DETECTED] == 5
-        assert item[DocumentMetadata.JOB_ID] == "job-123"
-        assert item[DocumentMetadata.TRACE_ID] == "trace-456"
-        assert item[DocumentMetadata.IS_PASSWORD_PROTECTED] is True
-        assert item[DocumentMetadata.IS_DOCUMENT_BLURRY] is False
-        assert DocumentMetadata.RESPONSE_JSON in item
-        assert DocumentMetadata.DOCUMENT_METRICS_RAW in item
-        assert DocumentMetadata.DOCUMENT_METRICS_NORMALIZED in item
-        assert item[DocumentMetadata.OVERALL_BLUR_SCORE] == Decimal("0.85")
+    # base fields
+    assert item[DocumentMetadata.FILE_NAME] == "test-file"
+    assert item[DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY] == "income"
+    assert item[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED.value
+    assert item[DocumentMetadata.FILE_SIZE_BYTES] == 1024
+    assert item[DocumentMetadata.CONTENT_TYPE] == "application/pdf"
+    assert DocumentMetadata.CREATED_AT in item
+    assert DocumentMetadata.UPDATED_AT in item
+
+    # optional fields
+    assert item[DocumentMetadata.PAGES_DETECTED] == 5
+    assert item[DocumentMetadata.JOB_ID] == "job-123"
+    assert item[DocumentMetadata.TRACE_ID] == "trace-456"
+    assert item[DocumentMetadata.IS_PASSWORD_PROTECTED] is True
+    assert item[DocumentMetadata.IS_DOCUMENT_BLURRY] is False
+    assert DocumentMetadata.RESPONSE_JSON in item
+    assert DocumentMetadata.DOCUMENT_METRICS_RAW in item
+    assert DocumentMetadata.DOCUMENT_METRICS_NORMALIZED in item
+    assert item[DocumentMetadata.OVERALL_BLUR_SCORE] == Decimal("0.85")
 
 
 @pytest.mark.parametrize(
@@ -662,6 +658,56 @@ def test_classify_functions(function, response_code, status, matched_document_cl
         mock_update.assert_called_once_with(**expected_call)
 
 
+def test_classify_as_multi_segment():
+    """Test multi-segment classification stores segments and count."""
+    from documentai_api.utils.models import SegmentResult
+
+    segments = [
+        SegmentResult(
+            segment_index=0,
+            matched_document_class="Payslip",
+            matched_blueprint_name="Payslip",
+            matched_blueprint_confidence=0.99,
+            status="success",
+        ),
+        SegmentResult(
+            segment_index=1,
+            matched_document_class="W2",
+            matched_blueprint_name="W2-Form",
+            matched_blueprint_confidence=0.98,
+            status="success",
+        ),
+    ]
+
+    with (
+        patch("documentai_api.utils.ddb.get_internal_api_response") as mock_get_response,
+        patch("documentai_api.utils.ddb.update_ddb") as mock_update,
+        patch("documentai_api.utils.ddb._execute_ddb_update") as mock_execute,
+        patch("documentai_api.utils.ddb.build_v1_api_response") as mock_build_v1,
+    ):
+        mock_build_v1.return_value = {"status": "completed"}
+
+        ddb_util.classify_as_multi_segment("test-file", segments)
+
+        mock_update.assert_called_once_with(
+            object_key="test-file",
+            status=ProcessStatus.MULTI_SEGMENT,
+            internal_api_response=mock_get_response.return_value,
+        )
+
+        # two _execute_ddb_update calls: segments + v1 response rebuild
+        assert mock_execute.call_count == 2
+
+        # first call - segment data
+        segment_call = mock_execute.call_args_list[0]
+        assert segment_call[0][2][":segmentCount"] == 2
+        assert ":segmentResults" in segment_call[0][2]
+
+        # second call - v1 response
+        v1_call = mock_execute.call_args_list[1]
+        assert ":v1ResponseJson" in v1_call[0][2]
+
+
 @pytest.mark.parametrize(
     ("query_result", "expected"),
     [
@@ -684,36 +730,120 @@ def test_classify_functions(function, response_code, status, matched_document_cl
         ),
     ],
 )
-def test_is_document_build_submitted(mock_ddb_service, query_result, expected):
+def test_is_document_build_submitted(mock_ddb_service, monkeypatch, query_result, expected):
     """Test checking if document build is submitted in various scenarios."""
-    with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
-        mock_ddb_service.query_by_key.return_value = query_result
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
+    mock_ddb_service.query_by_key.return_value = query_result
 
-        result = ddb_util.is_document_build_submitted("test-build-id")
+    result = ddb_util.is_document_build_submitted("test-build-id")
 
-        assert result is expected
+    assert result is expected
 
 
-def test_mark_document_build_submitted(mock_ddb_service):
+def test_mark_document_build_submitted(mock_ddb_service, monkeypatch):
     """Test marking all pages in a document build as submitted."""
-    with patch.dict(os.environ, {"DOCUMENTAI_BUILD_TABLE_NAME": "test-document-builds-table"}):
-        mock_ddb_service.query_by_key.return_value = [
-            {"buildId": "test-build-id", "pageNumber": 1},
-            {"buildId": "test-build-id", "pageNumber": 2},
-        ]
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
 
-        ddb_util.mark_document_build_submitted("test-build-id")
+    mock_ddb_service.query_by_key.return_value = [
+        {"buildId": "test-build-id", "pageNumber": 1},
+        {"buildId": "test-build-id", "pageNumber": 2},
+    ]
 
-        assert mock_ddb_service.update_item.call_count == 2
+    ddb_util.mark_document_build_submitted("test-build-id")
 
-        calls = mock_ddb_service.update_item.call_args_list
+    assert mock_ddb_service.update_item.call_count == 2
 
-        assert calls[0].kwargs["table_name"] == "test-document-builds-table"
-        assert calls[0].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 1}
-        assert calls[0].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
-        assert ":submittedAt" in calls[0].kwargs["expression_values"]
+    calls = mock_ddb_service.update_item.call_args_list
 
-        assert calls[1].kwargs["table_name"] == "test-document-builds-table"
-        assert calls[1].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 2}
-        assert calls[1].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
-        assert ":submittedAt" in calls[1].kwargs["expression_values"]
+    assert calls[0].kwargs["table_name"] == "test-document-builds-table"
+    assert calls[0].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 1}
+    assert calls[0].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+    assert ":submittedAt" in calls[0].kwargs["expression_values"]
+
+    assert calls[1].kwargs["table_name"] == "test-document-builds-table"
+    assert calls[1].kwargs["key"] == {"buildId": "test-build-id", "pageNumber": 2}
+    assert calls[1].kwargs["update_expression"] == "SET submittedAt = :submittedAt"
+    assert ":submittedAt" in calls[1].kwargs["expression_values"]
+
+
+@pytest.mark.asyncio
+async def test_upsert_document_build_page_with_original_filename(mock_ddb_service, monkeypatch):
+    """Test upsert stores original file name."""
+    from documentai_api.config.constants import DocumentCategory
+
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
+
+    await ddb_util.upsert_document_build_page(
+        build_id="test-build-id",
+        page_number=1,
+        original_file_name="paystub.pdf",
+        s3_path="preprocessing/test-build-id/page-1.pdf",
+        category=DocumentCategory.INCOME,
+    )
+
+    mock_ddb_service.put_item.assert_called_once()
+    item = mock_ddb_service.put_item.call_args[0][1]
+    assert item["originalFileName"] == "paystub.pdf"
+    assert item["buildId"] == "test-build-id"
+    assert item["pageNumber"] == 1
+    assert item["s3Path"] == "preprocessing/test-build-id/page-1.pdf"
+    assert item["category"] == "income"
+
+
+def test_get_document_build_pages_includes_original_filename(mock_ddb_service, monkeypatch):
+    """Test get pages returns original file name."""
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_PREPROCESSING_LOCATION, "s3://test-bucket/preprocessing")
+
+    mock_ddb_service.query_by_key.return_value = [
+        {
+            "buildId": "test-build-id",
+            "pageNumber": 1,
+            "s3Path": "preprocessing/test-build-id/page-1.pdf",
+            "originalFileName": "paystub.pdf",
+            "category": "income",
+            "createdAt": "2026-01-01T00:00:00+00:00",
+        },
+        {
+            "buildId": "test-build-id",
+            "pageNumber": 2,
+            "s3Path": "preprocessing/test-build-id/page-2.pdf",
+            "originalFileName": "w2.pdf",
+            "createdAt": "2026-01-01T00:00:01+00:00",
+        },
+    ]
+
+    pages = ddb_util.get_document_build_pages("test-build-id")
+
+    assert len(pages) == 2
+    assert pages[0].original_file_name == "paystub.pdf"
+    assert pages[0].page_number == 1
+    assert pages[1].original_file_name == "w2.pdf"
+    assert pages[1].page_number == 2
+
+
+def test_get_document_build_pages_filters_metadata_record(mock_ddb_service, monkeypatch):
+    """Test get pages excludes the build metadata record (page 0)."""
+    monkeypatch.setenv(env.DOCUMENTAI_BUILD_TABLE_NAME, "test-document-builds-table")
+    monkeypatch.setenv(env.DOCUMENTAI_PREPROCESSING_LOCATION, "s3://test-bucket/preprocessing")
+
+    mock_ddb_service.query_by_key.return_value = [
+        {
+            "buildId": "test-build-id",
+            "pageNumber": 0,
+            "isBuildMetadata": True,
+            "createdAt": "2026-01-01T00:00:00+00:00",
+        },
+        {
+            "buildId": "test-build-id",
+            "pageNumber": 1,
+            "s3Path": "preprocessing/test-build-id/page-1.pdf",
+            "originalFileName": "paystub.pdf",
+            "createdAt": "2026-01-01T00:00:01+00:00",
+        },
+    ]
+
+    pages = ddb_util.get_document_build_pages("test-build-id")
+
+    assert len(pages) == 1
+    assert pages[0].page_number == 1

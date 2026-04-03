@@ -361,3 +361,129 @@ def test_delete_document_build(
         assert response.status_code == expected_status
         if expected_status == 400:
             assert "already" in response.json()["detail"]
+
+
+def test_get_document_build_includes_status_and_filename(
+    document_build_ddb_table, mock_document_build_submit
+):
+    """Test GET build returns buildStatus and originalFileName."""
+    pages = [
+        PageMetadata(
+            page_number=1,
+            s3_key="builds/test-build-id/page-1.pdf",
+            s3_bucket_name="test-bucket",
+            original_file_name="paystub.pdf",
+            category="income",
+        ),
+        PageMetadata(
+            page_number=2,
+            s3_key="builds/test-build-id/page-2.pdf",
+            s3_bucket_name="test-bucket",
+            original_file_name="w2.pdf",
+        ),
+    ]
+
+    with (
+        patch("documentai_api.utils.ddb.document_build_exists", return_value=True),
+        patch("documentai_api.app.get_document_build_pages", return_value=pages),
+        patch("documentai_api.utils.ddb.is_document_build_submitted", return_value=False),
+    ):
+        response = client.get("/v1/builds/test-build-id")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["buildStatus"] == "not_submitted"
+    assert result["pages"][0]["originalFileName"] == "paystub.pdf"
+    assert result["pages"][1]["originalFileName"] == "w2.pdf"
+
+
+@pytest.mark.parametrize(
+    ("is_submitted", "expected_status"),
+    [
+        (True, "submitted"),
+        (False, "not_submitted"),
+    ],
+)
+def test_get_document_build_status(
+    document_build_ddb_table, mock_document_build_submit, is_submitted, expected_status
+):
+    """Test GET build returns correct buildStatus."""
+    pages = [create_page_metadata(1, category="income")]
+
+    with (
+        patch("documentai_api.utils.ddb.document_build_exists", return_value=True),
+        patch("documentai_api.app.get_document_build_pages", return_value=pages),
+        patch("documentai_api.utils.ddb.is_document_build_submitted", return_value=is_submitted),
+    ):
+        response = client.get("/v1/builds/test-build-id")
+
+    assert response.status_code == 200
+    assert response.json()["buildStatus"] == expected_status
+
+
+def test_upload_document_build_pages_batch_success(
+    document_build_ddb_table, mock_document_build_upload
+):
+    """Test batch upload of multiple pages."""
+    with patch("documentai_api.app.get_document_build_pages", return_value=[]):
+        files = [
+            ("files", ("page1.pdf", b"fake pdf 1", "application/pdf")),
+            ("files", ("page2.pdf", b"fake pdf 2", "application/pdf")),
+        ]
+        response = client.post("/v1/builds/test-build-id/pages/batch", files=files)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["buildId"] == "test-build-id"
+    assert result["pagesAdded"] == 2
+    assert len(result["pages"]) == 2
+    assert result["pages"][0]["pageNumber"] == 1
+    assert result["pages"][1]["pageNumber"] == 2
+    assert "2 pages uploaded successfully" in result["message"]
+
+
+def test_upload_document_build_pages_batch_single_file(
+    document_build_ddb_table, mock_document_build_upload
+):
+    """Test batch upload with single file uses singular message."""
+    with patch("documentai_api.app.get_document_build_pages", return_value=[]):
+        files = [("files", ("page1.pdf", b"fake pdf", "application/pdf"))]
+        response = client.post("/v1/builds/test-build-id/pages/batch", files=files)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["pagesAdded"] == 1
+    assert "1 page uploaded successfully" in result["message"]
+
+
+def test_upload_document_build_pages_batch_invalid_file(
+    document_build_ddb_table, mock_document_build_upload
+):
+    """Test batch upload fails entirely if any file is invalid."""
+    mock_document_build_upload["magic"].side_effect = ["application/pdf", "application/zip"]
+
+    files = [
+        ("files", ("page1.pdf", b"fake pdf", "application/pdf")),
+        ("files", ("page2.zip", b"fake zip", "application/zip")),
+    ]
+    response = client.post("/v1/builds/test-build-id/pages/batch", files=files)
+
+    assert response.status_code == 400
+    assert "Invalid file type" in response.json()["detail"]
+
+
+def test_upload_document_build_pages_batch_continues_numbering(
+    document_build_ddb_table, mock_document_build_upload
+):
+    """Test batch upload continues page numbering from existing pages."""
+    existing_pages = [create_page_metadata(1), create_page_metadata(2)]
+
+    with patch("documentai_api.app.get_document_build_pages", return_value=existing_pages):
+        files = [
+            ("files", ("page3.pdf", b"fake pdf", "application/pdf")),
+        ]
+        response = client.post("/v1/builds/test-build-id/pages/batch", files=files)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["pages"][0]["pageNumber"] == 3

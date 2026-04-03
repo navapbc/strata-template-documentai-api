@@ -245,3 +245,91 @@ def test_build_v1_api_response(
             )
         else:
             mock_extract_field_values.assert_not_called()
+
+
+@pytest.mark.parametrize("include_extracted_data", [True, False])
+def test_build_v1_api_response_multi_segment(include_extracted_data):
+    """Test multi-segment response returns segments instead of fields."""
+    import json
+
+    year = datetime.now().year
+    created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC)
+    bda_completed_at = datetime(year, 1, 1, 12, 0, 10, tzinfo=UTC)
+
+    segment_results = json.dumps(
+        [
+            {
+                "segment_index": 0,
+                "bda_output_s3_uri": "s3://bucket/segment/0/result.json",
+                "matched_document_class": "Payslip",
+                "matched_blueprint_name": "Payslip",
+                "matched_blueprint_confidence": 0.99,
+                "field_confidence_scores": [{"PayDate": 0.85}, {"NetPay": 0.92}],
+                "field_empty_list": [],
+                "status": "success",
+            },
+            {
+                "segment_index": 1,
+                "bda_output_s3_uri": "s3://bucket/segment/1/result.json",
+                "matched_document_class": "W2",
+                "matched_blueprint_name": "W2-Form",
+                "matched_blueprint_confidence": 0.98,
+                "field_confidence_scores": [{"EIN": 0.97}, {"Wages": 0.96}],
+                "field_empty_list": [],
+                "status": "success",
+            },
+        ]
+    )
+
+    with (
+        patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
+        patch("documentai_api.utils.response_builder.get_bda_result_json") as mock_get_bda,
+        patch(
+            "documentai_api.utils.response_builder.extract_field_values_from_bda_results"
+        ) as mock_extract_bda,
+    ):
+        mock_get_ddb_record.return_value = {
+            DocumentMetadata.JOB_ID: "test-job-id",
+            DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS: 85,
+            DocumentMetadata.BDA_COMPLETED_AT: bda_completed_at.isoformat(),
+            DocumentMetadata.CREATED_AT: created_at.isoformat(),
+            DocumentMetadata.SEGMENT_RESULTS: segment_results,
+            DocumentMetadata.SEGMENT_COUNT: 2,
+        }
+
+        if include_extracted_data:
+            mock_get_bda.return_value = {"fake": "result"}
+            mock_extract_bda.return_value = (
+                None,
+                {"PayDate": "2026-04-15", "NetPay": "1234.56"},
+            )
+
+        response = response_builder_util.build_v1_api_response(
+            "test-key",
+            ProcessStatus.MULTI_SEGMENT.value,
+            include_extracted_data=include_extracted_data,
+        )
+
+        assert response["status"] == "completed"
+        assert response["message"] == "Multi-segment document processed successfully"
+        assert "fields" not in response
+        assert "segments" in response
+        assert len(response["segments"]) == 2
+
+        seg0 = response["segments"][0]
+        assert seg0["segment"] == 0
+        assert seg0["matchedDocumentClass"] == "Payslip"
+        assert seg0["matchedBlueprint"] == "Payslip"
+        assert "PayDate" in seg0["fields"]
+        assert seg0["fields"]["PayDate"]["confidence"] == 0.85
+
+        if include_extracted_data:
+            assert seg0["fields"]["PayDate"]["value"] == "2026-04-15"
+            mock_get_bda.assert_called()
+        else:
+            assert seg0["fields"]["PayDate"]["value"] == "<redacted>"
+
+        seg1 = response["segments"][1]
+        assert seg1["segment"] == 1
+        assert seg1["matchedDocumentClass"] == "W2"
+        assert seg1["matchedBlueprint"] == "W2-Form"
