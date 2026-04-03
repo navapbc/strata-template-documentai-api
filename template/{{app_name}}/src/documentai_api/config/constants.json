@@ -71,6 +71,7 @@
     "all": {
       "blurry_document_detected": "blurry_document_detected",
       "failed": "failed",
+      "multi_segment": "multi_segment",
       "multipage": "multipage", 
       "no_custom_blueprint_matched": "no_custom_blueprint_matched",
       "no_document_detected": "no_document_detected",
@@ -84,6 +85,7 @@
     "completed": [
       "success",
       "failed",
+      "multi_segment",
       "no_document_detected",
       "no_custom_blueprint_matched"
     ],
@@ -97,6 +99,7 @@
     ],
     "successful": [
       "success",
+      "multi_segment",
       "no_custom_blueprint_matched",
       "not_sampled",
       "not_implemented"

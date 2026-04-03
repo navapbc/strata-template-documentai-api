@@ -66,23 +66,25 @@ def get_bda_job_response(bda_invocation_arn: str) -> str | None:
         return None
 
 
-def extract_bda_output_s3_uri(
+def extract_bda_output_s3_uris(
     bda_output_bucket_name: str, bda_output_object_key: str
-) -> str | None:
+) -> list[str]:
     """Read and parse BDA job metadata from S3."""
     s3 = AWSClientFactory.get_s3_client()
     metadata_response = s3.get_object(Bucket=bda_output_bucket_name, Key=bda_output_object_key)
     job_metadata = json.loads(metadata_response["Body"].read().decode("utf-8"))
+    uris = []
 
     # extract bda result uri from job metadata
     try:
         for output_meta in job_metadata.get("output_metadata", []):
             for segment in output_meta.get("segment_metadata", []):
                 if "custom_output_path" in segment:
-                    return segment["custom_output_path"]
+                    uris.append(segment["custom_output_path"])
 
-                if "standard_output_path" in segment:
-                    return segment["standard_output_path"]
+                elif "standard_output_path" in segment:
+                    uris.append(segment["standard_output_path"])
     except (TypeError, AttributeError) as e:
         logger.error(f"Failed to extract BDA result uri: {e}")
-        return None
+
+    return uris

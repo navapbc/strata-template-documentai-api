@@ -13,6 +13,8 @@ class DocumentMetadata:
     JOB_ID = "jobId"
     TRACE_ID = "traceId"
     V1_API_RESPONSE_JSON = "v1ApiResponseJson"
+    SEGMENT_COUNT = "segmentCount"
+    SEGMENT_RESULTS = "segmentResults"
     CREATED_AT = "createdAt"
     UPDATED_AT = "updatedAt"
 

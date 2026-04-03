@@ -26,9 +26,6 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     if not ddb_record:
         return {}
 
-    bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-    metadata, field_values = extract_field_values_from_bda_results(bda_results)
-
     # get confidence scores and extracted values if requested
     if include_extracted_data:
         bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
@@ -124,12 +121,49 @@ def build_v1_api_response(
     if status in PROCESSING_STATUSES_SUCCESSFUL:
         base_response["status"] = "completed"
 
-        if status == ProcessStatus.SUCCESS.value:
-            base_response["message"] = "Document processed successfully"
-        elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
-            base_response["message"] = "Document processed but no matching template found"
+        if status == ProcessStatus.MULTI_SEGMENT.value:
+            base_response["message"] = "Multi-segment document processed successfully"
+            segment_results = json.loads(ddb_record.get(DocumentMetadata.SEGMENT_RESULTS, "[]"))
+            segments = []
+            for seg in segment_results:
+                fields = {}
+                field_values = {}
 
-        base_response.update({"fields": _extract_field_values(ddb_record, include_extracted_data)})
+                if include_extracted_data and seg.get("bda_output_s3_uri"):
+                    bda_results = get_bda_result_json(seg["bda_output_s3_uri"])
+                    _, field_values = extract_field_values_from_bda_results(bda_results)
+
+                for field_item in seg.get("field_confidence_scores") or []:
+                    for field_name, confidence in field_item.items():
+                        fields[field_name] = {
+                            "confidence": round(confidence, 2),
+                            "value": field_values.get(field_name)
+                            if include_extracted_data
+                            else "<redacted>",
+                        }
+
+                segments.append(
+                    {
+                        "segment": seg["segment_index"],
+                        "matchedDocumentClass": seg.get("matched_document_class"),
+                        "matchedBlueprint": seg.get("matched_blueprint_name"),
+                        "confidence": seg.get("matched_blueprint_confidence"),
+                        "status": seg.get("status"),
+                        "fields": fields,
+                    }
+                )
+
+            base_response["segments"] = segments
+
+        else:
+            base_response.update(
+                {"fields": _extract_field_values(ddb_record, include_extracted_data)}
+            )
+
+            if status == ProcessStatus.SUCCESS.value:
+                base_response["message"] = "Document processed successfully"
+            elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
+                base_response["message"] = "Document processed but no matching template found"
 
     # error responses
     elif status == ProcessStatus.FAILED.value:

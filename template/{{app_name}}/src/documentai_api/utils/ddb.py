@@ -24,6 +24,7 @@ from documentai_api.utils.models import (
     InternalApiResponse,
     PageMetadata,
     ProcessingTimes,
+    SegmentResult,
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
@@ -65,6 +66,7 @@ def document_build_page_exists(build_id: str, page_number: int) -> bool:
 async def upsert_document_build_page(
     build_id: str,
     page_number: int,
+    original_file_name: str,
     s3_path: str,
     category: DocumentCategory | None = None,
 ):
@@ -74,6 +76,7 @@ async def upsert_document_build_page(
     item = {
         BuildMetadata.BUILD_ID: build_id,
         BuildMetadata.PAGE_NUMBER: page_number,
+        BuildMetadata.ORIGINAL_FILE_NAME: original_file_name,
         BuildMetadata.S3_PATH: s3_path,
         BuildMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
     }
@@ -102,6 +105,7 @@ def get_document_build_pages(build_id: str) -> list[PageMetadata]:
             page_number=item.get(BuildMetadata.PAGE_NUMBER, 0),
             s3_key=item.get(BuildMetadata.S3_PATH, ""),
             s3_bucket_name=bucket_name,
+            original_file_name=item.get(BuildMetadata.ORIGINAL_FILE_NAME),
             category=item.get(BuildMetadata.CATEGORY),
             created_at=item.get(BuildMetadata.CREATED_AT),
         )
@@ -845,4 +849,37 @@ def classify_as_no_custom_blueprint_matched(object_key: str, data: Classificatio
     )
 
     # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+
+def classify_as_multi_segment(object_key: str, segments: list[SegmentResult]):
+    """Mark file as multi-segment and store per-segment results."""
+    from dataclasses import asdict
+
+    internal_api_response = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.SUCCESS,
+        matched_document_class=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.MULTI_SEGMENT,
+        internal_api_response=internal_api_response,
+    )
+
+    # store segment results and count
+    update_expr = f"SET {DocumentMetadata.SEGMENT_RESULTS} = :segmentResults, {DocumentMetadata.SEGMENT_COUNT} = :segmentCount"
+    expr_values = {
+        ":segmentResults": json.dumps([asdict(s) for s in segments]),
+        ":segmentCount": len(segments),
+    }
+    _execute_ddb_update(object_key, update_expr, expr_values)
+
+    # rebuild v1 response now that segments are stored
+    v1_response = build_v1_api_response(object_key, ProcessStatus.MULTI_SEGMENT.value)
+    update_expr = f"SET {DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson"
+    expr_values = {":v1ResponseJson": json.dumps(v1_response)}
+    _execute_ddb_update(object_key, update_expr, expr_values)
+
     return internal_api_response.__dict__

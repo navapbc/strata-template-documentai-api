@@ -2,6 +2,7 @@ class BuildMetadata:
     BUILD_ID = "buildId"
     PAGE_NUMBER = "pageNumber"
     S3_PATH = "s3Path"
+    ORIGINAL_FILE_NAME = "originalFileName"
     CATEGORY = "category"
     CREATED_AT = "createdAt"
     SUBMITTED_AT = "submittedAt"

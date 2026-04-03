@@ -73,3 +73,9 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
+
+
+class DocumentBuildStatus(Enum):
+    SUBMITTED = "submitted"
+    NOT_SUBMITTED = "not_submitted"
+    COMPLETED = "completed"

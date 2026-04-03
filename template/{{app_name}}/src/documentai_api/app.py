@@ -31,6 +31,7 @@ from documentai_api.config.constants import (
     S3_METADATA_KEY_ORIGINAL_FILE_NAME,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
+    DocumentBuildStatus,
     DocumentCategory,
     ProcessStatus,
 )
@@ -234,6 +235,47 @@ async def upload_document_for_processing(
         ) from e
 
 
+async def add_page_to_build(
+    file: UploadFile,
+    build_id: str,
+    page_number: int,
+    category: DocumentCategory | None = None,
+    trace_id: str | None = None,
+) -> dict:
+    """Add a single page to a document build."""
+    actual_content_type = await validate_file_type(file)
+    logger.info(
+        f"Adding page to document build; build_id: {build_id}; page_number: {page_number}; filename: {file.filename}; category: {category}; content_type: {actual_content_type}"
+    )
+
+    file.file.seek(0)
+    file_extension = file.filename.split(".")[-1]
+    unique_file_name = f"{build_id}/page-{page_number}.{file_extension}"
+
+    await upload_document_for_processing(
+        file=file,
+        original_file_name=file.filename,
+        unique_file_name=unique_file_name,
+        content_type=actual_content_type,
+        s3_location=DOCUMENTAI_PREPROCESSING_LOCATION,
+        user_provided_document_category=category,
+        trace_id=trace_id,
+    )
+
+    _, prefix = parse_s3_uri(DOCUMENTAI_PREPROCESSING_LOCATION)
+    s3_path = f"{prefix}/{unique_file_name}" if prefix else unique_file_name
+
+    await upsert_document_build_page(
+        build_id=build_id,
+        page_number=page_number,
+        original_file_name=file.filename,
+        s3_path=s3_path,
+        category=category,
+    )
+
+    return {"buildId": build_id, "pageNumber": page_number, "fileName": file.filename}
+
+
 async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
     """Poll for document processing completion with timeout."""
     elapsed_time = 0
@@ -324,7 +366,7 @@ async def create_document(
     actual_content_type = await validate_file_type(file)
 
     logger.info(
-        f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
+        f"Processing {file.filename}; category: {category}; content_type: {actual_content_type}"
     )
 
     file.file.seek(0)
@@ -401,11 +443,12 @@ async def create_build(
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
 ):
-    """Create a new document build for multi-page upload."""
+    """Create a new document build for multi-stage, document build upload."""
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
     build_id = str(uuid.uuid4())
+    logger.info(f"Creating document build; build_id: {build_id}; category: {category}")
     create_document_build(build_id, category)
 
     response.headers["X-Trace-ID"] = trace_id
@@ -432,7 +475,7 @@ async def upload_document_build_page(
     ] = None,
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
 ):
-    """Upload a page for multi-page document processing."""
+    """Upload a single page for multi-stage, document build document processing."""
     try:
         if not trace_id:
             trace_id = str(uuid.uuid4())
@@ -447,47 +490,65 @@ async def upload_document_build_page(
                 detail=f"Page {page_number} already exists for build {build_id}. Set overwrite=true to replace.",
             )
 
-        actual_content_type = await validate_file_type(file)
-        logger.info(
-            f"Processing {file.filename}; category: {category}; content-type: {actual_content_type}"
-        )
-
-        file.file.seek(0)
-        file_extension = file.filename.split(".")[-1]
-        unique_file_name = f"{build_id}/page-{page_number}.{file_extension}"
-
-        await upload_document_for_processing(
-            file=file,
-            original_file_name=file.filename,
-            unique_file_name=unique_file_name,
-            content_type=actual_content_type,
-            s3_location=DOCUMENTAI_PREPROCESSING_LOCATION,
-            user_provided_document_category=category,
-            trace_id=trace_id,
-        )
-
-        s3_location = DOCUMENTAI_PREPROCESSING_LOCATION
-        _, prefix = parse_s3_uri(s3_location)
-        s3_path = f"{prefix}/{unique_file_name}" if prefix else unique_file_name
-
-        await upsert_document_build_page(
-            build_id=build_id,
-            page_number=page_number,
-            s3_path=s3_path,
-            category=category,
-        )
+        result = await add_page_to_build(file, build_id, page_number, category, trace_id)
 
         response.headers["X-Trace-ID"] = trace_id
-        return {
-            "buildId": build_id,
-            "pageNumber": page_number,
-            "message": "Page uploaded successfully",
-        }
+        return {**result, "message": "Page uploaded successfully"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error uploading document build page {page_number} for build {build_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload page") from e
+
+
+@app.post(
+    "/v1/builds/{build_id}/pages/batch",
+    name="postDocumentBuildPageBatch",
+    dependencies=[Depends(verify_api_key)],
+)
+async def upload_document_build_pages_batch(
+    request: Request,
+    response: Response,
+    files: list[UploadFile],
+    build_id: str,
+    category: Annotated[
+        DocumentCategory | None, Form(description="Type of document being uploaded")
+    ] = None,
+    trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
+):
+    """Upload multiple pages for multi-stage, document build document processing."""
+    try:
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
+
+        # ensure all files are valid before starting uploads to avoid partial failures
+        content_types = []
+        for file in files:
+            logger.debug(f"Validating file {file.filename} in batch upload for build {build_id}")
+            content_type = await validate_file_type(file)
+            content_types.append(content_type)
+
+        existing_pages = get_document_build_pages(build_id)
+        next_page_number = max((p.page_number for p in existing_pages), default=0) + 1
+
+        results = []
+        for file in files:
+            result = await add_page_to_build(file, build_id, next_page_number, category, trace_id)
+            results.append({k: v for k, v in result.items() if k != "buildId"})
+            next_page_number += 1
+
+        response.headers["X-Trace-ID"] = trace_id
+        return {
+            "buildId": build_id,
+            "pagesAdded": len(results),
+            "pages": results,
+            "message": f"{len(results)} {'page' if len(results) == 1 else 'pages'} uploaded successfully",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading batch pages for build {build_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload pages") from e
 
 
 @app.post(
@@ -503,7 +564,7 @@ async def submit_document_build(
     wait: bool = False,
     timeout: int = 120,
 ):
-    """Submit a multi-page build for processing."""
+    """Submit a multi-stage, document build for processing."""
     from documentai_api.utils.ddb import (
         get_document_build_pages,
         is_document_build_submitted,
@@ -556,7 +617,7 @@ async def submit_document_build(
                 "jobId": job_id,
                 "buildId": build_id,
                 "jobStatus": ProcessStatus.NOT_STARTED.value,
-                "message": "Multi-page document submitted successfully",
+                "message": "Document build submitted successfully",
                 "pageCount": len(pages),
             }
         else:
@@ -576,7 +637,7 @@ async def submit_document_build(
 )
 async def get_document_build(build_id: str):
     """Get document build details including all uploaded pages."""
-    from documentai_api.utils.ddb import document_build_exists
+    from documentai_api.utils.ddb import document_build_exists, is_document_build_submitted
 
     try:
         if not document_build_exists(build_id):
@@ -586,9 +647,13 @@ async def get_document_build(build_id: str):
 
         return {
             BuildMetadata.BUILD_ID: build_id,
+            "buildStatus": DocumentBuildStatus.SUBMITTED.value
+            if is_document_build_submitted(build_id)
+            else DocumentBuildStatus.NOT_SUBMITTED.value,
             "pageCount": len(pages),
             "pages": [
                 {
+                    BuildMetadata.ORIGINAL_FILE_NAME: page.original_file_name,
                     BuildMetadata.PAGE_NUMBER: page.page_number,
                     BuildMetadata.CREATED_AT: page.created_at,
                     BuildMetadata.CATEGORY: page.category,

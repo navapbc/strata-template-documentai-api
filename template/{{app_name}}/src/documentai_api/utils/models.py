@@ -54,5 +54,19 @@ class PageMetadata:
     page_number: int
     s3_key: str
     s3_bucket_name: str
+    original_file_name: str | None = None
     category: str | None = None
     created_at: str | None = None
+
+
+@dataclass
+class SegmentResult:
+    segment_index: int
+    bda_output_s3_uri: str | None = None
+    matched_document_class: str | None = None
+    matched_blueprint_name: str | None = None
+    matched_blueprint_confidence: float | None = None
+    field_confidence_scores: list[dict] | None = None
+    field_empty_list: list | None = None
+    status: str | None = None  # "success", "no_custom_blueprint_matched", etc.
+    additional_info: str | None = None

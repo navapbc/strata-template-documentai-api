@@ -72,15 +72,15 @@ def test_process_bda_output_blueprint_matched():
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
         ) as mock_get_category,
         patch(
-            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri"
-        ) as mock_extract_uri,
+            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uris"
+        ) as mock_extract_uris,
         patch("documentai_api.utils.bda_output_processor.get_bda_result_json") as mock_get_json,
         patch(
             "documentai_api.utils.bda_output_processor.classify_as_success"
         ) as mock_classify_as_success,
     ):
         mock_get_category.return_value = "invoice"
-        mock_extract_uri.return_value = "s3://bucket/output"
+        mock_extract_uris.return_value = ["s3://bucket/output"]
         mock_get_json.return_value = {
             "matched_blueprint": {"name": "invoice_blueprint", "confidence": "0.95"},
             "document_class": {"type": "invoice"},
@@ -107,8 +107,8 @@ def test_process_bda_output_no_matching_blueprint(text, expected_status, expecte
             "documentai_api.utils.bda_output_processor.get_user_provided_document_category"
         ) as mock_get_category,
         patch(
-            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uri"
-        ) as mock_extract_uri,
+            "documentai_api.utils.bda_output_processor.extract_bda_output_s3_uris"
+        ) as mock_extract_uris,
         patch("documentai_api.utils.bda_output_processor.get_bda_result_json") as mock_get_json,
         patch(
             "documentai_api.utils.bda_output_processor.get_text_from_standard_blueprint"
@@ -118,7 +118,7 @@ def test_process_bda_output_no_matching_blueprint(text, expected_status, expecte
         ) as mock_classify_method,
     ):
         mock_get_category.return_value = "invoice"
-        mock_extract_uri.return_value = "s3://bucket/output"
+        mock_extract_uris.return_value = ["s3://bucket/output"]
         mock_get_json.return_value = {
             "matched_blueprint": {},
             "document_class": {"type": "unknown"},
