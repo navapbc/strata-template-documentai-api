@@ -1,34 +1,43 @@
 {
   "name": "strata-template-documentai-api",
-  "version": "1.0.0",
-  "description": "Open source tools for every layer of government service delivery. Strata is a gold-standard target architecture and suite of open source tools that gives government agencies everything they need to run a modern service.",
+  "version": "0.1.0",
+  "description": "Template application to identify and extract data from documents ",
   "status": "Production",
   "permissions": {
     "licenses": [
       {
         "name": "Apache-2.0",
-        "URL": "https://github.com/navapbc/strata-template-documentai-api/strata/blob/main/LICENSE.md"
+        "URL": "https://github.com/navapbc/strata-template-documentai-api/blob/main/LICENSE"
       }
     ],
-    "usageType": ["openSource"]
+    "usageType": [
+      "openSource"
+    ]
   },
   "organization": "Nava",
-  "repositoryURL": "https://github.com/navapbc/strata-template-documentai-api/strata",
+  "repositoryURL": "https://github.com/navapbc/strata-template-documentai-api",
   "repositoryVisibility": "public",
   "vcs": "git",
   "reuseFrequency": {
-    "forks": 2
+    "forks": 0
   },
-  "languages": ["Python"],
+  "languages": [
+    "Python"
+  ],
   "maintenance": "internal",
-  "SBOM": "https://github.com/navapbc/strata-template-documentai-api/strata/network/dependencies",
+  "SBOM": "https://github.com/navapbc/strata-template-documentai-api/network/dependencies",
   "date": {
-    "created": "2022-09-08T23:06:37Z",
-    "lastModified": "2025-10-16T18:20:45Z",
-    "metadataLastUpdated": "2025-10-16T19:37:20.815Z"
+    "created": "2026-01-07T18:13:24Z",
+    "lastModified": "2026-04-06T20:13:40Z",
+    "metadataLastUpdated": "2026-04-06T20:26:34Z"
   },
-  "tags": ["platform", "sdk"],
-  "contact": {},
-  "feedbackMechanism": "https://github.com/navapbc/strata-template-documentai-api/strata/issues",
+  "tags": [
+    "platform",
+    "sdk"
+  ],
+  "contact": {
+    "email": "strata@navapbc.com"
+  },
+  "feedbackMechanism": "https://github.com/navapbc/strata-template-documentai-api/issues",
   "AIUseCaseID": "0"
 }

@@ -11,11 +11,8 @@
   <a href="https://github.com/navapbc/strata-template-documentai-api/blob/main/CONTRIBUTING.md">
     <img src="https://img.shields.io/badge/PRs-Welcome-brightgreen" alt="PRs welcome!" />
   </a>
-  <a href="https://github.com/navapbc/strata-template-documentai-api/issues">
+  <a href="https://github.com/navapbc/strata-template-documentai-api/commits/main">
     <img src="https://img.shields.io/github/commit-activity/m/navapbc/strata-template-documentai-api" alt="git commit activity" />
-  </a>
-  <a href="https://github.com/navapbc/strata-template-documentai-api/repos/">
-    <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/navapbc/strata-template-documentai-api/total">
   </a>
 </h4>
 
