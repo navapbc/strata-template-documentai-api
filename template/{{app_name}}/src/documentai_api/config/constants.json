@@ -72,6 +72,7 @@
       "blurry_document_detected": "blurry_document_detected",
       "failed": "failed",
       "multipage": "multipage", 
+      "multiple_documents_on_single_page": "multiple_documents_on_single_page",
       "no_custom_blueprint_matched": "no_custom_blueprint_matched",
       "no_document_detected": "no_document_detected",
       "not_implemented": "not_implemented",
@@ -89,7 +90,8 @@
     ],
     "not_supported": [
         "multipage",
-        "password_protected"
+        "password_protected",
+        "multiple_documents_on_single_page"
     ],
     "pending_extraction": [
       "not_started",
@@ -106,8 +108,10 @@
     "supported_content_types": [
       "application/pdf",
       "image/jpeg",
+      "image/gif",
       "image/png",
-      "image/tiff"
+      "image/tiff",
+      "image/webp"
     ]
   },
   "upload_metadata_keys": {

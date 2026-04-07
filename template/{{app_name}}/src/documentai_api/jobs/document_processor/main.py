@@ -189,7 +189,6 @@ def main(object_key: str, bucket_name: str | None = None):
                 data=ClassificationData(additional_info="File too large after conversion"),
             )
     elif status == ProcessStatus.NOT_STARTED.value:
-        # ready for BDA immediately
         invoke_bda(bucket_name, object_key, ddb_key)
     else:
         logger.info(f"File {ddb_key} already has status: {status}, skipping")

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 
 from documentai_api.config.constants import (
     BDA_JOB_STATUS_COMPLETED,
@@ -22,6 +23,17 @@ class BdaFieldProcessingData:
 class BdaFieldProcessingResult:
     confidence: float
     is_empty: bool
+
+
+@lru_cache(maxsize=1)
+def get_blueprint_names() -> list[str]:
+    """Get blueprint names from BDA. Cached for process lifetime."""
+    try:
+        # TODO: call BDA list blueprints API
+        return []
+    except Exception as e:
+        logger.warning(f"Failed to fetch blueprint types: {e}")
+        return []
 
 
 def is_bda_job_running(status: str) -> bool:

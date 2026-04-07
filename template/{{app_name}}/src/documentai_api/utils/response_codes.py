@@ -5,7 +5,7 @@ class ResponseCodes:
     MISSING_FIELDS = "101"
     NO_DOCUMENT_DETECTED = "103"
     BLURRY_DOCUMENT_DETECTED = "104"
-    MULTIPAGE_DOCUMENT = "400"
+    MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE = "400"
     INTERNAL_PROCESSING_ERROR = "999"
 
     @classmethod
@@ -18,7 +18,7 @@ class ResponseCodes:
             cls.MISSING_FIELDS: "Missing fields",
             cls.NO_DOCUMENT_DETECTED: "No document detected",
             cls.BLURRY_DOCUMENT_DETECTED: "Document is blurry",
-            cls.MULTIPAGE_DOCUMENT: "Multi-page document",
+            cls.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE: "Multiple documents detected on single page",
             cls.INTERNAL_PROCESSING_ERROR: "Internal processing error",
         }
         return messages.get(code, "")

@@ -4,6 +4,7 @@ import random
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import documentai_api.utils.documents as document_utils
 from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
@@ -15,6 +16,7 @@ from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
+from documentai_api.utils.bedrock import preclassify_document_image
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -24,6 +26,7 @@ from documentai_api.utils.models import (
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
+from documentai_api.utils.schemas import get_all_schemas
 
 logger = get_logger(__name__)
 
@@ -371,9 +374,8 @@ def insert_ddb(
     trace_id: str | None = None,
     is_password_protected: bool | None = False,
     is_document_blurry: bool | None = False,
-    document_profile_raw_metrics=None,
-    document_profile_normalized_metrics=None,
-    overall_blur_score=None,
+    pre_classification_document_type: str | None = None,
+    pre_classification_confidence: float | None = None,
 ):
     try:
         table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
@@ -391,6 +393,7 @@ def insert_ddb(
 
         if file_size_bytes is not None:
             item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
+
         if content_type:
             item[DocumentMetadata.CONTENT_TYPE] = content_type
 
@@ -412,18 +415,15 @@ def insert_ddb(
         if is_document_blurry is not None:
             item[DocumentMetadata.IS_DOCUMENT_BLURRY] = bool(is_document_blurry)
 
-        if document_profile_raw_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_RAW] = json.dumps(
-                document_profile_raw_metrics.to_json_dict()
+        if pre_classification_document_type is not None:
+            item[DocumentMetadata.PRE_CLASSIFICATION_DOCUMENT_TYPE] = (
+                pre_classification_document_type
             )
 
-        if document_profile_normalized_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_NORMALIZED] = json.dumps(
-                document_profile_normalized_metrics.to_json_dict()
+        if pre_classification_confidence is not None:
+            item[DocumentMetadata.PRE_CLASSIFICATION_CONFIDENCE] = Decimal(
+                str(pre_classification_confidence)
             )
-
-        if overall_blur_score is not None:
-            item[DocumentMetadata.OVERALL_BLUR_SCORE] = Decimal(str(overall_blur_score))
 
         ddb_service.put_item(table_name, item)
 
@@ -441,41 +441,25 @@ def insert_initial_ddb_record(
     trace_id: str | None = None,
 ):
     """Insert initial DDB record."""
-    # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
-    # in other lambdas. only ddb_insert_file_name Lambda
-    # has OpenCV/Poppler layers attached. including this import at the top of the
-    # file will cause the  container deployment to fail with a ModuleNotFoundError:
-    # No module named 'cv2' error
-    from documentai_api.utils.document_detector import (
-        DocumentDetector,
-        QualityMetricsNormalized,
-        QualityMetricsRaw,
-    )
-
     if not user_provided_document_category:
         logger.warning(f"Warning: user_provided_document_category is None/empty for {ddb_key}")
         user_provided_document_category = "unknown"
 
-    document_detector = DocumentDetector()
     content_type = s3_service.get_content_type(source_bucket_name, source_object_key)
     file_size_bytes = s3_service.get_file_size_bytes(source_bucket_name, source_object_key)
     file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_key)
 
     bda_percentage = 1.0  # TODO: fetch from SSM
-    is_multipage_detection_enabled = False  # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
     internal_api_response = None
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
-    document_detector = DocumentDetector()
-    profile = document_detector.get_document_profile(file_bytes, source_object_key)
-    pages_detected = profile.page_count
-    is_password_protected = profile.is_password_protected
-    is_document_blurry = profile.is_blurry
-    document_profile_raw_metrics: QualityMetricsRaw = profile.raw_metrics
-    document_profile_normalized_metrics: QualityMetricsNormalized = profile.normalized_metrics
-    overall_blur_score = profile.overall_blur_score
+    pages_detected = document_utils.get_page_count(file_bytes)
+    is_password_protected = document_utils.is_password_protected(file_bytes)
+    is_document_blurry = False
+    pre_classification_document_type = None
+    pre_classification_confidence = None
 
     if content_type == "image/bmp":
         process_status = ProcessStatus.NOT_IMPLEMENTED
@@ -490,35 +474,36 @@ def insert_initial_ddb_record(
         response_code = ResponseCodes.DOCUMENT_TYPE_NOT_IMPLEMENTED
 
     elif bda_percentage == 1.0 or random.random() <= bda_percentage:
-        if is_document_blurry:
+        result = preclassify_document_image(
+            file_bytes, content_type, list(get_all_schemas().keys())
+        )
+        pre_classification_document_type = result.document_type
+        pre_classification_confidence = result.confidence
+
+        if not result.is_document:
+            # clearly not a document (cat, random photo, etc.)
+            process_status = ProcessStatus.NO_DOCUMENT_DETECTED
+            response_code = ResponseCodes.NO_DOCUMENT_DETECTED
+
+        elif (
+            result.document_type in ["not_a_document", "other_document"]
+            and result.confidence < 0.85
+        ):
+            # it's a document but can't classify — likely blurry
             process_status = ProcessStatus.BLURRY_DOCUMENT_DETECTED
             response_code = ResponseCodes.BLURRY_DOCUMENT_DETECTED
+            is_document_blurry = True
+
+        elif result.document_count > 1:
+            process_status = ProcessStatus.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
+            response_code = ResponseCodes.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
 
         else:
+            # document passed pre-classification, proceed to extraction
             if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
-                # image file - needs grayscale conversion first
                 process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
             else:
-                # non-image file - can go directly to BDA
                 process_status = ProcessStatus.NOT_STARTED
-
-            if is_multipage_detection_enabled and file_bytes:
-                logger.info("=== Starting multi-page detection validation ===")
-
-                try:
-                    if document_detector.is_multipage_document(file_bytes):
-                        logger.info(f"{ddb_key} is a multipage doc")
-                        process_status = ProcessStatus.MULTIPAGE
-                        response_code = ResponseCodes.MULTIPAGE_DOCUMENT
-
-                    else:
-                        logger.info(f"{ddb_key} is a single page doc")
-
-                except Exception as e:
-                    logger.info(f"=== Multipage detection failed: {e} ===")
-
-            logger.info("=== Finished multi-page detection validation ===")
-
     else:
         process_status = ProcessStatus.NOT_SAMPLED
         response_code = ResponseCodes.SUCCESS
@@ -544,9 +529,8 @@ def insert_initial_ddb_record(
         trace_id=trace_id,
         is_document_blurry=is_document_blurry,
         is_password_protected=is_password_protected,
-        document_profile_raw_metrics=document_profile_raw_metrics,
-        document_profile_normalized_metrics=document_profile_normalized_metrics,
-        overall_blur_score=overall_blur_score,
+        pre_classification_document_type=pre_classification_document_type,
+        pre_classification_confidence=pre_classification_confidence,
     )
 
     # explicity remove file reference to free memory for the lambda
@@ -659,6 +643,25 @@ def classify_as_no_custom_blueprint_matched(object_key: str, data: Classificatio
     update_ddb(
         object_key=object_key,
         status=ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED,
+        internal_api_response=internal_api_response,
+        data=data,
+    )
+
+    # convert dataclass to dict for JSON serialization
+    return internal_api_response.__dict__
+
+
+def classify_as_multiple_documents_on_page(object_key: str, data: ClassificationData):
+    """Mark file processing as multiple documents detected on single page."""
+    internal_api_response: InternalApiResponse = get_internal_api_response(
+        object_key=object_key,
+        response_code=ResponseCodes.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE,
+        matched_document_class=None,
+    )
+
+    update_ddb(
+        object_key=object_key,
+        status=ProcessStatus.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE,
         internal_api_response=internal_api_response,
         data=data,
     )

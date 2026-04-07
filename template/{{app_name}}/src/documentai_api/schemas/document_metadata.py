@@ -15,6 +15,10 @@ class DocumentMetadata:
     CREATED_AT = "createdAt"
     UPDATED_AT = "updatedAt"
 
+    # preclassification fields
+    PRE_CLASSIFICATION_DOCUMENT_TYPE = "preClassificationDocumentType"
+    PRE_CLASSIFICATION_CONFIDENCE = "preClassificationConfidence"
+
     # performance tracking
     BDA_STARTED_AT = "bdaStartedAt"
     BDA_COMPLETED_AT = "bdaCompletedAt"

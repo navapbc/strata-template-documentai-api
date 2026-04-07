@@ -59,6 +59,13 @@ class AWSClientFactory:
 
     @classmethod
     @lru_cache(maxsize=1)
+    def get_bedrock_runtime_client(cls):
+        return AWSClientFactory.get_session().client(
+            "bedrock-runtime", region_name=AWSClientFactory._get_region()
+        )
+
+    @classmethod
+    @lru_cache(maxsize=1)
     def get_ssm_client(cls):
         return cls.get_session().client("ssm", region_name=cls._get_region())
 
