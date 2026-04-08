@@ -118,6 +118,11 @@
     "identity_document_types": [
       "US-drivers-licenses",
       "US-passports"
+    ],
+    "supported_content_types": [
+      "image/jpeg",
+      "image/png",
+      "application/pdf"
     ]
   },
   "upload_metadata_keys": {

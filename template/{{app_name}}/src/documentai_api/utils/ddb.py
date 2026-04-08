@@ -9,6 +9,7 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     TEXTRACT_IDENTITY_DOCUMENT_TYPES,
+    TEXTRACT_SUPPORTED_CONTENT_TYPES,
     ConfigDefaults,
     ProcessStatus,
 )
@@ -510,32 +511,51 @@ def insert_initial_ddb_record(
         elif result.document_count > 1:
             process_status = ProcessStatus.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
             response_code = ResponseCodes.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
-        elif result.document_type in TEXTRACT_IDENTITY_DOCUMENT_TYPES:
-            extract_started_at = datetime.now(UTC)
-            textract_response = analyze_id(file_bytes)
-            extract_completed_at = datetime.now(UTC)
 
-            fields = extract_fields_from_analyze_id(textract_response)
-            fields = map_textract_to_bda_fields(fields, result.document_type)
-            id_type = get_id_type(textract_response)
-            matched_document_class = get_document_class(id_type)
-            
-            # confidence only — no PII in DDB
-            field_confidence_scores = [{name: data["confidence"]} for name, data in fields.items()]
-            
-            # write extracted values to S3
-            output_bucket, output_prefix = s3_utils.parse_s3_uri(os.getenv(env.DOCUMENTAI_OUTPUT_LOCATION))
-            textract_s3_key = f"{output_prefix}/textract/{ddb_key}.json"
-            textract_s3_uri = f"s3://{output_bucket}/{textract_s3_key}"
-            s3_service.put_object(
-                output_bucket, textract_s3_key,
-                json.dumps({"source": "textract", "fields": fields}).encode(),
-                content_type="application/json",
-            )
+        elif result.document_type in TEXTRACT_IDENTITY_DOCUMENT_TYPES and content_type in TEXTRACT_SUPPORTED_CONTENT_TYPES:
+            try:
+                extract_started_at = datetime.now(UTC)
+                textract_response = analyze_id(file_bytes)
+                extract_completed_at = datetime.now(UTC)
 
-            logger.info(f"Textract identified document as {matched_document_class} with fields: {field_confidence_scores}")
-            process_status = ProcessStatus.SUCCESS
-            is_textract_result = True
+                output_bucket, output_prefix = s3_utils.parse_s3_uri(os.getenv(env.DOCUMENTAI_OUTPUT_LOCATION))
+
+                # write raw textract response to S3 for debugging/audit purposes
+                textract_s3_key = f"{output_prefix}/textract/{ddb_key}_raw.json"
+                fields = extract_fields_from_analyze_id(textract_response)
+                s3_service.put_object(
+                    output_bucket, f"{textract_s3_key}",
+                    json.dumps({"source": "textract", "fields": fields}).encode(),
+                    content_type="application/json",
+                )
+
+                fields = map_textract_to_bda_fields(fields, result.document_type)
+                id_type = get_id_type(textract_response)
+                matched_document_class = get_document_class(id_type)
+                
+                # confidence only — no PII in DDB
+                field_confidence_scores = [{name: data["confidence"]} for name, data in fields.items()]
+                
+                # write mapped extracted values to S3
+                textract_s3_key = f"{output_prefix}/textract/{ddb_key}.json"
+                textract_s3_uri = f"s3://{output_bucket}/{textract_s3_key}"
+                s3_service.put_object(
+                    output_bucket, textract_s3_key,
+                    json.dumps({"source": "textract", "fields": fields}).encode(),
+                    content_type="application/json",
+                )
+
+
+
+                logger.info(f"Textract identified document as {matched_document_class} with fields: {field_confidence_scores}")
+                process_status = ProcessStatus.SUCCESS
+                is_textract_result = True
+            except Exception as e:
+                logger.warning(f"Textract failed, falling back to BDA: {e}")
+                if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
+                    process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
+                else:
+                    process_status = ProcessStatus.NOT_STARTED
         else:
             # document passed pre-classification, proceed to extraction
             if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:

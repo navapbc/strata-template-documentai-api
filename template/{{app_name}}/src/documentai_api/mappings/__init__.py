@@ -1,8 +1,10 @@
 from documentai_api.mappings.document_classes import TEXTRACT_ID_TYPE_TO_BDA_DOCUMENT_CLASS
-from documentai_api.mappings.us_passports import TEXTRACT_TO_BDA_FIELD_MAP
+from documentai_api.mappings.us_passports import TEXTRACT_TO_BDA_FIELD_MAP as US_PASSPORT_FIELD_MAP
+from documentai_api.mappings.us_drivers_licenses import TEXTRACT_TO_BDA_FIELD_MAP as US_DL_FIELD_MAP
 
 _FIELD_MAPS = {
-    "US-passports": TEXTRACT_TO_BDA_FIELD_MAP,
+    "US-passports": US_PASSPORT_FIELD_MAP,
+    "US-drivers-licenses": US_DL_FIELD_MAP,
 }
 
 def map_textract_to_bda_fields(fields: dict, document_class: str) -> dict:

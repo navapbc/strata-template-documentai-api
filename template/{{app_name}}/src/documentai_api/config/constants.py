@@ -18,6 +18,7 @@ DEFAULT_TIMEOUT = SETTINGS["api"]["default_timeout"]
 SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
 TEXTRACT_IDENTITY_DOCUMENT_TYPES = SETTINGS["textract"]["identity_document_types"]
+TEXTRACT_SUPPORTED_CONTENT_TYPES = SETTINGS["textract"]["supported_content_types"]
 UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
 
 # grouped processing statuses
