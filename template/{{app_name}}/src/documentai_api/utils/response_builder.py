@@ -7,6 +7,7 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUSES_SUCCESSFUL,
     ProcessStatus,
+    ExtractMethod
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services.bda import get_bda_result_json
@@ -15,6 +16,7 @@ from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
 from documentai_api.utils.strings import snake_to_camel
+from documentai_api.utils.textract import extract_field_values_from_textract_results
 
 logger = get_logger(__name__)
 
@@ -26,13 +28,19 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     if not ddb_record:
         return {}
 
-    bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-    metadata, field_values = extract_field_values_from_bda_results(bda_results)
+    s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
+    result_json = get_bda_result_json(s3_uri)
+
+    if not result_json:
+        return {}
 
     # get confidence scores and extracted values if requested
     if include_extracted_data:
-        bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-        metadata, field_values = extract_field_values_from_bda_results(bda_results)
+        if ddb_record.get(DocumentMetadata.EXTRACT_METHOD) == ExtractMethod.TEXTRACT:
+            metadata, field_values = extract_field_values_from_textract_results(result_json)
+        else:
+            metadata, field_values = extract_field_values_from_bda_results(result_json)
+
         field_confidence_map_list = metadata.field_confidence_map_list
     else:
         field_confidence_map_list = json.loads(
@@ -44,8 +52,7 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     fields = {}
     for field_item in field_confidence_map_list:
         for field_name, confidence in field_item.items():
-            camel_field = snake_to_camel(field_name)
-            fields[camel_field] = {
+            fields[field_name] = {
                 "confidence": round(confidence, 2),
                 "value": field_values.get(field_name) if include_extracted_data else "<redacted>",
             }
@@ -57,6 +64,7 @@ def get_internal_api_response(
     object_key: str,
     response_code: str,
     matched_document_class: str | None,
+    user_provided_document_category: str | None = None,
 ) -> InternalApiResponse:
     """Get API response object for internal use.
 
@@ -68,10 +76,10 @@ def get_internal_api_response(
     Returns:
         InternalApiResponse: Response object for API endpoints
     """
-    # import here to avoid circular dependency
-    from documentai_api.utils.ddb import get_user_provided_document_category
-
-    user_provided_document_category = get_user_provided_document_category(object_key)
+    if not user_provided_document_category:
+        # import here to avoid circular dependency
+        from documentai_api.utils.ddb import get_user_provided_document_category
+        user_provided_document_category = get_user_provided_document_category(object_key)
 
     return InternalApiResponse(
         validation_passed=ResponseCodes.is_success_response_code(response_code),

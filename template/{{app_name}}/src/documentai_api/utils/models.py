@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from documentai_api.config.constants import DocumentCategory
+from documentai_api.config.constants import DocumentCategory, ExtractMethod
 
 
 @dataclass
@@ -53,3 +53,14 @@ class BedrockClassificationResult:
     confidence: float
     document_count: int
     is_document: bool
+
+@dataclass
+class ExtractedFieldResultsSummary:
+    confidence_scores: list
+    empty_fields: list
+    field_confidence_map_list: list
+
+@dataclass
+class ExtractedFieldResult:
+    confidence: float
+    is_empty: bool

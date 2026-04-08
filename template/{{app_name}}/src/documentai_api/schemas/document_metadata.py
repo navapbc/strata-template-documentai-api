@@ -19,6 +19,13 @@ class DocumentMetadata:
     PRE_CLASSIFICATION_DOCUMENT_TYPE = "preClassificationDocumentType"
     PRE_CLASSIFICATION_CONFIDENCE = "preClassificationConfidence"
 
+    # extract tracking
+    EXTRACT_METHOD = "extractMethod"
+    EXTRACT_STARTED_AT = "extractStartedAt"
+    EXTRACT_COMPLETED_AT = "extractCompletedAt"
+    EXTRACT_PROCESSING_TIME_SECONDS = "extractProcessingTimeSeconds"
+    EXTRACT_OUTPUT_S3_URI = "extractOutputS3Uri"
+
     # performance tracking
     BDA_STARTED_AT = "bdaStartedAt"
     BDA_COMPLETED_AT = "bdaCompletedAt"

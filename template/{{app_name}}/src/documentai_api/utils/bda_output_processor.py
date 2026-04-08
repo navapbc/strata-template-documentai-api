@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
 from documentai_api.services.bda import extract_bda_output_s3_uri, get_bda_result_json
 from documentai_api.utils.bda import (
-    BdaFieldProcessingData,
     extract_field_metadata_from_bda_results,
     get_text_from_standard_blueprint,
 )
@@ -17,7 +16,7 @@ from documentai_api.utils.ddb import (
 )
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.response_codes import ResponseCodes
-
+from documentai_api.utils.models import ExtractedFieldResultsSummary
 logger = get_logger(__name__)
 
 
@@ -53,7 +52,7 @@ def get_bda_processing_results(bda_result_json: dict) -> BdaProcessingResults:
     )
 
 
-def _determine_response_code(field_data: BdaFieldProcessingData) -> str:
+def _determine_response_code(field_data: ExtractedFieldResultsSummary) -> str:
     """Determine response code based on field results."""
     # add logic here if response code should be derived from field data
     # returning success as default

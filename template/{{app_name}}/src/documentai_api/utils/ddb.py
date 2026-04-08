@@ -8,6 +8,7 @@ import documentai_api.utils.documents as document_utils
 from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
+    TEXTRACT_IDENTITY_DOCUMENT_TYPES,
     ConfigDefaults,
     ProcessStatus,
 )
@@ -23,10 +24,14 @@ from documentai_api.utils.models import (
     FieldMetrics,
     InternalApiResponse,
     ProcessingTimes,
+    ExtractMethod
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
 from documentai_api.utils.schemas import get_all_schemas
+from documentai_api.services.textract import analyze_id
+from documentai_api.utils.textract import extract_fields_from_analyze_id, get_id_type
+from documentai_api.mappings import get_document_class, map_textract_to_bda_fields
 
 logger = get_logger(__name__)
 
@@ -254,8 +259,12 @@ def _build_update_expression(
             extract_region_from_bda_arn(bda_invocation_arn)
             or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
+        
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
+
+        updates.append(f"{DocumentMetadata.EXTRACT_METHOD} = :extractMethod")
+        values[":extractMethod"] = ExtractMethod.BDA
 
     if error_message:
         updates.append(f"{DocumentMetadata.ERROR_MESSAGE} = :errorMessage")
@@ -460,6 +469,10 @@ def insert_initial_ddb_record(
     is_document_blurry = False
     pre_classification_document_type = None
     pre_classification_confidence = None
+    is_textract_result = False
+    extract_started_at = None
+    extract_completed_at = None
+    matched_document_class = None
 
     if content_type == "image/bmp":
         process_status = ProcessStatus.NOT_IMPLEMENTED
@@ -497,7 +510,32 @@ def insert_initial_ddb_record(
         elif result.document_count > 1:
             process_status = ProcessStatus.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
             response_code = ResponseCodes.MULTIPLE_DOCUMENTS_ON_SINGLE_PAGE
+        elif result.document_type in TEXTRACT_IDENTITY_DOCUMENT_TYPES:
+            extract_started_at = datetime.now(UTC)
+            textract_response = analyze_id(file_bytes)
+            extract_completed_at = datetime.now(UTC)
 
+            fields = extract_fields_from_analyze_id(textract_response)
+            fields = map_textract_to_bda_fields(fields, result.document_type)
+            id_type = get_id_type(textract_response)
+            matched_document_class = get_document_class(id_type)
+            
+            # confidence only — no PII in DDB
+            field_confidence_scores = [{name: data["confidence"]} for name, data in fields.items()]
+            
+            # write extracted values to S3
+            output_bucket, output_prefix = s3_utils.parse_s3_uri(os.getenv(env.DOCUMENTAI_OUTPUT_LOCATION))
+            textract_s3_key = f"{output_prefix}/textract/{ddb_key}.json"
+            textract_s3_uri = f"s3://{output_bucket}/{textract_s3_key}"
+            s3_service.put_object(
+                output_bucket, textract_s3_key,
+                json.dumps({"source": "textract", "fields": fields}).encode(),
+                content_type="application/json",
+            )
+
+            logger.info(f"Textract identified document as {matched_document_class} with fields: {field_confidence_scores}")
+            process_status = ProcessStatus.SUCCESS
+            is_textract_result = True
         else:
             # document passed pre-classification, proceed to extraction
             if content_type in ["image/jpeg", "image/png", "image/bmp", "image/tiff"]:
@@ -508,15 +546,17 @@ def insert_initial_ddb_record(
         process_status = ProcessStatus.NOT_SAMPLED
         response_code = ResponseCodes.SUCCESS
 
-    # initial status does not qualify for bda processing
-    # create the json response signaling the process is complete
+    
     if process_status not in PROCESSING_STATUS_PENDING_EXTRACTION:
         internal_api_response: InternalApiResponse = get_internal_api_response(
             object_key=ddb_key,
             response_code=response_code,
             matched_document_class=None,
+            user_provided_document_category=user_provided_document_category,
         )
-
+    
+    # initial status does not qualify for bda processing
+    # create the json response signaling the process is complete
     insert_ddb(
         object_key=ddb_key,
         user_provided_document_category=user_provided_document_category,
@@ -532,6 +572,37 @@ def insert_initial_ddb_record(
         pre_classification_document_type=pre_classification_document_type,
         pre_classification_confidence=pre_classification_confidence,
     )
+
+    if is_textract_result:
+        
+        data = ClassificationData(
+            matched_document_class=matched_document_class,
+            field_confidence_scores=field_confidence_scores,
+            bda_output_s3_uri=textract_s3_uri,
+        )
+
+        internal_api_response = get_internal_api_response(
+            object_key=ddb_key,
+            response_code=response_code,
+            matched_document_class=matched_document_class,
+            user_provided_document_category=user_provided_document_category,
+        )
+
+        update_ddb(
+            object_key=ddb_key,
+            status=process_status,
+            internal_api_response=internal_api_response,
+            data=data,
+        )
+
+        # TODO: update timing logic - consider separate to separate method
+        extract_time = get_elapsed_time_seconds(extract_started_at, extract_completed_at)
+        _execute_ddb_update(
+            ddb_key,
+            f"SET {DocumentMetadata.EXTRACT_STARTED_AT} = :start, {DocumentMetadata.EXTRACT_COMPLETED_AT} = :end, {DocumentMetadata.EXTRACT_PROCESSING_TIME_SECONDS} = :time, {DocumentMetadata.EXTRACT_METHOD} = :method",
+            {":start": extract_started_at.isoformat(), ":end": extract_completed_at.isoformat(), ":time": extract_time, ":method": ExtractMethod.TEXTRACT},
+        )
+
 
     # explicity remove file reference to free memory for the lambda
     del file_bytes

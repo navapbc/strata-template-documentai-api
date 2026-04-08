@@ -17,6 +17,7 @@ API_AUTH_KEY_HEADER_NAME = SETTINGS["api"]["auth"]["key"]["header_name"]
 DEFAULT_TIMEOUT = SETTINGS["api"]["default_timeout"]
 SUPPORTED_CONTENT_TYPES = SETTINGS["file_validation"]["supported_content_types"]
 DOCUMENT_CATEGORIES = SETTINGS["document_categories"]
+TEXTRACT_IDENTITY_DOCUMENT_TYPES = SETTINGS["textract"]["identity_document_types"]
 UPLOAD_METADATA_KEYS = SETTINGS["upload_metadata_keys"]
 
 # grouped processing statuses
@@ -65,3 +66,8 @@ ProcessStatus = Enum(
     {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
     type=str,
 )
+
+
+class ExtractMethod:
+    TEXTRACT = "textract"
+    BDA = "bda"

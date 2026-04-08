@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from functools import lru_cache
 
 from documentai_api.config.constants import (
@@ -8,21 +7,10 @@ from documentai_api.config.constants import (
     BdaResponseFields,
 )
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ExtractedFieldResultsSummary, ExtractedFieldResult
 
 logger = get_logger(__name__)
 
-
-@dataclass
-class BdaFieldProcessingData:
-    confidence_scores: list
-    empty_fields: list
-    field_confidence_map_list: list
-
-
-@dataclass
-class BdaFieldProcessingResult:
-    confidence: float
-    is_empty: bool
 
 
 @lru_cache(maxsize=1)
@@ -94,7 +82,7 @@ def _extract_fields_recursive(
             )
 
 
-def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessingResult:
+def _process_single_field(field_name: str, field_data: dict) -> ExtractedFieldResult:
     """Process a single field and return its results."""
     confidence = field_data.get(BdaResponseFields.FIELD_CONFIDENCE, 0)
     value = field_data.get(BdaResponseFields.FIELD_VALUE, "")
@@ -102,7 +90,7 @@ def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessi
 
     logger.info(f"Extracted field name: {field_name}, confidence: {confidence}")
 
-    return BdaFieldProcessingResult(confidence, is_empty)
+    return ExtractedFieldResult(confidence, is_empty)
 
 
 def get_text_from_standard_blueprint(bda_result_json):
@@ -131,10 +119,10 @@ def get_text_from_standard_blueprint(bda_result_json):
 
 def extract_field_values_from_bda_results(
     bda_result_json: dict,
-) -> tuple[BdaFieldProcessingData, dict]:
+) -> tuple[ExtractedFieldResultsSummary, dict]:
     """Extract both metadata and field values from BDA result."""
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
-        return (BdaFieldProcessingData([], [], []), {})
+        return (ExtractedFieldResultsSummary([], [], []), {})
 
     explainability_info = bda_result_json[BdaResponseFields.EXPLAINABILITY_INFO]
 
@@ -149,7 +137,7 @@ def extract_field_values_from_bda_results(
                 item, "", confidence_scores, empty_fields, field_confidence_map_list, field_values
             )
 
-    metadata = BdaFieldProcessingData(
+    metadata = ExtractedFieldResultsSummary(
         confidence_scores=confidence_scores,
         empty_fields=empty_fields,
         field_confidence_map_list=field_confidence_map_list,
@@ -158,7 +146,7 @@ def extract_field_values_from_bda_results(
     return (metadata, field_values)
 
 
-def extract_field_metadata_from_bda_results(bda_result_json: dict) -> BdaFieldProcessingData:
+def extract_field_metadata_from_bda_results(bda_result_json: dict) -> ExtractedFieldResultsSummary:
     """Extract only metadata (confidence, empty fields) from BDA result."""
     metadata, _ = extract_field_values_from_bda_results(bda_result_json)
     return metadata

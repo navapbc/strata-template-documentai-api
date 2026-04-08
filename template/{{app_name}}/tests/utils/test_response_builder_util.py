@@ -31,12 +31,12 @@ def test_extract_field_values(include_extracted_data):
             "documentai_api.utils.response_builder.extract_field_values_from_bda_results"
         ) as mock_extract_bda,
     ):
-        from documentai_api.utils.bda import BdaFieldProcessingData
+        from documentai_api.utils.models import ExtractedFieldResultsSummary
 
         mock_get_bda.return_value = {"fake": "bda_result"}
 
         # mock metadata with field_confidence_map_list
-        mock_metadata = BdaFieldProcessingData(
+        mock_metadata = ExtractedFieldResultsSummary(
             confidence_scores=[0.95, 0.85],
             empty_fields=[],
             field_confidence_map_list=[{"field_name_1": 0.95}, {"field_name_2": 0.85}],

@@ -69,6 +69,13 @@ class AWSClientFactory:
     def get_ssm_client(cls):
         return cls.get_session().client("ssm", region_name=cls._get_region())
 
+
+    @classmethod
+    @lru_cache(maxsize=1)
+    def get_textract_client(cls):
+        return cls.get_session().client("textract", region_name=cls._get_region())
+
+
     @classmethod
     def get_ddb_table(cls, table_name: str):
         """Get DynamoDB table resource by name."""
