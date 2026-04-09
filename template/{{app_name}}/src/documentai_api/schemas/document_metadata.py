@@ -1,6 +1,7 @@
 class DocumentMetadata:
     # core fields
     FILE_NAME = "fileName"
+    ORIGINAL_FILE_NAME = "originalFileName"
     USER_PROVIDED_DOCUMENT_CATEGORY = "userProvidedDocumentCategory"
     PROCESS_STATUS = "processStatus"
     BDA_INVOCATION_ARN = "bdaInvocationArn"
