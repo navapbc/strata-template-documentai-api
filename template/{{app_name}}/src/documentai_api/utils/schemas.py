@@ -7,10 +7,10 @@ from documentai_api.config.constants import (
     CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES,
     CACHE_KEY_BLUEPRINT_SCHEMAS,
 )
+from documentai_api.logging import get_logger
 from documentai_api.services.bda import get_blueprint, get_data_automation_project
 from documentai_api.utils import env
 from documentai_api.utils.cache import get_cache
-from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

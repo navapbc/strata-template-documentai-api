@@ -8,10 +8,10 @@ from documentai_api.config.constants import (
     PROCESSING_STATUSES_SUCCESSFUL,
     ProcessStatus,
 )
+from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services.bda import get_bda_result_json
 from documentai_api.utils.bda import extract_field_values_from_bda_results
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
 from documentai_api.utils.strings import snake_to_camel

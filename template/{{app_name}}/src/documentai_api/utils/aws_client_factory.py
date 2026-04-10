@@ -3,8 +3,8 @@ from functools import lru_cache
 
 import boto3
 
+from documentai_api.logging import get_logger
 from documentai_api.utils import env
-from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -10,12 +10,12 @@ from documentai_api.config.constants import (
     ConfigDefaults,
     ProcessStatus,
 )
+from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,

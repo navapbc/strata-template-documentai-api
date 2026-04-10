@@ -1,12 +1,12 @@
 import os
 
+from documentai_api.logging import get_logger
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils.env import (
     BDA_PROFILE_ARN,
     BDA_PROJECT_ARN,
     DOCUMENTAI_OUTPUT_LOCATION,
 )
-from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

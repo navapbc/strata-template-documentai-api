@@ -18,6 +18,7 @@ dependencies = [
   "typer>=0.16.0",
   "click>=8.1,<8.3",
   "tenacity>=8.2.0",
+  "pydantic-settings>=2.0.3",
 ]
 
 [project.optional-dependencies]
@@ -93,6 +94,12 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "@abstractmethod",
+]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not audit'"
+markers = [
+    "audit: mark a test as a security audit log test, to be run isolated from other tests",
 ]
 
 [build-system]

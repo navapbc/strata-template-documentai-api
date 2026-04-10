@@ -2,8 +2,8 @@
 
 import json
 
+from documentai_api.logging import get_logger
 from documentai_api.utils.aws_client_factory import AWSClientFactory
-from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

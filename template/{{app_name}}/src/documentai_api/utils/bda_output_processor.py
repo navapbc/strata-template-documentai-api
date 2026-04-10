@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
+from documentai_api.logging import get_logger
 from documentai_api.services.bda import extract_bda_output_s3_uri, get_bda_result_json
 from documentai_api.utils.bda import (
     BdaFieldProcessingData,
@@ -15,7 +16,6 @@ from documentai_api.utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)

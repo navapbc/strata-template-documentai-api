@@ -6,7 +6,7 @@ from documentai_api.config.constants import (
     BDA_JOB_STATUS_RUNNING,
     BdaResponseFields,
 )
-from documentai_api.utils.logger import get_logger
+from documentai_api.logging import get_logger
 
 logger = get_logger(__name__)
 
