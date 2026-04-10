@@ -27,6 +27,7 @@ from documentai_api.config.constants import (
     API_TITLE,
     API_VERSION,
     PROCESSING_STATUS_COMPLETED,
+    S3_METADATA_KEY_ORIGINAL_FILE_NAME,
     SUPPORTED_CONTENT_TYPES,
     UPLOAD_METADATA_KEYS,
     DocumentCategory,
@@ -138,6 +139,7 @@ def _get_job_status(job_id: str) -> JobStatus:
 
 async def upload_document_for_processing(
     file: UploadFile,
+    original_file_name: str,
     unique_file_name: str,
     content_type: str,
     user_provided_document_category: DocumentCategory = None,
@@ -170,6 +172,8 @@ async def upload_document_for_processing(
             metadata[UPLOAD_METADATA_KEYS["user_provided_document_category"]] = (
                 user_provided_document_category.value
             )
+
+        metadata[S3_METADATA_KEY_ORIGINAL_FILE_NAME] = original_file_name
 
         if job_id:
             metadata[UPLOAD_METADATA_KEYS["job_id"]] = job_id
@@ -242,7 +246,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
     else:
         # fallback if we never got a record
         return {
-            "status": "failed",
+            "jobStatus": "failed",
             "message": f"Processing timeout after {timeout} seconds",
             "processedAt": None,
         }
@@ -295,6 +299,7 @@ async def create_document(
 
     await upload_document_for_processing(
         file=file,
+        original_file_name=file.filename,
         unique_file_name=unique_file_name,
         content_type=actual_content_type,
         user_provided_document_category=category,
@@ -306,7 +311,7 @@ async def create_document(
     if not wait:
         return {
             "jobId": job_id,
-            "status": ProcessStatus.NOT_STARTED.value,
+            "jobStatus": ProcessStatus.NOT_STARTED.value,
             "message": "Document uploaded successfully",
         }
     else:
@@ -326,7 +331,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
         if not job_status.v1_response_json:
             return {
                 "jobId": job_id,
-                "status": job_status.process_status,
+                "jobStatus": job_status.process_status,
                 "message": "Processing in progress",
             }
 

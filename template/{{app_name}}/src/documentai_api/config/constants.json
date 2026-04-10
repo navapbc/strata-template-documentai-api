@@ -111,8 +111,9 @@
     ]
   },
   "upload_metadata_keys": {
-    "user_provided_document_category": "user-provided-document-category",
     "job_id": "job-id",
-    "trace_id": "trace-id"
+    "original_file_name": "original-file-name",
+    "trace_id": "trace-id",
+    "user_provided_document_category": "user-provided-document-category"
   }
 }
