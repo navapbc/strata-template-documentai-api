@@ -14,9 +14,9 @@ logger = get_logger(__name__)
 
 @dataclass
 class BdaFieldProcessingData:
-    confidence_scores: list
-    empty_fields: list
-    field_confidence_map_list: list
+    confidence_scores: list[float]
+    empty_fields: list[str]
+    field_confidence_map_list: list[dict[str, float]]
 
 
 @dataclass
@@ -41,13 +41,13 @@ def is_bda_job_completed(status: str) -> bool:
 
 
 def _extract_fields_recursive(
-    data: dict,
+    data: dict[str, Any],
     parent_key: str,
-    confidence_scores: list,
-    empty_fields: list,
-    field_confidence_map_list: list,
-    field_values: dict | None = None,
-):
+    confidence_scores: list[float],
+    empty_fields: list[str],
+    field_confidence_map_list: list[dict[str, float]],
+    field_values: dict[str, Any] | None = None,
+) -> None:
     """Recursively process fields, handling both flat and nested structures."""
     for field_name, field_data in data.items():
         if not isinstance(field_data, dict):
@@ -83,7 +83,7 @@ def _extract_fields_recursive(
             )
 
 
-def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessingResult:
+def _process_single_field(field_name: str, field_data: dict[str, Any]) -> BdaFieldProcessingResult:
     """Process a single field and return its results."""
     confidence = field_data.get(BdaResponseFields.FIELD_CONFIDENCE, 0)
     value = field_data.get(BdaResponseFields.FIELD_VALUE, "")
@@ -94,7 +94,7 @@ def _process_single_field(field_name: str, field_data: dict) -> BdaFieldProcessi
     return BdaFieldProcessingResult(confidence, is_empty)
 
 
-def get_text_from_standard_blueprint(bda_result_json):
+def get_text_from_standard_blueprint(bda_result_json: dict[str, Any]) -> str | None:
     """Extract text from BDA standard output for both document and image modalities."""
     if not bda_result_json:
         return None
@@ -105,7 +105,7 @@ def get_text_from_standard_blueprint(bda_result_json):
         page = bda_result_json["pages"][0]
         text = page.get("representation", {}).get("text", "")
         if text:
-            return text.strip()
+            return str(text.strip())
 
     elif semantic_modality == "IMAGE" and bda_result_json.get("image"):
         image_data = bda_result_json["image"]
@@ -113,14 +113,14 @@ def get_text_from_standard_blueprint(bda_result_json):
         words = [word.get("text", "") for word in text_words if word.get("text")]
         text = " ".join(words)
         if text:
-            return text.strip()
+            return str(text.strip())
 
     return None
 
 
 def extract_field_values_from_bda_results(
-    bda_result_json: dict,
-) -> tuple[BdaFieldProcessingData, dict]:
+    bda_result_json: dict[str, Any],
+) -> tuple[BdaFieldProcessingData, dict[str, Any]]:
     """Extract both metadata and field values from BDA result."""
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
         return (BdaFieldProcessingData([], [], []), {})
@@ -147,7 +147,9 @@ def extract_field_values_from_bda_results(
     return (metadata, field_values)
 
 
-def extract_field_metadata_from_bda_results(bda_result_json: dict) -> BdaFieldProcessingData:
+def extract_field_metadata_from_bda_results(
+    bda_result_json: dict[str, Any],
+) -> BdaFieldProcessingData:
     """Extract only metadata (confidence, empty fields) from BDA result."""
     metadata, _ = extract_field_values_from_bda_results(bda_result_json)
     return metadata

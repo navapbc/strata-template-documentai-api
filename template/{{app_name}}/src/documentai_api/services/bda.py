@@ -1,6 +1,7 @@
 """Bedrock Data Automation service methods."""
 
 import json
+from typing import Any, cast
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils.logger import get_logger
@@ -8,36 +9,43 @@ from documentai_api.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def get_data_automation_project(project_arn: str) -> dict:
+def get_data_automation_project(project_arn: str) -> dict[str, Any]:
     """Get BDA project details including blueprints."""
     bedrock_client = AWSClientFactory.get_bda_client()
     logger.debug(f"Getting BDA project details for project ARN: {project_arn}")
-    return bedrock_client.get_data_automation_project(projectArn=project_arn)
+    return cast(dict[str, Any], bedrock_client.get_data_automation_project(projectArn=project_arn))
 
 
-def get_blueprint(blueprint_arn: str) -> dict:
+def get_blueprint(blueprint_arn: str) -> dict[str, Any]:
     """Get blueprint schema details."""
     bedrock_client = AWSClientFactory.get_bda_client()
-    return bedrock_client.get_blueprint(blueprintArn=blueprint_arn)
+    return cast(dict[str, Any], bedrock_client.get_blueprint(blueprintArn=blueprint_arn))
 
 
-def invoke_data_automation_async(project_arn: str, input_config: dict, output_config: dict) -> dict:
+def invoke_data_automation_async(
+    project_arn: str, input_config: dict[str, Any], output_config: dict[str, Any]
+) -> dict[str, Any]:
     """Invoke BDA job asynchronously."""
     bedrock_client = AWSClientFactory.get_bda_runtime_client()
 
-    return bedrock_client.invoke_data_automation_async(
-        projectArn=project_arn, inputConfiguration=input_config, outputConfiguration=output_config
+    return cast(
+        dict[str, Any],
+        bedrock_client.invoke_data_automation_async(
+            projectArn=project_arn,
+            inputConfiguration=input_config,
+            outputConfiguration=output_config,
+        ),
     )
 
 
-def get_data_automation_job(job_arn: str) -> dict:
+def get_data_automation_job(job_arn: str) -> dict[str, Any]:
     """Get BDA job status."""
     bedrock_client = AWSClientFactory.get_bda_runtime_client()
 
-    return bedrock_client.get_data_automation_job(jobArn=job_arn)
+    return cast(dict[str, Any], bedrock_client.get_data_automation_job(jobArn=job_arn))
 
 
-def get_bda_result_json(bda_result_uri: str) -> dict | None:
+def get_bda_result_json(bda_result_uri: str) -> dict[str, Any] | None:
     """Read and return BDA result JSON from S3."""
     if not bda_result_uri:
         return None
@@ -51,7 +59,7 @@ def get_bda_result_json(bda_result_uri: str) -> dict | None:
         bda_result_object = s3.get_object(Bucket=result_bucket, Key=result_key)
         bda_result_json = json.loads(bda_result_object["Body"].read().decode("utf-8"))
 
-        return bda_result_json
+        return cast(dict[str, Any], bda_result_json)
     except Exception as e:
         logger.error(f"Failed to read result JSON: {e}")
         return None
@@ -61,7 +69,9 @@ def get_bda_job_response(bda_invocation_arn: str) -> str | None:
     """Get BDA job status."""
     try:
         bedrock_client = AWSClientFactory.get_bda_runtime_client()
-        return bedrock_client.get_data_automation_status(invocationArn=bda_invocation_arn)
+        return cast(
+            str, bedrock_client.get_data_automation_status(invocationArn=bda_invocation_arn)
+        )
     except Exception:
         return None
 
@@ -79,10 +89,10 @@ def extract_bda_output_s3_uri(
         for output_meta in job_metadata.get("output_metadata", []):
             for segment in output_meta.get("segment_metadata", []):
                 if "custom_output_path" in segment:
-                    return segment["custom_output_path"]
+                    return str(segment["custom_output_path"])
 
                 if "standard_output_path" in segment:
-                    return segment["standard_output_path"]
+                    return str(segment["standard_output_path"])
 
         return None
     except (TypeError, AttributeError) as e:

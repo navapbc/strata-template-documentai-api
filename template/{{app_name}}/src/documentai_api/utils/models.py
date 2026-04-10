@@ -23,9 +23,9 @@ class ClassificationData:
     matched_document_class: str | None = None
     matched_blueprint_name: str | None = None
     matched_blueprint_confidence: float | None = None
-    field_confidence_scores: list[dict] | None = None
-    field_below_threshold_list: list | None = None
-    field_empty_list: list | None = None
+    field_confidence_scores: list[dict[str, float]] | None = None
+    field_below_threshold_list: list[str] | None = None
+    field_empty_list: list[str] | None = None
     additional_info: str | None = None
 
 

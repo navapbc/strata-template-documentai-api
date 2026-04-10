@@ -31,7 +31,9 @@ dev = [
   "httpx>=0.24.0",
   "moto[all]>=4.2.0",
   "freezegun>=1.2.0",
-  "mypy>=1.5.0",
+  "mypy>=1.20.0",
+  "boto3-stubs>=1.38.0",
+  "types-boto3[s3,dynamodb,bedrock,bedrock-runtime,sqs,athena,ssm]>=1.38.0",
 ]
 
 [project.scripts]
@@ -40,15 +42,28 @@ bda_result_processor = "documentai_api.jobs.bda_result_processor.main:app"
 document_processor = "documentai_api.jobs.document_processor.main:app"
 export-openapi = "documentai_api.cli.export_openapi:app"
 
-[[tool.mypy.overrides]]
-# documentai_api.utils.document_detector will eventually be replaced with Claude Haiku
-module = "documentai_api.utils.document_detector"
-ignore_errors = true
+[tool.mypy]
+pretty = true
+show_error_context = true
+strict = true
+# prep for mypy 2.0
+local_partial_types = true
+allow_redefinition_new = true
+strict_bytes = true
 
 [[tool.mypy.overrides]]
-# boto3/botocore do not provide type hints, exclude from mypy type checking
 module = ["boto3.*", "botocore.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# document_detector.py has heavy OpenCV/numpy typing issues with over 100 mypy lint findings
+# inline ingores for all 100+ seems like overkill. add a targeted, less strict override 
+# for documentai_api.utils.document_detector
+# note: the file will be eventually replaced with lightweight alternative (Claude Haiku pre-classification)
+module = "documentai_api.utils.document_detector"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disable_error_code = ["type-arg", "arg-type", "call-overload", "return-value", "attr-defined", "var-annotated"]
 
 [tool.ruff]
 line-length = 100

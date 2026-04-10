@@ -1,12 +1,13 @@
 import json
 from enum import StrEnum
 from pathlib import Path
+from typing import Any, cast
 
 
-def load_settings():
+def load_settings() -> dict[str, Any]:
     config_path = Path(__file__).parent / "constants.json"
     with open(config_path) as f:
-        return json.load(f)
+        return cast(dict[str, Any], json.load(f))
 
 
 SETTINGS = load_settings()

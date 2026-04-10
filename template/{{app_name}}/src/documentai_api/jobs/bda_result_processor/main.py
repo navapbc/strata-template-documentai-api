@@ -2,6 +2,7 @@
 """Process BDA output from S3 and extract document data."""
 
 import json
+from typing import Any
 
 import typer
 
@@ -45,7 +46,7 @@ def extract_uploaded_filename(object_key: str) -> str:
     return filename
 
 
-def main(bucket_name: str, object_key: str) -> dict:
+def main(bucket_name: str, object_key: str) -> dict[str, Any]:
     """Process BDA output file.
 
     Args:
@@ -75,7 +76,7 @@ def main(bucket_name: str, object_key: str) -> dict:
 def cli(
     bucket_name: str = typer.Argument(..., help="S3 bucket containing BDA output"),
     object_key: str = typer.Argument(..., help="S3 object key of BDA output file"),
-):
+) -> None:
     """Process BDA output file."""
     try:
         result = main(bucket_name, object_key)

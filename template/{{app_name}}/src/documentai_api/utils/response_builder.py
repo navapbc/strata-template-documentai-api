@@ -21,7 +21,9 @@ logger = get_logger(__name__)
 
 # TODO: Refactor to improve testability - consider making public along with
 # restructuring to reduce mocking in tests
-def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
+def _extract_field_values(
+    ddb_record: dict[str, Any], include_extracted_data: bool
+) -> dict[str, Any]:
     """Extract field data for API response."""
     if not ddb_record:
         return {}

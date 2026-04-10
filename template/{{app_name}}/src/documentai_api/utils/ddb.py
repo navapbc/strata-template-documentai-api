@@ -116,7 +116,9 @@ def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
     return FieldMetrics(field_count, non_empty_count, avg_confidence)
 
 
-def _build_completion_timing(object_key: str, bda_output_s3_uri: str | None) -> tuple[list, dict]:
+def _build_completion_timing(
+    object_key: str, bda_output_s3_uri: str | None
+) -> tuple[list[str], dict[str, Any]]:
     """Build completion timing updates."""
     updates = []
     values: dict[str, Any] = {}
@@ -166,7 +168,7 @@ def _build_completion_timing(object_key: str, bda_output_s3_uri: str | None) -> 
 
 def _build_timing_updates(
     object_key: str, status: str, bda_output_s3_uri: str | None
-) -> tuple[str, dict]:
+) -> tuple[str, dict[str, Any]]:
     """Handle all timing-related updates for different statuses."""
     status = status.value if isinstance(status, ProcessStatus) else status
 
@@ -201,7 +203,7 @@ def _build_update_expression(
     v1_api_response: str | None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
-) -> tuple[str, dict]:
+) -> tuple[str, dict[str, Any]]:
     """Build DynamoDB update expression and values."""
     updates = [
         f"{DocumentMetadata.PROCESS_STATUS} = :processStatus",
@@ -268,7 +270,9 @@ def _build_update_expression(
     return "SET " + ", ".join(updates), values
 
 
-def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
+def _execute_ddb_update(
+    object_key: str, update_expression: str, expression_values: dict[str, Any]
+) -> None:
     """Execute the DynamoDB update."""
     table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     key = {"fileName": object_key}
@@ -293,7 +297,7 @@ def get_user_provided_document_category(object_key: str) -> str | None:
     return user_provided_document_category
 
 
-def get_ddb_record(object_key: str) -> dict:
+def get_ddb_record(object_key: str) -> dict[str, Any]:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
         table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
@@ -309,7 +313,7 @@ def get_ddb_record(object_key: str) -> dict:
         raise
 
 
-def get_ddb_by_job_id(job_id: str) -> dict | None:
+def get_ddb_by_job_id(job_id: str) -> dict[str, Any] | None:
     """Get document metadata record by job ID."""
     table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
@@ -330,7 +334,7 @@ def update_ddb(
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
-):
+) -> None:
     """Update DynamoDB processing status for a file."""
     try:
         # build base update expression (without v1_response)
@@ -378,10 +382,10 @@ def insert_ddb(
     trace_id: str | None = None,
     is_password_protected: bool | None = False,
     is_document_blurry: bool | None = False,
-    document_profile_raw_metrics=None,
-    document_profile_normalized_metrics=None,
-    overall_blur_score=None,
-):
+    document_profile_raw_metrics: Any = None,
+    document_profile_normalized_metrics: Any = None,
+    overall_blur_score: float | None = None,
+) -> None:
     try:
         table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
 
@@ -446,7 +450,7 @@ def insert_initial_ddb_record(
     user_provided_document_category: str | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-):
+) -> None:
     """Insert initial DDB record."""
     # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
     # in other lambdas. only ddb_insert_file_name Lambda
@@ -463,7 +467,6 @@ def insert_initial_ddb_record(
         logger.warning(f"Warning: user_provided_document_category is None/empty for {ddb_key}")
         user_provided_document_category = "unknown"
 
-    document_detector = DocumentDetector()
     content_type = s3_service.get_content_type(source_bucket_name, source_object_key)
     file_size_bytes = s3_service.get_file_size_bytes(source_bucket_name, source_object_key)
     file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_key)
@@ -475,7 +478,7 @@ def insert_initial_ddb_record(
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
-    document_detector = DocumentDetector()
+    document_detector = DocumentDetector()  # type: ignore[no-untyped-call]
     profile = document_detector.get_document_profile(file_bytes, source_object_key)
     pages_detected = profile.page_count
     is_password_protected = profile.is_password_protected
@@ -560,7 +563,7 @@ def insert_initial_ddb_record(
     del file_bytes
 
 
-def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
+def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str) -> None:
     """Mark file processing as started with BDA job ARN."""
     update_ddb(
         object_key=object_key,
@@ -570,7 +573,7 @@ def set_bda_processing_status_started(object_key: str, bda_invocation_arn: str):
     )
 
 
-def set_bda_processing_status_not_started(object_key: str):
+def set_bda_processing_status_not_started(object_key: str) -> None:
     update_ddb(
         object_key=object_key,
         status=ProcessStatus.NOT_STARTED,
@@ -578,7 +581,9 @@ def set_bda_processing_status_not_started(object_key: str):
     )
 
 
-def classify_as_success(object_key: str, response_code: str, data: ClassificationData):
+def classify_as_success(
+    object_key: str, response_code: str, data: ClassificationData
+) -> dict[str, Any]:
     """Mark file processing as completed."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
@@ -597,7 +602,9 @@ def classify_as_success(object_key: str, response_code: str, data: Classificatio
     return internal_api_response.__dict__
 
 
-def classify_as_failed(object_key: str, error_message: str, data: ClassificationData):
+def classify_as_failed(
+    object_key: str, error_message: str, data: ClassificationData
+) -> dict[str, Any]:
     """Mark file processing as failed with error message."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
@@ -617,7 +624,7 @@ def classify_as_failed(object_key: str, error_message: str, data: Classification
     return internal_api_response.__dict__
 
 
-def classify_as_not_implemented(object_key: str, data: ClassificationData):
+def classify_as_not_implemented(object_key: str, data: ClassificationData) -> dict[str, Any]:
     """Mark file processing as not implemented."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
@@ -636,7 +643,7 @@ def classify_as_not_implemented(object_key: str, data: ClassificationData):
     return internal_api_response.__dict__
 
 
-def classify_as_no_document_detected(object_key: str, data: ClassificationData):
+def classify_as_no_document_detected(object_key: str, data: ClassificationData) -> dict[str, Any]:
     """Mark file processing as no document detected."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,
@@ -655,7 +662,9 @@ def classify_as_no_document_detected(object_key: str, data: ClassificationData):
     return internal_api_response.__dict__
 
 
-def classify_as_no_custom_blueprint_matched(object_key: str, data: ClassificationData):
+def classify_as_no_custom_blueprint_matched(
+    object_key: str, data: ClassificationData
+) -> dict[str, Any]:
     """Mark file processing as not implemented."""
     internal_api_response: InternalApiResponse = get_internal_api_response(
         object_key=object_key,

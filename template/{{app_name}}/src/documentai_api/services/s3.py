@@ -1,17 +1,22 @@
 """S3 Service methods."""
 
 from datetime import datetime
+from typing import IO, Any, cast
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
 def upload_file(
-    bucket: str, key: str, file_obj, content_type: str | None = None, metadata: dict | None = None
+    bucket: str,
+    key: str,
+    file_obj: IO[bytes],
+    content_type: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """Upload file to S3."""
     s3_client = AWSClientFactory.get_s3_client()
 
-    extra_args: dict[str, str | dict] = {}
+    extra_args: dict[str, str | dict[str, str]] = {}
 
     if content_type:
         extra_args["ContentType"] = content_type
@@ -22,16 +27,16 @@ def upload_file(
     s3_client.upload_fileobj(file_obj, bucket, key, ExtraArgs=extra_args)
 
 
-def get_object(bucket: str, key: str) -> dict:
+def get_object(bucket: str, key: str) -> dict[str, Any]:
     """Get object from S3."""
     s3_client = AWSClientFactory.get_s3_client()
-    return s3_client.get_object(Bucket=bucket, Key=key)
+    return cast(dict[str, Any], s3_client.get_object(Bucket=bucket, Key=key))
 
 
-def head_object(bucket: str, key: str) -> dict:
+def head_object(bucket: str, key: str) -> dict[str, Any]:
     """Get object metadata from S3."""
     s3_client = AWSClientFactory.get_s3_client()
-    return s3_client.head_object(Bucket=bucket, Key=key)
+    return cast(dict[str, Any], s3_client.head_object(Bucket=bucket, Key=key))
 
 
 def put_object(bucket: str, key: str, body: bytes, content_type: str | None = None) -> None:
@@ -48,19 +53,19 @@ def put_object(bucket: str, key: str, body: bytes, content_type: str | None = No
 def get_content_type(bucket: str, key: str) -> str:
     """Get file content type."""
     response = head_object(bucket, key)
-    return response.get("ContentType", "application/octet-stream")
+    return str(response.get("ContentType", "application/octet-stream"))
 
 
 def get_file_size_bytes(bucket: str, key: str) -> int:
     """Get file size in bytes."""
     response = head_object(bucket, key)
-    return response.get("ContentLength", 0)
+    return int(response.get("ContentLength", 0))
 
 
 def get_file_bytes(bucket: str, key: str) -> bytes:
     """Get file content as bytes."""
     response = get_object(bucket, key)
-    return response["Body"].read()
+    return bytes(response["Body"].read())
 
 
 def is_password_protected(bucket: str, key: str) -> bool:
@@ -77,4 +82,4 @@ def is_password_protected(bucket: str, key: str) -> bool:
 def get_last_modified_at(bucket: str, key: str) -> datetime:
     """Get object's last modified timestamp."""
     response = head_object(bucket, key)
-    return response["LastModified"]
+    return cast(datetime, response["LastModified"])

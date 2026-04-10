@@ -5,17 +5,18 @@ from documentai_api.utils.env import (
     BDA_PROFILE_ARN,
     BDA_PROJECT_ARN,
     DOCUMENTAI_OUTPUT_LOCATION,
+    get_required_env,
 )
 from documentai_api.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
+def invoke_bedrock_data_automation(source_bucket_name: str, source_object_name: str) -> str:
     """Invoke BDA and return job ARN."""
     bda_project_arn = os.getenv(BDA_PROJECT_ARN)
     bda_profile_arn = os.getenv(BDA_PROFILE_ARN)
-    documentai_output_location = os.getenv(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
+    documentai_output_location = get_required_env(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
 
     logger.info(f"documentai_output_location after processing: {documentai_output_location}")
     logger.info(f"BDA_PROJECT_ARN: {bda_project_arn}")
@@ -35,8 +36,8 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
         )
 
         file_bytes = s3_service.get_file_bytes(source_bucket_name, source_object_name)
-        document_detector = DocumentDetector()
-        page_count = document_detector.get_page_count(file_bytes)
+        document_detector = DocumentDetector()  # type: ignore[no-untyped-call]
+        page_count = document_detector.get_page_count(file_bytes)  # type: ignore[no-untyped-call]
 
         if page_count and page_count > MULTIPAGE_DETECTION_MAX_PAGES:
             logger.info(
@@ -45,7 +46,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
 
             truncated_bytes = document_detector.truncate_to_pages(
                 file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES
-            )
+            )  # type: ignore[no-untyped-call]
 
             # create new truncated file name
             base_name, extension = os.path.splitext(source_object_name)
@@ -66,7 +67,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
             },
         )
         logger.info(f"BDA response: {response}")
-        return response.get("invocationArn")
+        return str(response.get("invocationArn"))
     except Exception as e:
         logger.error(f"BDA API call failed: {e}")
         raise

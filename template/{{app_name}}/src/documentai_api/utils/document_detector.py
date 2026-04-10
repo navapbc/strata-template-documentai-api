@@ -643,8 +643,8 @@ class DocumentDetector:
         self,
         raw_metrics: QualityMetricsRaw,
         normalized_metrics: QualityMetricsNormalized,
-        overall_blur_score,
-    ):
+        overall_blur_score: float,
+    ) -> bool:
         """Determine if document is blurry using two-stage detection.
 
         Returns:
@@ -665,11 +665,11 @@ class DocumentDetector:
 
         return overall_blur_score >= 0.7
 
-    def _calculate_local_contrast_score(self, file_bytes, file_name) -> float:
+    def _calculate_local_contrast_score(self, file_bytes: bytes, file_name: str) -> float:
         result = self._process_image_bytes(file_bytes, file_name, self._get_local_contrast_score)
         return float(result) if result is not None else np.nan
 
-    def _calculate_laplacian_variance(self, file_bytes, file_name) -> float:
+    def _calculate_laplacian_variance(self, file_bytes: bytes, file_name: str) -> float:
         """Returns the Laplacian variance for an image/document."""
         if not file_bytes:
             logger.warning("No image bytes provided")
@@ -711,7 +711,7 @@ class DocumentDetector:
         total = np.sum(magnitude)
         return high / total if total > 0 else np.nan
 
-    def _calculate_frequency_blur_score(self, file_bytes) -> float:
+    def _calculate_frequency_blur_score(self, file_bytes: bytes) -> float:
         """FFT-based blur detection for natural images."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -822,7 +822,7 @@ class DocumentDetector:
         else:
             return False
 
-    def _calculate_edge_metrics(self, file_bytes) -> float:
+    def _calculate_edge_metrics(self, file_bytes: bytes) -> float:
         """Calculate edge density and stddev intensity for any file type."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -850,7 +850,7 @@ class DocumentDetector:
 
         return np.nan, np.nan
 
-    def get_document_profile(self, file_bytes, file_name) -> DocumentProfile:
+    def get_document_profile(self, file_bytes: bytes, file_name: str) -> DocumentProfile:
         """Analyze document and return comprehensive quality and content metrics.
 
         Args:

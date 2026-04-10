@@ -2,6 +2,7 @@
 """Process uploaded documents: insert to DDB, convert if needed, invoke BDA."""
 
 import os
+from typing import Any
 
 import typer
 from botocore.exceptions import ClientError
@@ -12,7 +13,6 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
 from documentai_api.utils.ddb import (
-    ClassificationData,
     classify_as_failed,
     classify_as_not_implemented,
     get_ddb_record,
@@ -22,6 +22,7 @@ from documentai_api.utils.ddb import (
 )
 from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
 logger = get_logger(__name__)
@@ -116,7 +117,7 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
     retry=retry_if_exception_type(ClientError),
     reraise=True,
 )
-def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
+def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict[str, Any]:
     """Invoke BDA for a file that's ready for processing."""
     try:
         invocation_arn = invoke_bedrock_data_automation(bucket_name, object_key)
@@ -139,7 +140,7 @@ def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
         raise
 
 
-def main(object_key: str, bucket_name: str | None = None):
+def main(object_key: str, bucket_name: str | None = None) -> None:
     """Process uploaded document and invoke BDA.
 
     This job combines DDB insertion, grayscale conversion, and BDA invocation
@@ -201,7 +202,7 @@ def cli(
     bucket_name: str | None = typer.Argument(
         None, help="S3 bucket name (defaults to DOCUMENTAI_INPUT_LOCATION env var)"
     ),
-):
+) -> None:
     """Process uploaded document and invoke BDA."""
     try:
         main(object_key, bucket_name)
