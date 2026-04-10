@@ -26,12 +26,18 @@ def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dic
     if not ddb_record:
         return {}
 
-    bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-    metadata, field_values = extract_field_values_from_bda_results(bda_results)
-
     # get confidence scores and extracted values if requested
     if include_extracted_data:
-        bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
+        s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
+
+        if not s3_uri:
+            return {}
+
+        bda_results = get_bda_result_json(s3_uri)
+
+        if not bda_results:
+            return {}
+
         metadata, field_values = extract_field_values_from_bda_results(bda_results)
         field_confidence_map_list = metadata.field_confidence_map_list
     else:

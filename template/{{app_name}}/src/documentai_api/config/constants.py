@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 
@@ -35,33 +35,59 @@ BDA_JOB_STATUS_COMPLETED = SETTINGS["bda_job_statuses"]["completed"]
 CACHE_KEY_BLUEPRINT_SCHEMAS = SETTINGS["cache"]["blueprint_schemas"]["key"]
 CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES = SETTINGS["cache"]["blueprint_schemas"]["ttl_minutes"]
 
-# ----- generate enums dynamically from settings -----
-BdaJobStatus = Enum(
-    "BdaJobStatus",
-    {key.upper(): value for key, value in SETTINGS["bda_job_statuses"]["all"].items()},
-    type=str,
-)
 
-BdaResponseFields = Enum(
-    "BdaResponseFields",
-    {key.upper(): value for key, value in SETTINGS["bda_response_fields"].items()},
-    type=str,
-)
+class BdaJobStatus(StrEnum):
+    CREATED = "Created"
+    IN_PROGRESS = "InProgress"
+    SUCCESS = "Success"
+    SERVICE_ERROR = "ServiceError"
+    CLIENT_ERROR = "ClientError"
 
-ConfigDefaults = Enum(
-    "ConfigDefaults",
-    {key.upper(): value for key, value in SETTINGS["config_defaults"].items()},
-    type=str,
-)
 
-DocumentCategory = Enum(
-    "DocumentCategory",
-    {category.upper(): category for category in SETTINGS["document_categories"]},
-    type=str,
-)
+class BdaResponseFields:
+    EXPLAINABILITY_INFO = "explainability_info"
+    FIELD_CONFIDENCE = "confidence"
+    FIELD_VALUE = "value"
+    MATCHED_BLUEPRINT = "matched_blueprint"
+    MATCHED_BLUEPRINT_NAME = "name"
+    MATCHED_BLUEPRINT_CONFIDENCE = "confidence"
+    DOCUMENT_CLASS = "document_class"
+    DOCUMENT_TYPE = "type"
 
-ProcessStatus = Enum(
-    "ProcessStatus",
-    {key.upper(): value for key, value in SETTINGS["processing_statuses"]["all"].items()},
-    type=str,
-)
+
+class ConfigDefaults(StrEnum):
+    FIELD_CONFIDENCE_THRESHOLD = "0.7"
+    POLL_INTERVAL_SECONDS = "5"
+    MAX_WAIT_SECONDS = "120"
+    ALB_TIMEOUT_BUFFER_SECONDS = "15"
+    USER_DOCUMENT_TYPE_NOT_PROVIDED = "Not specified"
+    BDA_REGION_NOT_AVAILABLE = "N/A"
+    LOG_RETENTION_DAYS = "30"
+    BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH = "50"
+    BLURRY_DOCUMENT_THRESHOLD = "25"
+    BDA_MAX_IMAGE_SIZE_BYTES = "5242880"
+    BDA_MAX_DOCUMENT_FILE_SIZE_BYTES = "524288000"
+    DDB_EMIT_CUSTOM_CLOUDWATCH_METRICS = "false"
+    EMPTY_FIELD_PERCENTAGE_THRESHOLD = "50"
+
+
+class DocumentCategory(StrEnum):
+    INCOME = "income"
+    EXPENSES = "expenses"
+    LEGAL_DOCUMENTS = "legal_documents"
+    EMPLOYMENT_TRAINING = "employment_training"
+
+
+class ProcessStatus(StrEnum):
+    BLURRY_DOCUMENT_DETECTED = "blurry_document_detected"
+    FAILED = "failed"
+    MULTIPAGE = "multipage"
+    NO_CUSTOM_BLUEPRINT_MATCHED = "no_custom_blueprint_matched"
+    NO_DOCUMENT_DETECTED = "no_document_detected"
+    NOT_IMPLEMENTED = "not_implemented"
+    NOT_STARTED = "not_started"
+    NOT_SAMPLED = "not_sampled"
+    PASSWORD_PROTECTED = "password_protected"
+    PENDING_GRAYSCALE_CONVERSION = "pending_grayscale_conversion"
+    STARTED = "started"
+    SUCCESS = "success"

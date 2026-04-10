@@ -83,6 +83,8 @@ def extract_bda_output_s3_uri(
 
                 if "standard_output_path" in segment:
                     return segment["standard_output_path"]
+
+        return None
     except (TypeError, AttributeError) as e:
         logger.error(f"Failed to extract BDA result uri: {e}")
         return None

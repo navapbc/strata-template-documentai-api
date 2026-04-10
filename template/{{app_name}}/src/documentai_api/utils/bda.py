@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from documentai_api.config.constants import (
     BDA_JOB_STATUS_COMPLETED,
@@ -126,10 +127,10 @@ def extract_field_values_from_bda_results(
 
     explainability_info = bda_result_json[BdaResponseFields.EXPLAINABILITY_INFO]
 
-    confidence_scores = []
-    empty_fields = []
-    field_confidence_map_list = []
-    field_values = {}
+    confidence_scores: list[float] = []
+    empty_fields: list[str] = []
+    field_confidence_map_list: list[dict[str, float]] = []
+    field_values: dict[str, Any] = {}
 
     for item in explainability_info:
         if isinstance(item, dict):

@@ -3,6 +3,7 @@ import os
 import random
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
@@ -15,6 +16,7 @@ from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
+from documentai_api.utils.env import get_required_env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import (
     ClassificationData,
@@ -77,13 +79,16 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
         return ProcessingTimes()
 
 
-def _calculate_wait_time(object_key: str) -> Decimal:
+def _calculate_wait_time(object_key: str) -> Decimal | None:
     """Calculate BDA wait time from file creation to BDA start."""
     ddb_record = get_ddb_record(object_key)
     created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
+
+    if not created_at_str:
+        return None
+
     created_at = datetime.fromisoformat(created_at_str)
-    current_time = datetime.now(UTC)
-    return get_elapsed_time_seconds(created_at, current_time)
+    return get_elapsed_time_seconds(created_at, datetime.now(UTC))
 
 
 def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
@@ -111,10 +116,10 @@ def _calculate_field_metrics(data: ClassificationData) -> FieldMetrics:
     return FieldMetrics(field_count, non_empty_count, avg_confidence)
 
 
-def _build_completion_timing(object_key: str, bda_output_s3_uri: str) -> tuple[list, dict]:
+def _build_completion_timing(object_key: str, bda_output_s3_uri: str | None) -> tuple[list, dict]:
     """Build completion timing updates."""
     updates = []
-    values = {}
+    values: dict[str, Any] = {}
 
     try:
         ddb_record = get_ddb_record(object_key)
@@ -159,12 +164,14 @@ def _build_completion_timing(object_key: str, bda_output_s3_uri: str) -> tuple[l
     return updates, values
 
 
-def _build_timing_updates(object_key: str, status: str, bda_output_s3_uri: str) -> tuple[str, dict]:
+def _build_timing_updates(
+    object_key: str, status: str, bda_output_s3_uri: str | None
+) -> tuple[str, dict]:
     """Handle all timing-related updates for different statuses."""
     status = status.value if isinstance(status, ProcessStatus) else status
 
     updates = []
-    values = {}
+    values: dict[str, Any] = {}
 
     if status == ProcessStatus.STARTED:
         updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
@@ -189,7 +196,7 @@ def _build_timing_updates(object_key: str, status: str, bda_output_s3_uri: str) 
 
 def _build_update_expression(
     status: str,
-    data: ClassificationData,
+    data: ClassificationData | None,
     internal_api_response: InternalApiResponse | None,
     v1_api_response: str | None,
     bda_invocation_arn: str | None = None,
@@ -201,7 +208,7 @@ def _build_update_expression(
         f"{DocumentMetadata.UPDATED_AT} = :updatedAt",
     ]
 
-    values = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
+    values: dict[str, Any] = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
 
     if data:
         metrics = _calculate_field_metrics(data)
@@ -263,13 +270,13 @@ def _build_update_expression(
 
 def _execute_ddb_update(object_key: str, update_expression: str, expression_values: dict):
     """Execute the DynamoDB update."""
-    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
 
 
-def get_user_provided_document_category(object_key: str) -> str:
+def get_user_provided_document_category(object_key: str) -> str | None:
     """Get user specified document type for a file.
 
     This should always succeed - the user document type is set when the file
@@ -289,7 +296,7 @@ def get_user_provided_document_category(object_key: str) -> str:
 def get_ddb_record(object_key: str) -> dict:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+        table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -304,7 +311,7 @@ def get_ddb_record(object_key: str) -> dict:
 
 def get_ddb_by_job_id(job_id: str) -> dict | None:
     """Get document metadata record by job ID."""
-    table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     if not index_name:
@@ -319,7 +326,7 @@ def get_ddb_by_job_id(job_id: str) -> dict | None:
 def update_ddb(
     object_key: str,
     status: str,
-    internal_api_response: InternalApiResponse,
+    internal_api_response: InternalApiResponse | None = None,
     data: ClassificationData | None = None,
     bda_invocation_arn: str | None = None,
     error_message: str | None = None,
@@ -376,9 +383,9 @@ def insert_ddb(
     overall_blur_score=None,
 ):
     try:
-        table_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+        table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
 
-        item = {
+        item: dict[str, Any] = {
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
@@ -436,7 +443,7 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     ddb_key: str,
-    user_provided_document_category: str,
+    user_provided_document_category: str | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
 ):
@@ -464,7 +471,7 @@ def insert_initial_ddb_record(
     bda_percentage = 1.0  # TODO: fetch from SSM
     is_multipage_detection_enabled = False  # TODO: add SSM configuration
     response_code = ResponseCodes.SUCCESS
-    internal_api_response = None
+    internal_api_response: InternalApiResponse | None = None
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
@@ -506,7 +513,7 @@ def insert_initial_ddb_record(
                 logger.info("=== Starting multi-page detection validation ===")
 
                 try:
-                    if document_detector.is_multipage_document(file_bytes):
+                    if profile.is_multipage:
                         logger.info(f"{ddb_key} is a multipage doc")
                         process_status = ProcessStatus.MULTIPAGE
                         response_code = ResponseCodes.MULTIPAGE_DOCUMENT
@@ -526,7 +533,7 @@ def insert_initial_ddb_record(
     # initial status does not qualify for bda processing
     # create the json response signaling the process is complete
     if process_status not in PROCESSING_STATUS_PENDING_EXTRACTION:
-        internal_api_response: InternalApiResponse = get_internal_api_response(
+        internal_api_response = get_internal_api_response(
             object_key=ddb_key,
             response_code=response_code,
             matched_document_class=None,

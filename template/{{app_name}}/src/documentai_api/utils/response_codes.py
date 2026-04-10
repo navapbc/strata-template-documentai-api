@@ -24,6 +24,6 @@ class ResponseCodes:
         return messages.get(code, "")
 
     @classmethod
-    def is_success_response_code(cls, code: str) -> str:
+    def is_success_response_code(cls, code: str) -> bool:
         """Get message for response code."""
         return code.startswith("0")

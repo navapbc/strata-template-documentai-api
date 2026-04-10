@@ -30,7 +30,8 @@ dev = [
   "ruff>=0.1.0",
   "httpx>=0.24.0",
   "moto[all]>=4.2.0",
-  "freezegun>=1.2.0"
+  "freezegun>=1.2.0",
+  "mypy>=1.5.0",
 ]
 
 [project.scripts]
@@ -38,6 +39,16 @@ documentai_api = "documentai_api.main:main"
 bda_result_processor = "documentai_api.jobs.bda_result_processor.main:app"
 document_processor = "documentai_api.jobs.document_processor.main:app"
 export-openapi = "documentai_api.cli.export_openapi:app"
+
+[[tool.mypy.overrides]]
+# documentai_api.utils.document_detector will eventually be replaced with Claude Haiku
+module = "documentai_api.utils.document_detector"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# boto3/botocore do not provide type hints, exclude from mypy type checking
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100

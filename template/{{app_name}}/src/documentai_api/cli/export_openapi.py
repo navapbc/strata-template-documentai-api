@@ -10,7 +10,7 @@ app = typer.Typer()
 def export_openapi(
     output: Annotated[
         typer.FileTextWrite, typer.Option(help="File to write to, or '-' for stdout")
-    ] = "-",
+    ] = "-",  # type: ignore[assignment]
 ):
     """Export OpenAPI specification."""
     from documentai_api.app import app as fastapi_app

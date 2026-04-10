@@ -11,7 +11,8 @@ def upload_file(
     """Upload file to S3."""
     s3_client = AWSClientFactory.get_s3_client()
 
-    extra_args = {}
+    extra_args: dict[str, str | dict] = {}
+
     if content_type:
         extra_args["ContentType"] = content_type
 

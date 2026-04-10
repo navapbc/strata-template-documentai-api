@@ -140,7 +140,7 @@ async def upload_document_for_processing(
     file: UploadFile,
     unique_file_name: str,
     content_type: str,
-    user_provided_document_category: DocumentCategory = None,
+    user_provided_document_category: DocumentCategory | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
 ):
@@ -268,6 +268,9 @@ async def create_document(
               If false (default), returns immediately with job_id for async polling.
         timeout: Maximum seconds to wait when wait=true (default: 120)
     """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
@@ -335,6 +338,9 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
             # rebuild response with extracted data
             from documentai_api.utils.response_builder import build_v1_api_response
 
+            if not job_status.object_key or not job_status.process_status:
+                raise HTTPException(status_code=500, detail=f"Incomplete record for job {job_id}")
+
             return build_v1_api_response(
                 object_key=job_status.object_key,
                 status=job_status.process_status,
@@ -370,7 +376,3 @@ async def get_schema(document_type: str):
         )
 
     return schema
-
-
-if __name__ == "__main__":
-    app()
