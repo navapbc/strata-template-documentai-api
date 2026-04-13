@@ -377,6 +377,7 @@ def update_ddb(
 
 def insert_ddb(
     object_key: str,
+    original_file_name: str,
     user_provided_document_category: str | None = None,
     process_status: str | None = None,
     internal_api_response: InternalApiResponse | None = None,
@@ -396,6 +397,7 @@ def insert_ddb(
 
         item: dict[str, Any] = {
             DocumentMetadata.FILE_NAME: object_key,
+            DocumentMetadata.ORIGINAL_FILE_NAME: original_file_name,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
                 user_provided_document_category
@@ -452,6 +454,7 @@ def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
     ddb_key: str,
+    original_file_name: str,
     user_provided_document_category: str | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
@@ -545,10 +548,12 @@ def insert_initial_ddb_record(
             object_key=ddb_key,
             response_code=response_code,
             matched_document_class=None,
+            user_provided_document_category=user_provided_document_category,
         )
 
     insert_ddb(
         object_key=ddb_key,
+        original_file_name=original_file_name,
         user_provided_document_category=user_provided_document_category,
         process_status=process_status,
         internal_api_response=internal_api_response,

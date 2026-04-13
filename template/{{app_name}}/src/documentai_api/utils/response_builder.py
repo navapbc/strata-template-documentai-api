@@ -66,6 +66,7 @@ def get_internal_api_response(
     object_key: str,
     response_code: str,
     matched_document_class: str | None,
+    user_provided_document_category: str | None = None,
 ) -> InternalApiResponse:
     """Get API response object for internal use.
 
@@ -73,14 +74,15 @@ def get_internal_api_response(
         object_key: S3 file key
         response_code: Processing result code
         document_type: Detected document type
-
+        user_provided_document_category: Document category provided by user at upload time
     Returns:
         InternalApiResponse: Response object for API endpoints
     """
     # import here to avoid circular dependency
-    from documentai_api.utils.ddb import get_user_provided_document_category
+    if not user_provided_document_category:
+        from documentai_api.utils.ddb import get_user_provided_document_category
 
-    user_provided_document_category = get_user_provided_document_category(object_key)
+        user_provided_document_category = get_user_provided_document_category(object_key)
 
     return InternalApiResponse(
         validation_passed=ResponseCodes.is_success_response_code(response_code),
