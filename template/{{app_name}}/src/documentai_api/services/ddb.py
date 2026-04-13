@@ -5,7 +5,9 @@ from typing import Any, cast
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 
 
-def get_item(table_name: str, key: dict[str, Any], consistent_read: bool = True) -> dict[str, Any]:
+def get_item(
+    table_name: str, key: dict[str, Any], consistent_read: bool = True
+) -> dict[str, Any] | None:
     """Get item from DynamoDB table."""
     ddb_table = AWSClientFactory.get_ddb_table(table_name)
     response = ddb_table.get_item(Key=key, ConsistentRead=consistent_read)
@@ -38,5 +40,6 @@ def query_by_key(
     response = ddb_table.query(
         IndexName=index_name,
         KeyConditionExpression=boto3.dynamodb.conditions.Key(key_name).eq(key_value),  # type: ignore[attr-defined]
-    ) 
-    return cast(list[dict[str, Any]], response.get("Items", []))
+    )
+    items = response.get("Items", [])
+    return [dict(item) for item in items]

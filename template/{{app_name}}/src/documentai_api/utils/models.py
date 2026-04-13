@@ -3,13 +3,15 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from documentai_api.config.constants import DocumentCategory
+
 
 @dataclass
 class InternalApiResponse:
     """Shared API response model."""
 
     validation_passed: bool
-    document_category: str | None
+    document_category: DocumentCategory | None
     matched_document_class: str | None
     response_code: str
     response_message: str

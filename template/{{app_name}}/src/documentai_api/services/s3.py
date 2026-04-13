@@ -1,9 +1,14 @@
 """S3 Service methods."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import IO, Any, cast
+from typing import IO, TYPE_CHECKING, Any
 
 from documentai_api.utils.aws_client_factory import AWSClientFactory
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.type_defs import GetObjectOutputTypeDef, HeadObjectOutputTypeDef
 
 
 def upload_file(
@@ -27,27 +32,26 @@ def upload_file(
     s3_client.upload_fileobj(file_obj, bucket, key, ExtraArgs=extra_args)
 
 
-def get_object(bucket: str, key: str) -> dict[str, Any]:
+def get_object(bucket: str, key: str) -> GetObjectOutputTypeDef:
     """Get object from S3."""
     s3_client = AWSClientFactory.get_s3_client()
-    return cast(dict[str, Any], s3_client.get_object(Bucket=bucket, Key=key))
+    return s3_client.get_object(Bucket=bucket, Key=key)
 
 
-def head_object(bucket: str, key: str) -> dict[str, Any]:
+def head_object(bucket: str, key: str) -> HeadObjectOutputTypeDef:
     """Get object metadata from S3."""
     s3_client = AWSClientFactory.get_s3_client()
-    return cast(dict[str, Any], s3_client.head_object(Bucket=bucket, Key=key))
+    return s3_client.head_object(Bucket=bucket, Key=key)
 
 
 def put_object(bucket: str, key: str, body: bytes, content_type: str | None = None) -> None:
     """Put object to S3."""
     s3_client = AWSClientFactory.get_s3_client()
 
-    extra_args = {}
     if content_type:
-        extra_args["ContentType"] = content_type
-
-    s3_client.put_object(Bucket=bucket, Key=key, Body=body, **extra_args)
+        s3_client.put_object(Bucket=bucket, Key=key, Body=body, ContentType=content_type)
+    else:
+        s3_client.put_object(Bucket=bucket, Key=key, Body=body)
 
 
 def get_content_type(bucket: str, key: str) -> str:
@@ -82,4 +86,4 @@ def is_password_protected(bucket: str, key: str) -> bool:
 def get_last_modified_at(bucket: str, key: str) -> datetime:
     """Get object's last modified timestamp."""
     response = head_object(bucket, key)
-    return cast(datetime, response["LastModified"])
+    return response["LastModified"]

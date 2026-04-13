@@ -9,6 +9,7 @@ from documentai_api.config.constants import (
     PROCESSING_STATUS_COMPLETED,
     PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
+    DocumentCategory,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -280,7 +281,7 @@ def _execute_ddb_update(
     ddb_service.update_item(table_name, key, update_expression, expression_values)
 
 
-def get_user_provided_document_category(object_key: str) -> str | None:
+def get_user_provided_document_category(object_key: str) -> DocumentCategory | None:
     """Get user specified document type for a file.
 
     This should always succeed - the user document type is set when the file
@@ -294,7 +295,11 @@ def get_user_provided_document_category(object_key: str) -> str | None:
     if not user_provided_document_category:
         logger.warning(f"User specified document type not found for file: {object_key}")
 
-    return user_provided_document_category
+    return (
+        DocumentCategory(user_provided_document_category)
+        if user_provided_document_category
+        else None
+    )
 
 
 def get_ddb_record(object_key: str) -> dict[str, Any]:
