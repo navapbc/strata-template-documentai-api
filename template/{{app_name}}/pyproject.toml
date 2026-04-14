@@ -32,7 +32,6 @@ dev = [
   "moto[all]>=4.2.0",
   "freezegun>=1.2.0",
   "mypy>=1.20.0",
-  "boto3-stubs>=1.38.0",
   "boto3-stubs[s3,dynamodb,bedrock,bedrock-runtime,bedrock-data-automation,bedrock-data-automation-runtime,sqs,athena,ssm]>=1.38.0",
 ]
 
@@ -57,7 +56,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # document_detector.py has heavy OpenCV/numpy typing issues with over 100 mypy lint findings
-# inline ingores for all 100+ seems like overkill. add a targeted, less strict override 
+# inline ingores for all 100+ seems like overkill. add a targeted, less strict override
 # for documentai_api.utils.document_detector
 # note: the file will be eventually replaced with lightweight alternative (Claude Haiku pre-classification)
 module = "documentai_api.utils.document_detector"
