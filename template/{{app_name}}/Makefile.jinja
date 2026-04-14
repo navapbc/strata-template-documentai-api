@@ -133,7 +133,7 @@ lint-ruff: ## Lint Python code with ruff
 	$(PY_RUN_CMD) ruff check $(LINT_ARGS) .
 
 lint-mypy: ## Type check with mypy
-	$(PY_RUN_CMD) mypy --show-error-codes src/documentai_api
+	$(PY_RUN_CMD) mypy src/documentai_api
 
 lint-uv: ## Check uv lockfile is up-to-date
 	$(RUN_CMD) uv lock --check
