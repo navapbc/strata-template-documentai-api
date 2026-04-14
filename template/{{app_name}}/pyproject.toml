@@ -55,14 +55,10 @@ module = ["boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# document_detector.py has heavy OpenCV/numpy typing issues with over 100 mypy lint findings
-# inline ingores for all 100+ seems like overkill. add a targeted, less strict override
-# for documentai_api.utils.document_detector
+# document_detector.py has a number of OpenCV/numpy typing difficulties
 # note: the file will be eventually replaced with lightweight alternative (Claude Haiku pre-classification)
 module = "documentai_api.utils.document_detector"
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-disable_error_code = ["type-arg", "arg-type", "call-overload", "return-value", "attr-defined", "var-annotated"]
+disable_error_code = ["arg-type", "call-overload"]
 
 [tool.ruff]
 line-length = 100

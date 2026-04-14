@@ -27,6 +27,7 @@ from documentai_api.utils.models import (
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
+from documentai_api.utils.document_detector import QualityMetricsRaw, QualityMetricsNormalized
 
 logger = get_logger(__name__)
 
@@ -388,8 +389,8 @@ def insert_ddb(
     trace_id: str | None = None,
     is_password_protected: bool | None = False,
     is_document_blurry: bool | None = False,
-    document_profile_raw_metrics: Any = None,
-    document_profile_normalized_metrics: Any = None,
+    document_profile_raw_metrics: QualityMetricsRaw | None = None,
+    document_profile_normalized_metrics: QualityMetricsNormalized | None = None,
     overall_blur_score: float | None = None,
 ) -> None:
     try:
@@ -486,13 +487,13 @@ def insert_initial_ddb_record(
     process_status = ProcessStatus.PENDING_GRAYSCALE_CONVERSION
     pages_detected = None
 
-    document_detector = DocumentDetector()  # type: ignore[no-untyped-call]
+    document_detector = DocumentDetector()
     profile = document_detector.get_document_profile(file_bytes, source_object_key)
     pages_detected = profile.page_count
     is_password_protected = profile.is_password_protected
     is_document_blurry = profile.is_blurry
-    document_profile_raw_metrics: QualityMetricsRaw = profile.raw_metrics
-    document_profile_normalized_metrics: QualityMetricsNormalized = profile.normalized_metrics
+    document_profile_raw_metrics = profile.raw_metrics
+    document_profile_normalized_metrics = profile.normalized_metrics
     overall_blur_score = profile.overall_blur_score
 
     if content_type == "image/bmp":

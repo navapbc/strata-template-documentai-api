@@ -188,6 +188,9 @@ def main(
     response = s3_service.head_object(bucket_name, object_key)
     metadata = response.get("Metadata", {})
     original_file_name = metadata.get(S3_METADATA_KEY_ORIGINAL_FILE_NAME)
+    if not original_file_name:
+        logger.warning("Original file name not present in S3 metadata")
+        original_file_name = ""
 
     if not all([job_id, trace_id, user_provided_document_category]):
         try:

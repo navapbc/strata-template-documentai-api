@@ -2,6 +2,8 @@ import io
 import math
 import os
 from dataclasses import asdict, dataclass
+from typing import Any, TypeVar
+from collections.abc import Callable
 
 import cv2
 import numpy as np
@@ -16,8 +18,13 @@ logger = get_logger(__name__)
 # increase PIL limit for large document processing
 Image.MAX_IMAGE_PIXELS = 250000000
 MULTIPAGE_DETECTION_MAX_PAGES = 5
+# TODO these should be enums
 IMAGE_FILE_TYPES = ["JPEG", "PNG", "GIF", "BMP"]
 DOCUMENT_FILE_TYPES = ["PDF", "TIFF"]
+
+T = TypeVar("T")
+ImageData = np.ndarray[Any, np.dtype[np.generic]]
+ROI = Any
 
 
 @dataclass
@@ -32,7 +39,7 @@ class QualityMetricsRaw:
     noise_stddev: float
     motion_blur_score: float
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict, replacing NaN with None."""
         metrics_dict = asdict(self)
         for key, value in metrics_dict.items():
@@ -52,7 +59,7 @@ class QualityMetricsNormalized:
     sobel_score: float
     noise_stddev: float
 
-    def to_json_dict(self):
+    def to_json_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict, replacing NaN with None."""
         metrics_dict = asdict(self)
         for key, value in metrics_dict.items():
@@ -74,23 +81,23 @@ class NormalizationRanges:
         - noise_stddev: Noise standard deviation (1=clean, 50+=noisy)
     """
 
-    fft_score: tuple = (0.0, 1.0)
-    edge_score: tuple = (0.0, 0.04)
-    laplacian_variance: tuple = (0.0, 500.0)
-    local_contrast: tuple = (0.0, 1.0)
-    sobel_score: tuple = (0.0, 200.0)
-    noise_stddev: tuple = (1.0, 50.0)
+    fft_score: tuple[float, float] = (0.0, 1.0)
+    edge_score: tuple[float, float] = (0.0, 0.04)
+    laplacian_variance: tuple[float, float] = (0.0, 500.0)
+    local_contrast: tuple[float, float] = (0.0, 1.0)
+    sobel_score: tuple[float, float] = (0.0, 200.0)
+    noise_stddev: tuple[float, float] = (1.0, 50.0)
 
 
 @dataclass
 class DocumentProfile:
     """Document analysis results including quality metrics and content detection."""
 
-    page_count: int
-    raw_metrics: QualityMetricsRaw
-    normalized_metrics: QualityMetricsNormalized
-    normalization_ranges: NormalizationRanges
-    overall_blur_score: float
+    page_count: int | None
+    raw_metrics: QualityMetricsRaw | None
+    normalized_metrics: QualityMetricsNormalized | None
+    normalization_ranges: NormalizationRanges | None
+    overall_blur_score: float | None
     is_blurry: bool
     is_multipage: bool
     is_password_protected: bool
@@ -103,7 +110,7 @@ class DocumentDetector:
     but was kept as to not disturb current processing
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         ##################################
         # configuration parameters
         ##################################
@@ -138,7 +145,7 @@ class DocumentDetector:
         self._gaussianblur_ksize = (5, 5)
         self._gaussianblur_sigmaX = 0
 
-    def detect_file_type(self, image_file):
+    def detect_file_type(self, image_file: bytes) -> str | None:
         """Detect file type from binary header bytes."""
         try:
             file_type = "Unknown"
@@ -166,20 +173,22 @@ class DocumentDetector:
             logger.error(f"An error occurred: {e}")
             return None
 
-    def is_pdf(self, image_file):
+    def is_pdf(self, image_file: bytes) -> bool:
         """Detect if file is a PDF."""
         return self.detect_file_type(image_file) == "PDF"
 
-    def is_tiff(self, image_file):
+    def is_tiff(self, image_file: bytes) -> bool:
         """Detect if file is a TIFF."""
         return self.detect_file_type(image_file) == "TIFF"
 
-    def _get_cv2_laplacian_variance(self, image, file_name):
-        return cv2.Laplacian(image, cv2.CV_64F).var()
+    def _get_cv2_laplacian_variance(self, image: ImageData, file_name: str) -> float:
+        return float(cv2.Laplacian(image, cv2.CV_64F).var())
 
-    def _split_pdf_into_images(self, file_bytes, max_pages=None):
+    def _split_pdf_into_images(
+        self, file_bytes: bytes, max_pages: int | None = None
+    ) -> list[ImageData]:
         """Convert PDF pages to grayscale OpenCV images."""
-        images = []
+        images: list[ImageData] = []
 
         if self.is_password_protected(file_bytes):
             logger.warning("DocumentDetector: Password-protected PDF - cannot process")
@@ -211,7 +220,7 @@ class DocumentDetector:
 
         return images
 
-    def _apply_gamma_correction(self, img, gamma):
+    def _apply_gamma_correction(self, img: ImageData, gamma: float) -> ImageData:
         # Ensure gamma is a float for calculations
         gamma = float(gamma)
 
@@ -227,14 +236,16 @@ class DocumentDetector:
 
         return gamma_corrected_img
 
-    def _split_tiff_into_images(self, file_bytes, max_pages=None):
+    def _split_tiff_into_images(
+        self, file_bytes: bytes, max_pages: int | None = None
+    ) -> list[ImageData]:
         """Convert TIFF frames to grayscale OpenCV images."""
         images = []
 
         tiff_bytes = io.BytesIO(file_bytes)
 
         with Image.open(tiff_bytes) as tiff:
-            total_frames = tiff.n_frames
+            total_frames = tiff.n_frames  # type: ignore[attr-defined]
             frames_to_process = min(total_frames, max_pages) if max_pages else total_frames
 
             for i in range(frames_to_process):
@@ -245,11 +256,11 @@ class DocumentDetector:
 
         return images
 
-    def _truncate_pdf(self, file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES):
+    def _truncate_pdf(
+        self, file_bytes: bytes, max_pages: int = MULTIPAGE_DETECTION_MAX_PAGES
+    ) -> bytes:
         """Extract first N pages from PDF and return as new PDF bytes."""
         import io
-
-        from pdf2image import convert_from_bytes
 
         # Convert PDF to images (first N pages only)
         poppler_path = "/opt/bin" if os.path.exists("/opt/bin") else None
@@ -266,7 +277,9 @@ class DocumentDetector:
 
         return pdf_bytes.getvalue()
 
-    def _truncate_tiff(self, file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES):
+    def _truncate_tiff(
+        self, file_bytes: bytes, max_pages: int = MULTIPAGE_DETECTION_MAX_PAGES
+    ) -> bytes:
         """Extract first N frames from TIFF and return as new TIFF bytes."""
         import io
 
@@ -277,7 +290,7 @@ class DocumentDetector:
 
         with Image.open(tiff_bytes) as tiff:
             # get total frames
-            total_frames = tiff.n_frames
+            total_frames = tiff.n_frames  # type: ignore[attr-defined]
             frames_to_process = min(total_frames, max_pages)
 
             # extract first N frames
@@ -298,7 +311,15 @@ class DocumentDetector:
 
         return output_bytes.getvalue()
 
-    def _process_image_bytes(self, file_bytes, file_name, processor_func):
+    def _process_image_bytes(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        processor_func: Callable[
+            [ImageData, str],
+            T,
+        ],
+    ) -> T:
         """Process image bytes with proper cleanup."""
         nparr = np.frombuffer(file_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
@@ -314,7 +335,7 @@ class DocumentDetector:
         del image
         return result
 
-    def _detect_documents_in_image(self, image, file_name):
+    def _detect_documents_in_image(self, image: ImageData, file_name: str) -> int | None:
         """Detect rectangular document boundaries within a single image.
 
         Returns:
@@ -408,7 +429,9 @@ class DocumentDetector:
             logger.error("An error occurred: ", e)
             return None
 
-    def _extract_document_regions_of_interest(self, gray_image, file_name):
+    def _extract_document_regions_of_interest(
+        self, gray_image: ImageData, file_name: str
+    ) -> list[ROI]:
         """Extract content regions from document for quality analysis.
 
         Returns:
@@ -429,7 +452,7 @@ class DocumentDetector:
                 roi = gray_image[y_start:y_end, x_start:x_end]
 
                 # strict content detection
-                edge_pixels = np.sum(cv2.Canny(roi, 50, 150) > 0)
+                edge_pixels = np.sum(cv2.Canny(roi, 50, 150) > 0)  # type: ignore[operator]
                 edge_ratio = edge_pixels / roi.size
 
                 # only keep ROIs with some content (not pure whitespace)
@@ -441,7 +464,7 @@ class DocumentDetector:
         )
         return rois
 
-    def _calculate_edge_score(self, document_roi, file_name):
+    def _calculate_edge_score(self, document_roi: ROI, file_name: str) -> float:
         """Calculate the edge score for a grayscale image.
 
         Parameters
@@ -459,7 +482,8 @@ class DocumentDetector:
 
         # edge score the ratio of edge pixels to the total number of pixels in the roi
         total_pixels_in_roi = document_roi.size
-        edge_pixel_count = np.sum(edges_roi > 0)  # count non-zero pixels
+        # count non-zero pixels
+        edge_pixel_count = np.sum(edges_roi > 0)  # type: ignore[operator]
 
         if total_pixels_in_roi > 0:
             edge_score_raw = edge_pixel_count / total_pixels_in_roi
@@ -468,24 +492,29 @@ class DocumentDetector:
 
         return edge_score_raw
 
-    def _calculate_sobel_score(self, document_roi, file_name):
+    def _calculate_sobel_score(self, document_roi: ROI, file_name: str) -> float:
         gx = cv2.Sobel(document_roi, cv2.CV_64F, 1, 0, ksize=3)
         gy = cv2.Sobel(document_roi, cv2.CV_64F, 0, 1, ksize=3)
-        grad_mag = np.sqrt(gx**2 + gy**2)
+        grad_mag = np.sqrt(gx**2 + gy**2)  # type: ignore[operator]
         sobel_score_raw = np.mean(grad_mag)
-        return sobel_score_raw
+        return float(sobel_score_raw)
 
-    def _calculate_noise_stddev(self, document_roi, file_name):
+    def _calculate_noise_stddev(self, document_roi: ROI, file_name: str) -> float:
         h, w = document_roi.shape
         noisy_region = document_roi[int(h / 4) : int(3 * h / 4), int(w / 4) : int(3 * w / 4)]
         med = np.median(noisy_region)
         mad = np.median(np.abs(noisy_region - med))
         noise_stddev = mad * 1.4826
-        return noise_stddev
+        return float(noise_stddev)
 
     def _get_local_contrast_score(
-        self, gray_image, file_name, patch_size=64, ideal_std=60.0, mask=None
-    ):
+        self,
+        gray_image: ImageData,
+        file_name: str,
+        patch_size: int = 64,
+        ideal_std: float = 60.0,
+        mask: ImageData | None = None,
+    ) -> float:
         """Compute local contrast score for a grayscale image, optionally ignoring whitespace.
 
         Parameters
@@ -527,9 +556,9 @@ class DocumentDetector:
 
         median_std = np.median(local_std_list)
         score = median_std / ideal_std
-        return score
+        return float(score)
 
-    def _calculate_motion_blur_score(self, document_roi, file_name):
+    def _calculate_motion_blur_score(self, document_roi: ROI, file_name: str) -> float:
         """Return a motion blur severity score (0 = sharp, 1 = strong motion blur)."""
         kernel_h = np.array([[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=np.float32)
         kernel_v = np.array([[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=np.float32)
@@ -545,9 +574,11 @@ class DocumentDetector:
         # normalize ratio to 0-1 for easier integration
         score = min((ratio - 1.0) / 9.0, 1.0)  # ratio ~1-10 -> score 0-1
         score = max(0.0, score)
-        return score
+        return float(score)
 
-    def _calculate_quality_metrics(self, file_bytes, file_name):
+    def _calculate_quality_metrics(
+        self, file_bytes: bytes, file_name: str
+    ) -> tuple[QualityMetricsRaw, QualityMetricsNormalized, NormalizationRanges, float] | None:
         """Calculate comprehensive blur metrics for document.
 
         Returns:
@@ -573,7 +604,9 @@ class DocumentDetector:
             logger.error(f"Error calculating quality metrics for {file_name}: {e}")
             return None
 
-    def _get_quality_metrics(self, gray_image, file_name):
+    def _get_quality_metrics(
+        self, gray_image: ImageData, file_name: str
+    ) -> tuple[QualityMetricsRaw, QualityMetricsNormalized, NormalizationRanges, float]:
         # get multiple content regions of interest (roi) instead of single roi
         content_rois = self._extract_document_regions_of_interest(gray_image, file_name)
 
@@ -610,13 +643,13 @@ class DocumentDetector:
 
         # create raw metrics from median values
         raw_metrics = QualityMetricsRaw(
-            fft_score=np.median(all_fft),
-            edge_score=np.median(all_edge),
-            laplacian_variance=np.median(all_laplacian),
-            local_contrast=np.median(all_contrast),
-            sobel_score=np.median(all_sobel),
-            noise_stddev=np.median(all_noise),
-            motion_blur_score=np.median(all_motion),
+            fft_score=float(np.median(all_fft)),
+            edge_score=float(np.median(all_edge)),
+            laplacian_variance=float(np.median(all_laplacian)),
+            local_contrast=float(np.median(all_contrast)),
+            sobel_score=float(np.median(all_sobel)),
+            noise_stddev=float(np.median(all_noise)),
+            motion_blur_score=float(np.median(all_motion)),
         )
 
         ranges = NormalizationRanges()
@@ -641,9 +674,9 @@ class DocumentDetector:
 
     def _is_blurry(
         self,
-        raw_metrics: QualityMetricsRaw,
-        normalized_metrics: QualityMetricsNormalized,
-        overall_blur_score: float,
+        raw_metrics: QualityMetricsRaw | None,
+        normalized_metrics: QualityMetricsNormalized | None,
+        overall_blur_score: float | None,
     ) -> bool:
         """Determine if document is blurry using two-stage detection.
 
@@ -661,7 +694,7 @@ class DocumentDetector:
             return True  # Artifacts = blurry
 
         elif 0.55 <= overall_blur_score < 0.7:
-            return raw_metrics.motion_blur_score > 0.25
+            return bool(raw_metrics.motion_blur_score > 0.25)
 
         return overall_blur_score >= 0.7
 
@@ -692,7 +725,7 @@ class DocumentDetector:
         else:
             return np.nan
 
-    def fft_blur_score_normalized(self, document_roi, file):
+    def fft_blur_score_normalized(self, document_roi: ROI, file: str) -> float:
         if document_roi.size == 0:
             logger.warning("Empty image provided")
             return np.nan
@@ -735,7 +768,7 @@ class DocumentDetector:
 
         return np.nan
 
-    def _get_pdf_page_count(self, file_bytes):
+    def _get_pdf_page_count(self, file_bytes: bytes) -> int:
         from pypdf import PdfReader
 
         """Returns actual page count without truncation."""
@@ -746,7 +779,7 @@ class DocumentDetector:
             logger.warning(f"Error processing PDF bytes: {e}")
             return 1
 
-    def _get_tiff_page_count(self, file_bytes):
+    def _get_tiff_page_count(self, file_bytes: bytes) -> int:
         from PIL import Image
 
         try:
@@ -763,9 +796,9 @@ class DocumentDetector:
             logger.warning(f"Error processing TIFF: {e}")
             return 1
 
-    def get_page_count(self, file_bytes):
+    def get_page_count(self, file_bytes: bytes) -> int | None:
         """Count total pages in document."""
-        if not file_bytes or file_bytes == 0:
+        if not file_bytes:
             return None
 
         file_type = self.detect_file_type(file_bytes)
@@ -777,7 +810,7 @@ class DocumentDetector:
         else:
             return 1  # Single page for JPEG/PNG/etc.
 
-    def is_password_protected(self, file_bytes):
+    def is_password_protected(self, file_bytes: bytes) -> bool:
         """Detect if PDF is password protected."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -786,7 +819,7 @@ class DocumentDetector:
 
         return False
 
-    def _is_multipage_document(self, file_bytes, file_name):
+    def _is_multipage_document(self, file_bytes: bytes, file_name: str) -> bool:
         """Returns True if document contains multiple pages/documents."""
         file_type = self.detect_file_type(file_bytes)
         logger.info(f"DocumentDetector: Processing {file_type} file")
@@ -814,7 +847,7 @@ class DocumentDetector:
 
             for page in pages:
                 detected_document_in_page = self._detect_documents_in_image(page, file_name)
-                if detected_document_in_page > 1:
+                if detected_document_in_page and detected_document_in_page > 1:
                     break
 
             return detected_document_in_page is not None and detected_document_in_page > 1
@@ -822,7 +855,7 @@ class DocumentDetector:
         else:
             return False
 
-    def _calculate_edge_metrics(self, file_bytes: bytes) -> float:
+    def _calculate_edge_metrics(self, file_bytes: bytes) -> tuple[float, float | np.floating[Any]]:
         """Calculate edge density and stddev intensity for any file type."""
         file_type = self.detect_file_type(file_bytes)
 
@@ -898,10 +931,12 @@ class DocumentDetector:
             is_multipage=bool(
                 not is_password_protected and self._is_multipage_document(file_bytes, file_name)
             ),
-            is_password_protected=bool(is_password_protected),
+            is_password_protected=is_password_protected,
         )
 
-    def truncate_to_pages(self, file_bytes, max_pages=MULTIPAGE_DETECTION_MAX_PAGES):
+    def truncate_to_pages(
+        self, file_bytes: bytes, max_pages: int = MULTIPAGE_DETECTION_MAX_PAGES
+    ) -> bytes:
         file_type = self.detect_file_type(file_bytes)
 
         if file_type == "PDF":
