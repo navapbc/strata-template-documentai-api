@@ -51,12 +51,8 @@ allow_redefinition_new = true
 strict_bytes = true
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 # document_detector.py has a number of OpenCV/numpy typing difficulties
-# note: the file will be eventually replaced with lightweight alternative (Claude Haiku pre-classification)
+# note: the file may eventually replaced with lightweight alternative (Claude Haiku pre-classification)
 module = "documentai_api.utils.document_detector"
 disable_error_code = ["arg-type", "call-overload"]
 
