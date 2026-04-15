@@ -2,11 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from documentai_api.config.constants import (
-    PROCESSING_STATUSES_SUCCESSFUL,
-    BdaResponseFields,
-    ProcessStatus,
-)
+from documentai_api.config.constants import BdaResponseFields, ProcessStatus
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils import response_builder as response_builder_util
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
@@ -203,7 +199,7 @@ def test_build_v1_api_response(
     if additional_info:
         expected_response["additionalInfo"] = additional_info
 
-    if status in PROCESSING_STATUSES_SUCCESSFUL:
+    if ProcessStatus(status).is_successful():
         expected_response["fields"] = expected_fields_value
 
     assert response == expected_response

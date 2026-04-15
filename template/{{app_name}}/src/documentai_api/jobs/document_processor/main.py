@@ -15,12 +15,9 @@ from tenacity import (
 )
 
 from documentai_api.config.constants import (
-    S3_METADATA_KEY_JOB_ID,
-    S3_METADATA_KEY_ORIGINAL_FILE_NAME,
-    S3_METADATA_KEY_TRACE_ID,
-    S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY,
     ConfigDefaults,
     ProcessStatus,
+    S3MetadataKeys,
 )
 from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -34,7 +31,7 @@ from documentai_api.utils.ddb import (
     set_bda_processing_status_not_started,
     set_bda_processing_status_started,
 )
-from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION, MAX_BDA_INVOKE_RETRY_ATTEMPTS
+from documentai_api.utils.env import get_aws_config
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
@@ -45,12 +42,12 @@ app = typer.Typer()
 def is_file_too_large_for_bda(content_type: str, file_size_bytes: int) -> bool:
     """Check if file exceeds BDA size limits based on content type."""
     if content_type in ["image/jpeg", "image/png"]:
-        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value)
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES)
     elif content_type in ["application/pdf", "image/tiff"]:
-        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value)
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES)
     else:
         # unknown file type, assume document limit
-        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value)
+        return int(file_size_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES)
 
 
 def convert_to_grayscale(
@@ -83,7 +80,7 @@ def convert_to_grayscale(
         pil_image.save(jpeg_output, format="JPEG", quality=100)
         jpeg_bytes = jpeg_output.getvalue()
 
-        if len(jpeg_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value):
+        if len(jpeg_bytes) > int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES):
             logger.info(f"{object_key} too large for BDA, converting to PDF")
             pdf_output = io.BytesIO()
             pil_image.save(pdf_output, format="PDF")
@@ -125,7 +122,7 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
 
 
 @retry(
-    stop=stop_after_attempt(int(os.getenv(MAX_BDA_INVOKE_RETRY_ATTEMPTS, "3"))),
+    stop=stop_after_attempt(get_aws_config().max_bda_invoke_retry_attempts),
     wait=wait_exponential_jitter(initial=10, max=120),
     retry=retry_if_exception_type(ClientError),
 )
@@ -178,7 +175,7 @@ def main(
         job_id: Optional job ID (will be read from S3 metadata if not provided)
         trace_id: Optional trace ID (will be read from S3 metadata if not provided)
     """
-    input_location = os.getenv(DOCUMENTAI_INPUT_LOCATION, "")
+    input_location = get_aws_config().documentai_input_location
 
     if bucket_name is None:
         bucket_name, _ = parse_s3_uri(input_location)
@@ -187,17 +184,17 @@ def main(
 
     response = s3_service.head_object(bucket_name, object_key)
     metadata = response.get("Metadata", {})
-    original_file_name = metadata.get(S3_METADATA_KEY_ORIGINAL_FILE_NAME)
+    original_file_name = metadata.get(S3MetadataKeys.ORIGINAL_FILE_NAME)
     if not original_file_name:
         logger.warning("Original file name not present in S3 metadata")
         original_file_name = ""
 
     if not all([job_id, trace_id, user_provided_document_category]):
         try:
-            job_id = job_id or metadata.get(S3_METADATA_KEY_JOB_ID)
-            trace_id = trace_id or metadata.get(S3_METADATA_KEY_TRACE_ID)
+            job_id = job_id or metadata.get(S3MetadataKeys.JOB_ID)
+            trace_id = trace_id or metadata.get(S3MetadataKeys.TRACE_ID)
             user_provided_document_category = user_provided_document_category or metadata.get(
-                S3_METADATA_KEY_USER_PROVIDED_DOCUMENT_CATEGORY
+                S3MetadataKeys.USER_PROVIDED_DOCUMENT_CATEGORY
             )
         except Exception as e:
             logger.warning(f"Could not read S3 metadata: {e}")

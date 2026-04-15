@@ -1,27 +1,29 @@
-import os
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-# environment variable names
-API_AUTH_INSECURE_SHARED_KEY = "API_AUTH_INSECURE_SHARED_KEY"
-BDA_PROFILE_ARN = "BDA_PROFILE_ARN"
-BDA_PROJECT_ARN = "BDA_PROJECT_ARN"
-BDA_REGION = "BDA_REGION"
-DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME = "DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME"
-DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME = "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME"
-DOCUMENTAI_INPUT_LOCATION = "DOCUMENTAI_INPUT_LOCATION"
-DOCUMENTAI_OUTPUT_LOCATION = "DOCUMENTAI_OUTPUT_LOCATION"
-MAX_BDA_INVOKE_RETRY_ATTEMPTS = "MAX_BDA_INVOKE_RETRY_ATTEMPTS"
 
 
 class PydanticBaseEnvConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
-def get_required_env(name: str) -> str:
-    value = os.getenv(name)
+class AWSEnvConfig(PydanticBaseEnvConfig):
+    # general config
+    image_tag: str = ""
+    environment: str = "local"
 
-    if not value:
-        raise ValueError(f"{name} environment variable not set")
+    # aws related config
+    bda_project_arn: str
+    bda_profile_arn: str
+    bda_region: str = "us-east-1"
+    documentai_document_metadata_table_name: str
+    documentai_document_metadata_job_id_index_name: str
+    documentai_input_location: str
+    documentai_output_location: str
+    api_auth_insecure_shared_key: str = ""
+    max_bda_invoke_retry_attempts: int = 3
 
-    return value
+
+@lru_cache
+def get_aws_config() -> AWSEnvConfig:
+    return AWSEnvConfig()  # type: ignore[call-arg]

@@ -4,8 +4,6 @@ import json
 from typing import Any
 
 from documentai_api.config.constants import (
-    PROCESSING_STATUS_NOT_SUPPORTED,
-    PROCESSING_STATUSES_SUCCESSFUL,
     DocumentCategory,
     ProcessStatus,
 )
@@ -134,7 +132,7 @@ def build_v1_api_response(
         base_response["matchedDocumentClass"] = matched_document_class
 
     # success response with full results
-    if status in PROCESSING_STATUSES_SUCCESSFUL:
+    if ProcessStatus(status).is_successful():
         base_response["status"] = "completed"
 
         if status == ProcessStatus.SUCCESS.value:
@@ -163,7 +161,7 @@ def build_v1_api_response(
             }
         )
 
-    elif status in PROCESSING_STATUS_NOT_SUPPORTED:
+    elif ProcessStatus(status).is_not_supported():
         base_response.update(
             {
                 "status": "not_supported",

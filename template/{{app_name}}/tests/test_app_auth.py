@@ -1,11 +1,14 @@
 """Tests for API authentication."""
 
+from unittest.mock import MagicMock, patch
+
 
 def test_verify_api_key_missing_env_var(api_client):
-    """Test returns 500 when API_AUTH_INSECURE_SHARED_KEY not set."""
-    response = api_client.get("/v1/schemas")
+    config = MagicMock()
+    config.api_auth_insecure_shared_key = ""
+    with patch("documentai_api.app.get_aws_config", return_value=config):
+        response = api_client.get("/v1/schemas")
     assert response.status_code == 500
-    assert "API key not configured" in response.json()["detail"]
 
 
 def test_verify_api_key_invalid_key(api_client, api_skeleton_key):

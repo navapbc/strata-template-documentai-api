@@ -3,10 +3,7 @@ import os
 from documentai_api.logging import get_logger
 from documentai_api.utils.aws_client_factory import AWSClientFactory
 from documentai_api.utils.env import (
-    BDA_PROFILE_ARN,
-    BDA_PROJECT_ARN,
-    DOCUMENTAI_OUTPUT_LOCATION,
-    get_required_env,
+    get_aws_config,
 )
 
 logger = get_logger(__name__)
@@ -14,9 +11,9 @@ logger = get_logger(__name__)
 
 def invoke_bedrock_data_automation(source_bucket_name: str, source_object_name: str) -> str:
     """Invoke BDA and return job ARN."""
-    bda_project_arn = get_required_env(BDA_PROJECT_ARN)
-    bda_profile_arn = get_required_env(BDA_PROFILE_ARN)
-    documentai_output_location = get_required_env(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
+    bda_project_arn = get_aws_config().bda_project_arn
+    bda_profile_arn = get_aws_config().bda_profile_arn
+    documentai_output_location = get_aws_config().documentai_output_location.replace("s3://", "")
 
     logger.info(f"documentai_output_location after processing: {documentai_output_location}")
     logger.info(f"BDA_PROJECT_ARN: {bda_project_arn}")
