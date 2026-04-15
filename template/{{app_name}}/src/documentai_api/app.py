@@ -4,7 +4,7 @@ import os
 import secrets
 import uuid
 from dataclasses import dataclass
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, BinaryIO, cast
 
 import magic
 from fastapi import (
@@ -43,7 +43,6 @@ from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
 logger = get_logger(__name__)
-DOCUMENTAI_INPUT_LOCATION = os.getenv(env.DOCUMENTAI_INPUT_LOCATION)
 
 app = FastAPI(
     title=API_TITLE,
@@ -139,7 +138,7 @@ def _get_job_status(job_id: str) -> JobStatus:
 
 
 async def upload_document_for_processing(
-    file: UploadFile,
+    file: BinaryIO,
     original_file_name: str,
     unique_file_name: str,
     content_type: str,
@@ -155,11 +154,10 @@ async def upload_document_for_processing(
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    if not DOCUMENTAI_INPUT_LOCATION:
-        raise ValueError("DOCUMENTAI_INPUT_LOCATION environment variable not set")
+    input_location = env.get_required_env(env.DOCUMENTAI_INPUT_LOCATION)
 
     # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    bucket_name, object_key = parse_s3_uri(f"{DOCUMENTAI_INPUT_LOCATION}/{unique_file_name}")
+    bucket_name, object_key = parse_s3_uri(f"{input_location}/{unique_file_name}")
 
     try:
         metadata = {}
@@ -186,13 +184,13 @@ async def upload_document_for_processing(
             "S3: Starting actual upload",
             extra={
                 "metadata": metadata,
-                "file": file.file,
+                "file": file,
                 "document_upload_bucket_name": bucket_name,
                 "unique_file_name": unique_file_name,
             },
         )
 
-        s3_service.upload_file(bucket_name, object_key, file.file, content_type, metadata)
+        s3_service.upload_file(bucket_name, object_key, file, content_type, metadata)
         logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
@@ -302,7 +300,7 @@ async def create_document(
     job_id = str(uuid.uuid4())
 
     await upload_document_for_processing(
-        file=file,
+        file=file.file,
         original_file_name=file.filename,
         unique_file_name=unique_file_name,
         content_type=actual_content_type,

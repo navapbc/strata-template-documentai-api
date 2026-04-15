@@ -1,6 +1,6 @@
 """Tests for jobs/document_processor/main.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,27 +13,51 @@ from documentai_api.jobs.document_processor.main import (
     main,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
-from documentai_api.utils import env
 
 
 @pytest.fixture(autouse=True)
-def mock_env(monkeypatch):
-    """Mock environment variables for all tests."""
-    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, "s3://test-bucket/input")
+def disable_tenacity_wait_auto(disable_tenacity_wait):
+    pass
 
 
 @pytest.fixture(autouse=True)
-def mock_s3_head():
-    with patch("documentai_api.jobs.document_processor.main.s3_service.head_object") as mock:
-        mock.return_value = {
-            "Metadata": {
-                "job-id": "test-job-id",
-                "trace-id": "test-trace-id",
-                "user-provided-document-category": "income",
-                "original-file-name": "original.pdf",
-            }
-        }
-        yield mock
+def mock_env(runtime_required_env):
+    pass
+
+
+@pytest.fixture(autouse=True)
+def mock_invoke(mocker):
+    return mocker.patch("documentai_api.jobs.document_processor.main.invoke_bda")
+
+
+@pytest.fixture
+def input_image(s3_bucket):
+    return s3_bucket.put_object(
+        Key="input/test.jpg",
+        Body=b"image data",
+        ContentType="image/jpeg",
+        Metadata={
+            "job-id": "test-job-id",
+            "trace-id": "test-trace-id",
+            "user-provided-document-category": "income",
+            "original-file-name": "original.jpg",
+        },
+    )
+
+
+@pytest.fixture
+def input_pdf(s3_bucket):
+    return s3_bucket.put_object(
+        Key="input/test.pdf",
+        Body=b"PDF data",
+        ContentType="application/pdf",
+        Metadata={
+            "job-id": "test-job-id",
+            "trace-id": "test-trace-id",
+            "user-provided-document-category": "income",
+            "original-file-name": "original.pdf",
+        },
+    )
 
 
 @pytest.mark.parametrize(
@@ -74,6 +98,7 @@ def test_convert_to_grayscale_invalid_image():
     assert result_type == "image/jpeg"
 
 
+# TODO: why not just actually call the libraries?
 def test_convert_to_grayscale_small_image(mock_grayscale_dependencies):
     """Test grayscale conversion with small valid image."""
 
@@ -119,68 +144,60 @@ def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_depende
     assert result_type == "application/pdf"
 
 
-def test_convert_s3_object_to_grayscale_success():
+def test_convert_s3_object_to_grayscale_success(s3_bucket, mocker):
     """Test successful S3 object grayscale conversion."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get,
-        patch("documentai_api.jobs.document_processor.main.s3_service.put_object") as mock_s3_put,
-        patch("documentai_api.jobs.document_processor.main.convert_to_grayscale") as mock_convert,
-    ):
-        mock_s3_get.return_value = {
-            "Body": MagicMock(read=lambda: b"image data"),
-            "ContentType": "image/jpeg",
-        }
-        mock_convert.return_value = (b"grayscale data", "image/jpeg")
+    s3_bucket.put_object(Key="test.jpg", Body=b"image data", ContentType="image/jpeg")
 
-        result = convert_s3_object_to_grayscale("test-bucket", "test.jpg")
+    mock_convert = mocker.patch("documentai_api.jobs.document_processor.main.convert_to_grayscale")
+    mock_convert.return_value = (b"grayscale data", "image/jpeg")
+
+    result = convert_s3_object_to_grayscale(s3_bucket.name, "test.jpg")
+
+    current_object = s3_bucket.Object("test.jpg")
 
     assert result is True
-    mock_s3_get.assert_called_once_with("test-bucket", "test.jpg")
     mock_convert.assert_called_once_with("test.jpg", b"image data", "image/jpeg")
-    mock_s3_put.assert_called_once_with("test-bucket", "test.jpg", b"grayscale data", "image/jpeg")
+
+    assert current_object.content_type == "image/jpeg"
+    assert current_object.get()["Body"].read() == b"grayscale data"
 
 
-def test_convert_s3_object_to_grayscale_file_too_large():
+def test_convert_s3_object_to_grayscale_file_too_large(s3_bucket, mocker):
     """Test S3 conversion returns False when file too large."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get,
-        patch("documentai_api.jobs.document_processor.main.convert_to_grayscale") as mock_convert,
-    ):
-        mock_s3_get.return_value = {
-            "Body": MagicMock(read=lambda: b"image data"),
-            "ContentType": "image/jpeg",
-        }
-        large_bytes = b"x" * (int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1)
-        mock_convert.return_value = (large_bytes, "image/jpeg")
+    s3_bucket.put_object(Key="test.jpg", Body=b"image data", ContentType="image/jpeg")
 
-        result = convert_s3_object_to_grayscale("test-bucket", "test.jpg")
+    large_bytes = b"x" * (int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1)
+    mock_convert = mocker.patch("documentai_api.jobs.document_processor.main.convert_to_grayscale")
+    mock_convert.return_value = (large_bytes, "image/jpeg")
+
+    result = convert_s3_object_to_grayscale(s3_bucket.name, "test.jpg")
 
     assert result is False
 
+    # but file is still updated in S3
+    current_object = s3_bucket.Object("test.jpg")
+    assert current_object.get()["Body"].read() == large_bytes
 
-def test_convert_s3_object_to_grayscale_error():
+
+def test_convert_s3_object_to_grayscale_error(s3_bucket):
     """Test S3 grayscale conversion handles errors gracefully."""
-    with patch("documentai_api.jobs.document_processor.main.s3_service.get_object") as mock_s3_get:
-        mock_s3_get.side_effect = Exception("S3 error")
-
-        result = convert_s3_object_to_grayscale("test-bucket", "test.jpg")
+    result = convert_s3_object_to_grayscale(s3_bucket.name, "file_that_does_not_exist.jpg")
 
     assert result is False
 
 
-def test_invoke_bda_success():
+def test_invoke_bda_success(input_pdf, mocker):
     """Test successful BDA invocation."""
-    with (
-        patch(
-            "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
-        ) as mock_invoke,
-        patch(
-            "documentai_api.jobs.document_processor.main.set_bda_processing_status_started"
-        ) as mock_set_status,
-    ):
-        mock_invoke.return_value = "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
+    mock_set_status = mocker.patch(
+        "documentai_api.jobs.document_processor.main.set_bda_processing_status_started"
+    )
 
-        result = invoke_bda("test-bucket", "input/test.pdf", "test.pdf")
+    mock_low_level_invoke = mocker.patch(
+        "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
+    )
+    mock_low_level_invoke.return_value = "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
+
+    result = invoke_bda(input_pdf.bucket_name, input_pdf.key, "test.pdf")
 
     assert result["invocationArn"] == "arn:aws:bedrock:us-east-1:123456789012:job/abc123"
     mock_set_status.assert_called_once_with(
@@ -189,165 +206,132 @@ def test_invoke_bda_success():
     )
 
 
-def test_invoke_bda_failure():
+def test_invoke_bda_failure(input_pdf, mock_invoke, mocker):
     """Test BDA invocation failure updates DDB and raises exception."""
     from botocore.exceptions import ClientError
     from tenacity import RetryError
 
-    with (
-        patch(
-            "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
-        ) as mock_invoke,
-        patch("documentai_api.jobs.document_processor.main.classify_as_failed") as mock_classify,
-    ):
-        # raise ClientError so retry decorator actually retries
-        mock_invoke.side_effect = ClientError(
-            {"Error": {"Code": "ServiceException", "Message": "BDA invocation failed"}},
-            "invoke_bedrock_data_automation",
-        )
+    mock_classify = mocker.patch("documentai_api.jobs.document_processor.main.classify_as_failed")
 
-        with pytest.raises(RetryError):
-            invoke_bda("test-bucket", "input/test.pdf", "test.pdf")
+    mock_low_level_invoke = mocker.patch(
+        "documentai_api.jobs.document_processor.main.invoke_bedrock_data_automation"
+    )
 
-        mock_classify.assert_called_once()
-        assert mock_classify.call_args.kwargs["object_key"] == "test.pdf"
-        assert mock_classify.call_args.kwargs["error_message"] == "BDA invocation failed"
+    # raise ClientError so retry decorator actually retries
+    mock_low_level_invoke.side_effect = ClientError(
+        {"Error": {"Code": "ServiceException", "Message": "BDA invocation failed"}},
+        "invoke_bedrock_data_automation",
+    )
+
+    with pytest.raises(RetryError):
+        invoke_bda(input_pdf.bucket_name, input_pdf.key, "test.pdf")
+
+    mock_classify.assert_called_once()
+    assert mock_classify.call_args.kwargs["object_key"] == "test.pdf"
+    assert mock_classify.call_args.kwargs["error_message"] == "BDA invocation failed"
 
 
-def test_main_first_time_pdf(mock_s3_head):
+def test_main_first_time_pdf(input_pdf, mocker, ddb_doc_metadata_table, mock_invoke):
     """Test first time processing PDF (no grayscale needed)."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch(
-            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
-        ) as mock_insert,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.side_effect = [
-            ValueError("Record not found"),
-            {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
-        ]
+    main(input_pdf.key, input_pdf.bucket_name)
 
-        main("input/test.pdf", "test-bucket")
+    expected_object_key = "test.pdf"
 
-    mock_insert.assert_called_once()
-    mock_invoke.assert_called_once_with("test-bucket", "input/test.pdf", "test.pdf")
+    doc_meta_record = ddb_doc_metadata_table.get_item(Key={"fileName": expected_object_key})["Item"]
+    assert doc_meta_record[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED
+
+    mock_invoke.assert_called_once_with(input_pdf.bucket_name, input_pdf.key, expected_object_key)
 
 
-def test_main_first_time_image(mock_s3_head):
+def test_main_first_time_image(input_image, mocker, ddb_doc_metadata_table, mock_invoke):
     """Test first time processing image (needs grayscale)."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch(
-            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
-        ) as mock_insert,
-        patch(
-            "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
-        ) as mock_convert,
-        patch(
-            "documentai_api.jobs.document_processor.main.set_bda_processing_status_not_started"
-        ) as mock_set_status,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.side_effect = [
-            ValueError("Record not found"),
-            {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
-        ]
-        mock_convert.return_value = True
+    mock_convert = mocker.patch(
+        "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
+    )
+    mock_convert.return_value = True
 
-        main("input/test.jpg", "test-bucket")
+    main(input_image.key, input_image.bucket_name)
 
-    mock_insert.assert_called_once()
-    mock_convert.assert_called_once_with("test-bucket", "input/test.jpg")
-    mock_set_status.assert_called_once_with("test.jpg")
-    mock_invoke.assert_called_once_with("test-bucket", "input/test.jpg", "test.jpg")
+    expected_object_key = "test.jpg"
+
+    doc_meta_record = ddb_doc_metadata_table.get_item(Key={"fileName": expected_object_key})["Item"]
+    assert doc_meta_record[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED
+
+    mock_convert.assert_called_once_with(input_image.bucket_name, input_image.key)
+    mock_invoke.assert_called_once_with(
+        input_image.bucket_name, input_image.key, expected_object_key
+    )
 
 
-def test_main_grayscale_conversion_fails(mock_s3_head):
+def test_main_grayscale_conversion_fails(input_image, mocker, mock_invoke):
     """Test grayscale conversion failure marks as not implemented."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.insert_initial_ddb_record"),
-        patch(
-            "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
-        ) as mock_convert,
-        patch(
-            "documentai_api.jobs.document_processor.main.classify_as_not_implemented"
-        ) as mock_classify,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.side_effect = [
-            ValueError("Record not found"),
-            {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
-        ]
-        mock_convert.return_value = False
+    mocker.patch("documentai_api.jobs.document_processor.main.insert_initial_ddb_record")
 
-        main("input/test.jpg", "test-bucket")
+    mock_convert = mocker.patch(
+        "documentai_api.jobs.document_processor.main.convert_s3_object_to_grayscale"
+    )
+    mock_convert.return_value = False
+
+    mock_classify = mocker.patch(
+        "documentai_api.jobs.document_processor.main.classify_as_not_implemented"
+    )
+
+    mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
+    mock_get.side_effect = [
+        ValueError("Record not found"),
+        {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
+    ]
+
+    main(input_image.key, input_image.bucket_name)
 
     mock_classify.assert_called_once()
     mock_invoke.assert_not_called()
 
 
-def test_main_already_processed(mock_s3_head):
+def test_main_already_processed(input_pdf, mocker, mock_invoke):
     """Test that already processed files are skipped."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "success"}
+    mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
+    mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.SUCCESS.value}
 
-        main("input/test.pdf", "test-bucket")
+    main(input_pdf.key, input_pdf.bucket_name)
 
     mock_invoke.assert_not_called()
 
 
-def test_main_uses_env_bucket_when_not_provided():
+def test_main_uses_env_bucket_when_not_provided(input_pdf, mocker, mock_invoke):
     """Test bucket name defaults to environment variable."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.s3_service.head_object"),
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value}
+    main(input_pdf.key)
 
-        main("input/test.pdf")
-
-    mock_invoke.assert_called_once_with("test-bucket", "input/test.pdf", "test.pdf")
+    mock_invoke.assert_called_once_with(input_pdf.bucket_name, input_pdf.key, "test.pdf")
 
 
-def test_main_idempotent_on_duplicate_events(mock_s3_head):
+def test_main_idempotent_on_duplicate_events(input_pdf, mocker, mock_invoke):
     """Test job is idempotent when receiving duplicate S3 events."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda") as mock_invoke,
-    ):
-        mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: "processing"}
+    mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
+    mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.STARTED.value}
 
-        main("input/test.pdf", "test-bucket")
+    main(input_pdf.key, input_pdf.bucket_name)
 
     mock_invoke.assert_not_called()
 
 
-def test_main_propagates_s3_metadata(mock_s3_head):
+def test_main_propagates_s3_metadata(input_pdf, mocker):
     """Test that job_id, trace_id, and document category are read from S3 metadata."""
-    with (
-        patch("documentai_api.jobs.document_processor.main.get_ddb_record") as mock_get,
-        patch(
-            "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
-        ) as mock_insert,
-        patch("documentai_api.jobs.document_processor.main.invoke_bda"),
-    ):
-        mock_get.side_effect = [
-            ValueError("Record not found"),
-            {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
-        ]
+    mock_insert = mocker.patch(
+        "documentai_api.jobs.document_processor.main.insert_initial_ddb_record"
+    )
 
-        main("input/test.pdf", "test-bucket")
+    mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
+    mock_get.side_effect = [
+        ValueError("Record not found"),
+        {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
+    ]
+
+    main(input_pdf.key, input_pdf.bucket_name)
 
     mock_insert.assert_called_once()
     call_kwargs = mock_insert.call_args.kwargs
 
-    # values are derived from the mock_s3_head fixture
     assert call_kwargs["job_id"] == "test-job-id"
     assert call_kwargs["trace_id"] == "test-trace-id"
     assert call_kwargs["user_provided_document_category"] == "income"

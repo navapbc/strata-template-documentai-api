@@ -1,13 +1,52 @@
 """Shared test fixtures."""
 
-from unittest.mock import patch
-
 import pytest
-from moto import mock_aws
+
+#############################################################################
+# Autouse fixtures                                                          #
+#                                                                           #
+# Since these are defined here in the top-level conftest file, they apply   #
+# globally to all tests.                                                    #
+#############################################################################
+
+
+@pytest.fixture(autouse=True, scope="session")
+def reset_env():
+    """Start each test suite run with a clean environment."""
+    import os
+
+    # save a copy of environment as it is at start of run
+    env = dict(os.environ)
+
+    os.environ.clear()
+
+    # for native dependencies
+    os.environ["PATH"] = env["PATH"]
+
+    # for other fixtures that may want to reference real environment values for
+    # their test settings
+    return env
+
+
+#######################
+# API Server fixtures #
+#######################
 
 
 @pytest.fixture
-def api_client():
+def runtime_required_env(monkeypatch, s3_bucket, ddb_doc_metadata_table):
+    """Required configuration to run the application in general."""
+    from documentai_api.utils import env
+
+    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, f"s3://{s3_bucket.name}/input")
+    monkeypatch.setenv(env.DOCUMENTAI_OUTPUT_LOCATION, f"s3://{s3_bucket.name}/output")
+    monkeypatch.setenv(env.BDA_PROJECT_ARN, "arn:aws:project")
+    monkeypatch.setenv(env.BDA_PROFILE_ARN, "arn:aws:profile")
+    monkeypatch.setenv(env.BDA_REGION, "us-east-1")
+
+
+@pytest.fixture
+def api_client(runtime_required_env):
     """Create test client."""
     from fastapi.testclient import TestClient
 
@@ -23,94 +62,56 @@ def api_skeleton_key(monkeypatch):
     return key
 
 
-@pytest.fixture
-def aws_credentials(monkeypatch):
-    """Mock AWS credentials for moto."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
-    monkeypatch.setenv("AWS_SECURITY_TOKEN", "testing")
-    monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+#################################################################################
+# Regular fixtures                                                              #
+#                                                                               #
+# Logical groups of fixtures should be grouped in tests/helpers/fixtures/ (and  #
+# then imported at the bottom of this file) or live within conftest.py files in #
+# various test directories. But general/misc. fixtures can live here.           #
+#################################################################################
 
 
 @pytest.fixture
-def s3_client(aws_credentials):
-    """Create a test S3 client."""
-    import boto3
+def mock_grayscale_dependencies(mocker):
+    mock_cv2_imdecode = mocker.patch("cv2.imdecode")
+    mock_cv2_cvtcolor = mocker.patch("cv2.cvtColor")
+    mock_pil_fromarray = mocker.patch("PIL.Image.fromarray")
 
-    with mock_aws():
-        yield boto3.client("s3", region_name="us-east-1")
-
-
-@pytest.fixture
-def s3_bucket(aws_credentials):
-    """Create a test S3 bucket resource."""
-    import boto3
-
-    with mock_aws():
-        s3 = boto3.resource("s3", region_name="us-east-1")
-        bucket = s3.Bucket("test-bucket")
-        bucket.create()
-        yield bucket
+    return mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
 
 
 @pytest.fixture
-def ddb_table(aws_credentials):
-    """Create a test DynamoDB table."""
-    import boto3
+def disable_tenacity_wait(mocker):
+    """Make Tenacity wait for 0 seconds between retries.
 
-    with mock_aws():
-        dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-        table = dynamodb.create_table(
-            TableName="test-table",
-            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
-            AttributeDefinitions=[
-                {"AttributeName": "id", "AttributeType": "S"},
-                {"AttributeName": "userId", "AttributeType": "S"},
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    "IndexName": "test-index",
-                    "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
-                    "Projection": {"ProjectionType": "ALL"},
-                }
-            ],
-            BillingMode="PAY_PER_REQUEST",
-        )
-        table.test_index_name = "test-index"
-        yield table
+    Generally
+    """
+    mocker.patch("tenacity.nap.time")
 
 
 @pytest.fixture
-def mock_bda_clients():
-    """Mock BDA clients (not supported by moto yet)."""
-    with (
-        patch("documentai_api.services.bda.AWSClientFactory.get_bda_client") as mock_bda,
-        patch(
-            "documentai_api.services.bda.AWSClientFactory.get_bda_runtime_client"
-        ) as mock_bda_runtime,
-    ):
-        yield {
-            "bda": mock_bda.return_value,
-            "bda_runtime": mock_bda_runtime.return_value,
-        }
+def clear_env_vars():
+    """Clear all environment variables.
+
+    The test suite starts with an _almost_ clean environment by default, by if
+    you want it cleaner you can use this. Pytest may internally still set some
+    environment variables.
+    """
+    import os
+    from unittest.mock import patch
+
+    with patch.dict(os.environ, {}, clear=True):
+        yield
 
 
-@pytest.fixture
-def mock_bda_client(mock_bda_clients):
-    return mock_bda_clients["bda"]
+######################
+# Pytest setup stuff #
+######################
 
+pytest.register_assert_rewrite("tests.helpers")
 
-@pytest.fixture
-def mock_bda_runtime_client(mock_bda_clients):
-    return mock_bda_clients["bda_runtime"]
-
-
-@pytest.fixture
-def mock_grayscale_dependencies():
-    with (
-        patch("cv2.imdecode") as mock_cv2_imdecode,
-        patch("cv2.cvtColor") as mock_cv2_cvtcolor,
-        patch("PIL.Image.fromarray") as mock_pil_fromarray,
-    ):
-        yield mock_cv2_imdecode, mock_cv2_cvtcolor, mock_pil_fromarray
+pytest_plugins = (
+    "tests.helpers.fixtures.aws",
+    "tests.helpers.fixtures.db.ddb",
+    "tests.helpers.fixtures.documents",
+)

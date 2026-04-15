@@ -1,20 +1,10 @@
 """Tests for utils/aws_client_factory.py."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from documentai_api.utils import env
 from documentai_api.utils.aws_client_factory import AWSClientFactory
-
-
-@pytest.fixture(autouse=True)
-def reset_session():
-    """Reset the session between tests."""
-    AWSClientFactory._session = None
-    yield
-    AWSClientFactory._session = None
 
 
 @pytest.fixture(autouse=True)
@@ -26,13 +16,6 @@ def clear_lru_cache():
     AWSClientFactory.get_bda_runtime_client.cache_clear()
     AWSClientFactory.get_ssm_client.cache_clear()
     return
-
-
-@pytest.fixture
-def clear_env_vars():
-    """Clear all environment variables."""
-    with patch.dict(os.environ, {}, clear=True):
-        yield
 
 
 @pytest.fixture
@@ -87,11 +70,11 @@ def test_get_region_default(clear_env_vars):
     assert region == "us-east-1"
 
 
-def test_get_region_from_env():
+def test_get_region_from_env(monkeypatch):
     """Test that _get_region() returns value from AWS_REGION env var."""
-    with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}):
-        region = AWSClientFactory._get_region()
-        assert region == "us-west-2"
+    monkeypatch.setenv("AWS_REGION", "us-west-2")
+    region = AWSClientFactory._get_region()
+    assert region == "us-west-2"
 
 
 def test_get_bda_region_default(clear_env_vars):
@@ -100,11 +83,11 @@ def test_get_bda_region_default(clear_env_vars):
     assert region == "us-east-1"
 
 
-def test_get_bda_region_from_env():
+def test_get_bda_region_from_env(monkeypatch):
     """Test that _get_bda_region() returns value from BDA_REGION env var."""
-    with patch.dict(os.environ, {env.BDA_REGION: "eu-west-1"}):
-        region = AWSClientFactory._get_bda_region()
-        assert region == "eu-west-1"
+    monkeypatch.setenv("BDA_REGION", "eu-west-1")
+    region = AWSClientFactory._get_bda_region()
+    assert region == "eu-west-1"
 
 
 def test_get_s3_client(mock_aws_session_instance):

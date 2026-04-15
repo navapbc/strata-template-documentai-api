@@ -1,5 +1,4 @@
 import json
-import os
 import random
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -18,6 +17,11 @@ from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
+from documentai_api.utils.document_detector import (
+    DocumentDetector,
+    QualityMetricsNormalized,
+    QualityMetricsRaw,
+)
 from documentai_api.utils.env import get_required_env
 from documentai_api.utils.models import (
     ClassificationData,
@@ -27,7 +31,6 @@ from documentai_api.utils.models import (
 )
 from documentai_api.utils.response_builder import build_v1_api_response, get_internal_api_response
 from documentai_api.utils.response_codes import ResponseCodes
-from documentai_api.utils.document_detector import QualityMetricsRaw, QualityMetricsNormalized
 
 logger = get_logger(__name__)
 
@@ -322,12 +325,7 @@ def get_ddb_record(object_key: str) -> dict[str, Any]:
 def get_ddb_by_job_id(job_id: str) -> dict[str, Any] | None:
     """Get document metadata record by job ID."""
     table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
-    index_name = os.getenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
-
-    if not index_name:
-        raise ValueError(
-            f"{env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME} environment variable not set"
-        )
+    index_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None
@@ -461,17 +459,6 @@ def insert_initial_ddb_record(
     trace_id: str | None = None,
 ) -> None:
     """Insert initial DDB record."""
-    # import document_detector in insert_initial_ddb_record to avoid cv2 dependency
-    # in other lambdas. only ddb_insert_file_name Lambda
-    # has OpenCV/Poppler layers attached. including this import at the top of the
-    # file will cause the  container deployment to fail with a ModuleNotFoundError:
-    # No module named 'cv2' error
-    from documentai_api.utils.document_detector import (
-        DocumentDetector,
-        QualityMetricsNormalized,
-        QualityMetricsRaw,
-    )
-
     if not user_provided_document_category:
         logger.warning(f"Warning: user_provided_document_category is None/empty for {ddb_key}")
         user_provided_document_category = "unknown"

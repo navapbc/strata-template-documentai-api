@@ -1,7 +1,5 @@
 """Tests for API authentication."""
 
-from unittest.mock import patch
-
 
 def test_verify_api_key_missing_env_var(api_client):
     """Test returns 500 when API_AUTH_INSECURE_SHARED_KEY not set."""
@@ -24,10 +22,9 @@ def test_verify_api_key_missing_header(api_client, api_skeleton_key):
     assert "Invalid API key" in response.json()["detail"]
 
 
-def test_verify_api_key_valid(api_client, api_skeleton_key):
+def test_verify_api_key_valid(api_client, api_skeleton_key, mocker):
     """Test allows request with valid API key."""
-    with (
-        patch("documentai_api.app.get_all_schemas", return_value={"test": {}}),
-    ):
-        response = api_client.get("/v1/schemas", headers={"API-Key": api_skeleton_key})
-        assert response.status_code == 200
+    mocker.patch("documentai_api.app.get_all_schemas", return_value={"test": {}})
+
+    response = api_client.get("/v1/schemas", headers={"API-Key": api_skeleton_key})
+    assert response.status_code == 200
