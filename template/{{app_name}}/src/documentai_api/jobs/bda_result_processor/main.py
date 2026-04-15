@@ -2,12 +2,13 @@
 """Process BDA output from S3 and extract document data."""
 
 import json
-import os
+from typing import Any
 
 import typer
 
 from documentai_api.utils import env
 from documentai_api.utils.bda_output_processor import process_bda_output
+from documentai_api.utils.env import get_required_env
 from documentai_api.utils.logger import get_logger
 from documentai_api.utils.s3 import get_s3_prefix_from_location
 
@@ -21,8 +22,8 @@ def extract_uploaded_filename(object_key: str) -> str:
     BDA output: processed/input/w2-xxx.pdf/uuid/0/custom_output/0/result.json
     Extract: w2-xxx.pdf
     """
-    output_prefix = get_s3_prefix_from_location(os.getenv(env.DOCUMENTAI_OUTPUT_LOCATION))
-    input_prefix = get_s3_prefix_from_location(os.getenv(env.DOCUMENTAI_INPUT_LOCATION))
+    output_prefix = get_s3_prefix_from_location(get_required_env(env.DOCUMENTAI_OUTPUT_LOCATION))
+    input_prefix = get_s3_prefix_from_location(get_required_env(env.DOCUMENTAI_INPUT_LOCATION))
 
     # remove prefixes: processed/input/filename.pdf/... -> filename.pdf
     filename = object_key
@@ -45,7 +46,7 @@ def extract_uploaded_filename(object_key: str) -> str:
     return filename
 
 
-def main(bucket_name: str, object_key: str) -> dict:
+def main(bucket_name: str, object_key: str) -> dict[str, Any]:
     """Process BDA output file.
 
     Args:
@@ -75,7 +76,7 @@ def main(bucket_name: str, object_key: str) -> dict:
 def cli(
     bucket_name: str = typer.Argument(..., help="S3 bucket containing BDA output"),
     object_key: str = typer.Argument(..., help="S3 object key of BDA output file"),
-):
+) -> None:
     """Process BDA output file."""
     try:
         result = main(bucket_name, object_key)

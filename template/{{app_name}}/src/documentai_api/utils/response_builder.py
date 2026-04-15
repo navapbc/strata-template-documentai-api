@@ -6,6 +6,7 @@ from typing import Any
 from documentai_api.config.constants import (
     PROCESSING_STATUS_NOT_SUPPORTED,
     PROCESSING_STATUSES_SUCCESSFUL,
+    DocumentCategory,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
@@ -21,17 +22,25 @@ logger = get_logger(__name__)
 
 # TODO: Refactor to improve testability - consider making public along with
 # restructuring to reduce mocking in tests
-def _extract_field_values(ddb_record: dict, include_extracted_data: bool) -> dict[str, Any]:
+def _extract_field_values(
+    ddb_record: dict[str, Any], include_extracted_data: bool
+) -> dict[str, Any]:
     """Extract field data for API response."""
     if not ddb_record:
         return {}
 
-    bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
-    metadata, field_values = extract_field_values_from_bda_results(bda_results)
-
     # get confidence scores and extracted values if requested
     if include_extracted_data:
-        bda_results = get_bda_result_json(ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI))
+        s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
+
+        if not s3_uri:
+            return {}
+
+        bda_results = get_bda_result_json(s3_uri)
+
+        if not bda_results:
+            return {}
+
         metadata, field_values = extract_field_values_from_bda_results(bda_results)
         field_confidence_map_list = metadata.field_confidence_map_list
     else:
@@ -77,7 +86,9 @@ def get_internal_api_response(
 
     return InternalApiResponse(
         validation_passed=ResponseCodes.is_success_response_code(response_code),
-        document_category=user_provided_document_category,
+        document_category=DocumentCategory(user_provided_document_category)
+        if user_provided_document_category
+        else None,
         matched_document_class=matched_document_class,
         response_code=response_code,
         response_message=ResponseCodes.get_message(response_code),

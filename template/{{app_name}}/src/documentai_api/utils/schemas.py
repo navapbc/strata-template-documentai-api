@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Any, cast
 
 from documentai_api.config.constants import (
     CACHE_BLUEPRINT_SCHEMAS_TTL_MINUTES,
@@ -15,7 +16,7 @@ from documentai_api.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _fetch_schemas_from_bda() -> dict:
+def _fetch_schemas_from_bda() -> dict[str, Any]:
     """Fetch schemas from BDA."""
     msg = "Fetching schemas from BDA"
     logger.info(msg)
@@ -62,7 +63,7 @@ def _fetch_schemas_from_bda() -> dict:
         return {}
 
 
-def _extract_fields(schema: dict) -> list:
+def _extract_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract field list from schema."""
     fields = []
     properties = schema.get("properties", {})
@@ -119,14 +120,14 @@ def _extract_fields(schema: dict) -> list:
     return fields
 
 
-def get_all_schemas() -> dict:
+def get_all_schemas() -> dict[str, Any]:
     """Get all document schemas."""
     cache = get_cache()
 
     # try cache first
     schemas = cache.get(CACHE_KEY_BLUEPRINT_SCHEMAS)
     if schemas is not None:
-        return schemas
+        return cast(dict[str, Any], schemas)
 
     # fetch from BDA and cache
     schemas = _fetch_schemas_from_bda()
@@ -135,13 +136,13 @@ def get_all_schemas() -> dict:
     return schemas
 
 
-def get_document_schema(document_type: str) -> dict | None:
+def get_document_schema(document_type: str) -> dict[str, Any] | None:
     """Get schema for specific document type."""
     schemas = get_all_schemas()
     return schemas.get(document_type)
 
 
-def invalidate_schema_cache():
+def invalidate_schema_cache() -> None:
     """Force refresh of schema cache."""
     cache = get_cache()
     cache.invalidate(CACHE_KEY_BLUEPRINT_SCHEMAS)

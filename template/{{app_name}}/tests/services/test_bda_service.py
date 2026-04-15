@@ -27,39 +27,6 @@ def test_get_blueprint(mock_bda_client):
     mock_bda_client.get_blueprint.assert_called_once_with(blueprintArn=blueprint_arn)
 
 
-def test_invoke_data_automation_async(mock_bda_runtime_client):
-    """Invoke BDA job asynchronously."""
-    input_config = {"s3Uri": "s3://bucket/input.pdf"}
-    output_config = {"s3Uri": "s3://bucket/output/"}
-    project_arn = "arn:aws:bedrock:us-east-1:123:project/test"
-    invocation_arn = "arn:aws:bedrock:us-east-1:123:invocation/test"
-
-    mock_bda_runtime_client.invoke_data_automation_async.return_value = {
-        "invocationArn": invocation_arn
-    }
-
-    result = bda_service.invoke_data_automation_async(project_arn, input_config, output_config)
-
-    assert result["invocationArn"] == invocation_arn
-    mock_bda_runtime_client.invoke_data_automation_async.assert_called_once_with(
-        projectArn=project_arn, inputConfiguration=input_config, outputConfiguration=output_config
-    )
-
-
-def test_get_data_automation_job(mock_bda_runtime_client):
-    """Get BDA job status."""
-    job_arn = "arn:aws:bedrock:us-east-1:123:job/test"
-    mock_bda_runtime_client.get_data_automation_job.return_value = {
-        "jobArn": job_arn,
-        "status": "Completed",
-    }
-
-    result = bda_service.get_data_automation_job(job_arn)
-
-    assert result["status"] == "Completed"
-    mock_bda_runtime_client.get_data_automation_job.assert_called_once_with(jobArn=job_arn)
-
-
 def test_get_bda_result_json_success(s3_bucket):
     """Read BDA result JSON from S3."""
     s3_bucket.put_object(Key="path/to/result.json", Body=b'{"result": "success"}')

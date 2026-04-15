@@ -9,6 +9,7 @@
 	init \
 	init-local \
 	lint \
+	lint-mypy \
 	lint-ruff \
 	lint-uv \
 	login \
@@ -126,10 +127,13 @@ format: ## Format code
 	$(PY_RUN_CMD) ruff format $(FMT_ARGS) .
 
 lint: ## Run all linters
-lint: lint-ruff lint-uv
+lint: lint-ruff lint-uv lint-mypy
 
 lint-ruff: ## Lint Python code with ruff
 	$(PY_RUN_CMD) ruff check $(LINT_ARGS) .
+
+lint-mypy: ## Type check with mypy
+	$(PY_RUN_CMD) mypy src
 
 lint-uv: ## Check uv lockfile is up-to-date
 	$(RUN_CMD) uv lock --check

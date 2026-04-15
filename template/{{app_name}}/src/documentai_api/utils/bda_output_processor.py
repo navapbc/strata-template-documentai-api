@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
 from documentai_api.services.bda import extract_bda_output_s3_uri, get_bda_result_json
@@ -8,7 +9,6 @@ from documentai_api.utils.bda import (
     get_text_from_standard_blueprint,
 )
 from documentai_api.utils.ddb import (
-    ClassificationData,
     classify_as_no_custom_blueprint_matched,
     classify_as_no_document_detected,
     classify_as_not_implemented,
@@ -16,6 +16,7 @@ from documentai_api.utils.ddb import (
     get_user_provided_document_category,
 )
 from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.response_codes import ResponseCodes
 
 logger = get_logger(__name__)
@@ -26,19 +27,19 @@ class MatchedBlueprintInfo:
     """Timing data calculated during BDA processing completion."""
 
     name: str
-    confidence: str
+    confidence: float | None
 
 
 @dataclass
 class BdaProcessingResults:
     """Data elements derrived from BDA output."""
 
-    empty_field_list: list = field(default_factory=list)
-    field_confidence_map_list: list = field(default_factory=list)
+    empty_field_list: list[str] = field(default_factory=list)
+    field_confidence_map_list: list[dict[str, float]] = field(default_factory=list)
     response_code: str | None = None
 
 
-def get_bda_processing_results(bda_result_json: dict) -> BdaProcessingResults:
+def get_bda_processing_results(bda_result_json: dict[str, Any]) -> BdaProcessingResults:
     """Extract field processing results from BDA output."""
     if BdaResponseFields.EXPLAINABILITY_INFO not in bda_result_json:
         return BdaProcessingResults(response_code=ResponseCodes.INTERNAL_PROCESSING_ERROR)
@@ -60,7 +61,7 @@ def _determine_response_code(field_data: BdaFieldProcessingData) -> str:
     return ResponseCodes.SUCCESS
 
 
-def get_matched_blueprint(bda_result_json: dict) -> MatchedBlueprintInfo:
+def get_matched_blueprint(bda_result_json: dict[str, Any]) -> MatchedBlueprintInfo:
     """Extract matched blueprint name and confidence from BDA result JSON."""
     matched_blueprint = bda_result_json.get(BdaResponseFields.MATCHED_BLUEPRINT, {})
     matched_blueprint_name = matched_blueprint.get(BdaResponseFields.MATCHED_BLUEPRINT_NAME)
@@ -71,7 +72,9 @@ def get_matched_blueprint(bda_result_json: dict) -> MatchedBlueprintInfo:
     return MatchedBlueprintInfo(matched_blueprint_name, matched_blueprint_confidence)
 
 
-def process_bda_output(uploaded_filename, bda_output_bucket_name, bda_output_object_key):
+def process_bda_output(
+    uploaded_filename: str, bda_output_bucket_name: str, bda_output_object_key: str
+) -> dict[str, Any]:
     user_provided_document_category = get_user_provided_document_category(uploaded_filename)
 
     if not user_provided_document_category:
@@ -84,7 +87,14 @@ def process_bda_output(uploaded_filename, bda_output_bucket_name, bda_output_obj
         )
 
     bda_output_s3_uri = extract_bda_output_s3_uri(bda_output_bucket_name, bda_output_object_key)
+
+    if not bda_output_s3_uri:
+        raise ValueError("No BDA output S3 URI found")
+
     bda_result_json = get_bda_result_json(bda_output_s3_uri)
+    if not bda_result_json:
+        raise ValueError("No BDA result JSON found")
+
     matched_blueprint = get_matched_blueprint(bda_result_json)
 
     document_class = bda_result_json.get(BdaResponseFields.DOCUMENT_CLASS, {}).get(
@@ -131,7 +141,7 @@ def process_bda_output(uploaded_filename, bda_output_bucket_name, bda_output_obj
 
         return classify_as_success(
             object_key=uploaded_filename,
-            response_code=results.response_code,
+            response_code=results.response_code or ResponseCodes.SUCCESS,
             data=classification_data,
         )
 
