@@ -6,16 +6,17 @@ from documentai_api.utils.env import (
     BDA_PROFILE_ARN,
     BDA_PROJECT_ARN,
     DOCUMENTAI_OUTPUT_LOCATION,
+    get_required_env,
 )
 
 logger = get_logger(__name__)
 
 
-def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
+def invoke_bedrock_data_automation(source_bucket_name: str, source_object_name: str) -> str:
     """Invoke BDA and return job ARN."""
-    bda_project_arn = os.getenv(BDA_PROJECT_ARN)
-    bda_profile_arn = os.getenv(BDA_PROFILE_ARN)
-    documentai_output_location = os.getenv(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
+    bda_project_arn = get_required_env(BDA_PROJECT_ARN)
+    bda_profile_arn = get_required_env(BDA_PROFILE_ARN)
+    documentai_output_location = get_required_env(DOCUMENTAI_OUTPUT_LOCATION).replace("s3://", "")
 
     logger.info(f"documentai_output_location after processing: {documentai_output_location}")
     logger.info(f"BDA_PROJECT_ARN: {bda_project_arn}")
@@ -57,6 +58,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
                 bucket=source_bucket_name, key=source_object_name, body=truncated_bytes
             )
 
+        # TODO: refactor to call services/bda.py instead of calling runtime client directly
         response = bedrock.invoke_data_automation_async(
             dataAutomationProfileArn=bda_profile_arn,
             dataAutomationConfiguration={"dataAutomationProjectArn": bda_project_arn},
@@ -66,7 +68,7 @@ def invoke_bedrock_data_automation(source_bucket_name, source_object_name):
             },
         )
         logger.info(f"BDA response: {response}")
-        return response.get("invocationArn")
+        return str(response.get("invocationArn"))
     except Exception as e:
         logger.error(f"BDA API call failed: {e}")
         raise

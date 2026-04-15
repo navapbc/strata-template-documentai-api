@@ -22,10 +22,10 @@ class CacheItem:
 class Cache:
     """Generic in-memory cache with TTL."""
 
-    def __init__(self):
-        self._cache = {}
+    def __init__(self) -> None:
+        self._cache: dict[str, Any] = {}
 
-    def add(self, key: str, value: Any, ttl_minutes: int = 5):
+    def add(self, key: str, value: Any, ttl_minutes: int = 5) -> None:
         """Add item to cache with TTL."""
         self._cache[key] = CacheItem(value, ttl_minutes)
         logger.debug(f"Cache: Added '{key}' with TTL {ttl_minutes}m")
@@ -43,13 +43,13 @@ class Cache:
 
         return item.value
 
-    def invalidate(self, key: str):
+    def invalidate(self, key: str) -> None:
         """Remove item from cache."""
         if key in self._cache:
             del self._cache[key]
             logger.debug(f"Cache: Invalidated '{key}'")
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cache."""
         self._cache.clear()
         logger.debug("Cache: Cleared all items")

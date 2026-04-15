@@ -1,6 +1,7 @@
 """Data models for document classification and field metrics."""
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from documentai_api.config.constants import DocumentCategory
 
@@ -10,8 +11,8 @@ class InternalApiResponse:
     """Shared API response model."""
 
     validation_passed: bool
-    document_category: DocumentCategory
-    matched_document_class: str
+    document_category: DocumentCategory | None
+    matched_document_class: str | None
     response_code: str
     response_message: str
 
@@ -24,9 +25,9 @@ class ClassificationData:
     matched_document_class: str | None = None
     matched_blueprint_name: str | None = None
     matched_blueprint_confidence: float | None = None
-    field_confidence_scores: list[dict] | None = None
-    field_below_threshold_list: list | None = None
-    field_empty_list: list | None = None
+    field_confidence_scores: list[dict[str, float]] | None = None
+    field_below_threshold_list: list[str] | None = None
+    field_empty_list: list[str] | None = None
     additional_info: str | None = None
 
 
@@ -43,5 +44,5 @@ class FieldMetrics:
 class ProcessingTimes:
     """Timing data calculated during BDA processing completion."""
 
-    total_processing_time_seconds: float = 0.0
-    bda_processing_time_seconds: float = 0.0
+    total_processing_time_seconds: Decimal = Decimal(0)
+    bda_processing_time_seconds: Decimal = Decimal(0)

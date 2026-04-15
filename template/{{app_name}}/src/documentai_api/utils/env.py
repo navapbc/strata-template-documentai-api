@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # environment variable names
@@ -14,3 +16,12 @@ MAX_BDA_INVOKE_RETRY_ATTEMPTS = "MAX_BDA_INVOKE_RETRY_ATTEMPTS"
 
 class PydanticBaseEnvConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+def get_required_env(name: str) -> str:
+    value = os.getenv(name)
+
+    if not value:
+        raise ValueError(f"{name} environment variable not set")
+
+    return value

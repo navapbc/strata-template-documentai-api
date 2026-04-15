@@ -4,7 +4,7 @@ import os
 import secrets
 import uuid
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import magic
 from fastapi import (
@@ -37,7 +37,9 @@ from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
-from documentai_api.utils.ddb import ClassificationData, classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
 
@@ -62,7 +64,7 @@ app.add_middleware(
 api_key_header = APIKeyHeader(name=API_AUTH_KEY_HEADER_NAME, auto_error=False)
 
 
-def verify_api_key(api_key: str = Depends(api_key_header)):
+def verify_api_key(api_key: str = Depends(api_key_header)) -> None:
     """Simple placeholder API key check."""
     expected_key = os.getenv(env.API_AUTH_INSECURE_SHARED_KEY)
 
@@ -77,17 +79,17 @@ def verify_api_key(api_key: str = Depends(api_key_header)):
 
 # public endpoints (no auth required)
 @app.get("/")
-def root():
+def root() -> dict[str, Any]:
     return {"message": API_TITLE, "status": "healthy"}
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, Any]:
     return {"message": "healthy"}
 
 
 @app.get("/config")
-def get_config(request: Request):
+def get_config(request: Request) -> dict[str, Any]:
     return {
         "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
         "version": API_VERSION,
@@ -110,7 +112,7 @@ def get_config(request: Request):
 class JobStatus:
     """Job status data from DDB."""
 
-    ddb_record: dict | None
+    ddb_record: dict[str, Any] | None
     object_key: str | None
     process_status: str | None
     v1_response_json: str | None
@@ -142,10 +144,10 @@ async def upload_document_for_processing(
     original_file_name: str,
     unique_file_name: str,
     content_type: str,
-    user_provided_document_category: DocumentCategory = None,
+    user_provided_document_category: DocumentCategory | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-):
+) -> None:
     logger.debug(
         "S3 upload started",
         extra={
@@ -203,7 +205,7 @@ async def upload_document_for_processing(
         ) from e
 
 
-async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
+async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict[str, Any]:
     """Poll for document processing completion with timeout."""
     elapsed_time = 0
     object_key = None
@@ -221,7 +223,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict:
                 job_status.process_status in PROCESSING_STATUS_COMPLETED
                 and job_status.v1_response_json
             ):
-                return json.loads(job_status.v1_response_json)
+                return cast(dict[str, Any], json.loads(job_status.v1_response_json))
 
             # still processing, wait and poll again
             await asyncio.sleep(polling_interval)
@@ -264,7 +266,7 @@ async def create_document(
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
     timeout: int = 180,  # accounts for ECS cold starts and BDA processing time
-):
+) -> dict[str, Any]:
     """Upload a document for processing.
 
     Args:
@@ -272,6 +274,9 @@ async def create_document(
               If false (default), returns immediately with job_id for async polling.
         timeout: Maximum seconds to wait when wait=true (default: 120)
     """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
     if not trace_id:
         trace_id = str(uuid.uuid4())
 
@@ -320,7 +325,7 @@ async def create_document(
 
 
 @app.get("/v1/documents/{job_id}", dependencies=[Depends(verify_api_key)])
-async def get_document_results(job_id: str, include_extracted_data: bool = False):
+async def get_document_results(job_id: str, include_extracted_data: bool = False) -> dict[str, Any]:
     """Get processing results by job ID."""
     try:
         job_status = _get_job_status(job_id)
@@ -340,6 +345,9 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
             # rebuild response with extracted data
             from documentai_api.utils.response_builder import build_v1_api_response
 
+            if not job_status.object_key or not job_status.process_status:
+                raise HTTPException(status_code=500, detail=f"Incomplete record for job {job_id}")
+
             return build_v1_api_response(
                 object_key=job_status.object_key,
                 status=job_status.process_status,
@@ -347,7 +355,7 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
             )
         else:
             # return cached response without extracted data
-            return json.loads(job_status.v1_response_json)
+            return cast(dict[str, Any], json.loads(job_status.v1_response_json))
 
     except HTTPException:
         raise
@@ -358,14 +366,14 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
 
 
 @app.get("/v1/schemas", dependencies=[Depends(verify_api_key)])
-async def list_schemas():
+async def list_schemas() -> dict[str, Any]:
     """List all supported document types."""
     schemas = get_all_schemas()
     return {"schemas": list(schemas.keys())}
 
 
 @app.get("/v1/schemas/{document_type}", dependencies=[Depends(verify_api_key)])
-async def get_schema(document_type: str):
+async def get_schema(document_type: str) -> dict[str, Any]:
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)
 
@@ -375,7 +383,3 @@ async def get_schema(document_type: str):
         )
 
     return schema
-
-
-if __name__ == "__main__":
-    app()

@@ -2,6 +2,7 @@
 """Process uploaded documents: insert to DDB, convert if needed, invoke BDA."""
 
 import os
+from typing import Any
 
 import typer
 from botocore.exceptions import ClientError
@@ -26,7 +27,6 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
 from documentai_api.utils.ddb import (
-    ClassificationData,
     classify_as_failed,
     classify_as_not_implemented,
     get_ddb_record,
@@ -35,6 +35,8 @@ from documentai_api.utils.ddb import (
     set_bda_processing_status_started,
 )
 from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION, MAX_BDA_INVOKE_RETRY_ATTEMPTS
+from documentai_api.utils.logger import get_logger
+from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
 logger = get_logger(__name__)
@@ -128,7 +130,7 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
     wait=wait_exponential_jitter(initial=10, max=120),
     retry=retry_if_exception_type(ClientError),
 )
-def _invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
+def _invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict[str, Any]:
     """Invoke BDA for a file that's ready for processing."""
     invocation_arn = invoke_bedrock_data_automation(bucket_name, object_key)
 
@@ -141,7 +143,7 @@ def _invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
     return {"invocationArn": invocation_arn}
 
 
-def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict:
+def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict[str, Any]:
     """Wrapper that handles retry failures."""
     try:
         return _invoke_bda(bucket_name, object_key, ddb_key)
@@ -164,7 +166,7 @@ def main(
     user_provided_document_category: str | None = None,
     job_id: str | None = None,
     trace_id: str | None = None,
-):
+) -> None:
     """Process uploaded document and invoke BDA.
 
     This job combines DDB insertion, grayscale conversion, and BDA invocation
@@ -187,6 +189,9 @@ def main(
     response = s3_service.head_object(bucket_name, object_key)
     metadata = response.get("Metadata", {})
     original_file_name = metadata.get(S3_METADATA_KEY_ORIGINAL_FILE_NAME)
+    if not original_file_name:
+        logger.warning("Original file name not present in S3 metadata")
+        original_file_name = ""
 
     if not all([job_id, trace_id, user_provided_document_category]):
         try:
@@ -251,7 +256,7 @@ def cli(
     trace_id: str | None = typer.Option(
         None, help="Trace ID (read from S3 metadata if not provided)"
     ),
-):
+) -> None:
     """Process uploaded document and invoke BDA."""
     try:
         main(object_key, bucket_name, user_provided_document_category, job_id, trace_id)
