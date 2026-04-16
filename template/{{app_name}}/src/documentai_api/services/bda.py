@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
+from documentai_api.logging import get_logger
 from documentai_api.utils.aws_client_factory import AWSClientFactory
-from documentai_api.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from mypy_boto3_bedrock_data_automation.type_defs import (

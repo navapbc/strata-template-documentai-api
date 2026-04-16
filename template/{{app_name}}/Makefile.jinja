@@ -119,6 +119,9 @@ test-coverage: ## Run tests with coverage report
 test-parallel: ## Run test suite in parallel
 	$(PY_RUN_CMD) pytest -n auto $(args)
 
+test-audit: ## Run audit logging tests
+	$(PY_RUN_CMD) pytest -m "audit" $(args)
+
 ##################################################
 # Lint / Format
 ##################################################

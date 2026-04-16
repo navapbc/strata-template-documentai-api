@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from documentai_api.config.constants import BdaResponseFields, ConfigDefaults
+from documentai_api.logging import get_logger
 from documentai_api.services.bda import extract_bda_output_s3_uri, get_bda_result_json
 from documentai_api.utils.bda import (
     BdaFieldProcessingData,

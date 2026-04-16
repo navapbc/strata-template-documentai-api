@@ -10,7 +10,7 @@ import numpy as np
 from pdf2image import convert_from_bytes
 from PIL import Image
 
-from documentai_api.utils.logger import get_logger
+from documentai_api.logging import get_logger
 from documentai_api.utils.numbers import normalize
 
 logger = get_logger(__name__)

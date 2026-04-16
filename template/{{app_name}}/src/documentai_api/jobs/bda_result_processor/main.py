@@ -6,6 +6,7 @@ from typing import Any
 
 import typer
 
+from documentai_api.logging import get_logger
 from documentai_api.utils import env
 from documentai_api.utils.bda_output_processor import process_bda_output
 from documentai_api.utils.env import get_required_env

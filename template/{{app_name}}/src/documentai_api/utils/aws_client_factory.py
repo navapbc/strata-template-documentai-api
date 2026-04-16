@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import boto3
 
+from documentai_api.logging import get_logger
 from documentai_api.utils import env
-from documentai_api.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from mypy_boto3_bedrock_data_automation.client import DataAutomationforBedrockClient
