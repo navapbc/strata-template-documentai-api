@@ -122,7 +122,7 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
 
 
 @retry(
-    stop=stop_after_attempt(get_aws_config().max_bda_invoke_retry_attempts),
+    stop=stop_after_attempt(3),
     wait=wait_exponential_jitter(initial=10, max=120),
     retry=retry_if_exception_type(ClientError),
 )
