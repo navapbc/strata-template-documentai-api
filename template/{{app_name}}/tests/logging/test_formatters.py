@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 import documentai_api.logging.formatters as formatters
-from tests.lib.assertions import assert_dict_contains
+from tests.helpers.assertions import assert_dict_contains
 
 
 def test_json_formatter(capsys: pytest.CaptureFixture):

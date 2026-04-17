@@ -5,7 +5,7 @@ import pytest
 
 import documentai_api.logging
 import documentai_api.logging.formatters as formatters
-from tests.lib.assertions import assert_dict_contains
+from tests.helpers.assertions import assert_dict_contains
 
 
 @pytest.fixture
