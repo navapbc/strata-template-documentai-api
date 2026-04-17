@@ -118,7 +118,7 @@ def get_config(request: Request) -> ConfigResponse:
 class JobStatus:
     """Job status data from DDB."""
 
-    ddb_record: dict[str, Any] | None
+    ddb_record: DocumentMetadata | None
     object_key: str | None
     process_status: str | None
     v1_response_json: str | None
@@ -138,11 +138,9 @@ def _get_job_status(job_id: str) -> JobStatus:
     if not ddb_record:
         return JobStatus(None, None, None, None)
 
-    object_key = ddb_record.get(DocumentMetadata.FILE_NAME)
-    process_status = ddb_record.get(DocumentMetadata.PROCESS_STATUS)
-    v1_response = ddb_record.get(DocumentMetadata.V1_API_RESPONSE_JSON)
-
-    return JobStatus(ddb_record, object_key, process_status, v1_response)
+    return JobStatus(
+        ddb_record, ddb_record.file_name, ddb_record.process_status, ddb_record.v1_api_response_json
+    )
 
 
 async def upload_document_for_processing(

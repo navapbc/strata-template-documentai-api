@@ -19,8 +19,6 @@ from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
 from documentai_api.utils.document_detector import (
     DocumentDetector,
-    QualityMetricsNormalized,
-    QualityMetricsRaw,
 )
 from documentai_api.utils.env import get_required_env
 from documentai_api.utils.models import (
@@ -60,8 +58,8 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
     """
     try:
         ddb_record = get_ddb_record(object_key)
-        created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
-        bda_started_at_str = ddb_record.get(DocumentMetadata.BDA_STARTED_AT)
+        created_at_str = ddb_record.created_at
+        bda_started_at_str = ddb_record.bda_started_at
 
         timing_data = ProcessingTimes()
 
@@ -87,7 +85,7 @@ def calculate_bda_processing_times(object_key: str, completion_time: datetime) -
 def _calculate_wait_time(object_key: str) -> Decimal | None:
     """Calculate BDA wait time from file creation to BDA start."""
     ddb_record = get_ddb_record(object_key)
-    created_at_str = ddb_record.get(DocumentMetadata.CREATED_AT)
+    created_at_str = ddb_record.created_at
 
     if not created_at_str:
         return None
@@ -131,7 +129,7 @@ def _build_completion_timing(
     try:
         ddb_record = get_ddb_record(object_key)
 
-        if ddb_record.get(DocumentMetadata.BDA_STARTED_AT):
+        if ddb_record.bda_started_at:
             completed_time = datetime.now(UTC)
 
             # use S3 LastModified timestamp if available
@@ -145,23 +143,23 @@ def _build_completion_timing(
                         f"Failed to get S3 timestamp for bdaCompletedAt, using current time: {e}"
                     )
 
-            updates.append(f"{DocumentMetadata.BDA_COMPLETED_AT} = :bdaCompletedAt")
+            updates.append(f"{DocumentMetadata.field_alias('bda_completed_at')} = :bdaCompletedAt")
             values[":bdaCompletedAt"] = completed_time.isoformat()
 
-            updates.append(f"{DocumentMetadata.PROCESSED_DATE} = :processedDate")
+            updates.append(f"{DocumentMetadata.field_alias('processed_date')} = :processedDate")
             values[":processedDate"] = completed_time.strftime("%Y-%m-%d")
 
             timing_data = calculate_bda_processing_times(object_key, completed_time)
 
             if timing_data.total_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS} = :totalProcessingTime"
+                    f"{DocumentMetadata.field_alias('total_processing_time_seconds')} = :totalProcessingTime"
                 )
                 values[":totalProcessingTime"] = timing_data.total_processing_time_seconds
 
             if timing_data.bda_processing_time_seconds:
                 updates.append(
-                    f"{DocumentMetadata.BDA_PROCESSING_TIME_SECONDS} = :bdaProcessingTime"
+                    f"{DocumentMetadata.field_alias('bda_processing_time_seconds')} = :bdaProcessingTime"
                 )
                 values[":bdaProcessingTime"] = timing_data.bda_processing_time_seconds
     except ValueError:
@@ -181,12 +179,14 @@ def _build_timing_updates(
     values: dict[str, Any] = {}
 
     if status == ProcessStatus.STARTED:
-        updates.append(f"{DocumentMetadata.BDA_STARTED_AT} = :bdaStartedAt")
+        updates.append(f"{DocumentMetadata.field_alias('bda_started_at')} = :bdaStartedAt")
         values[":bdaStartedAt"] = datetime.now(UTC).isoformat()
 
         try:
             wait_time = _calculate_wait_time(object_key)
-            updates.append(f"{DocumentMetadata.BDA_WAIT_TIME_SECONDS} = :bdaWaitTimeSeconds")
+            updates.append(
+                f"{DocumentMetadata.field_alias('bda_wait_time_seconds')} = :bdaWaitTimeSeconds"
+            )
             values[":bdaWaitTimeSeconds"] = wait_time
         except Exception as e:
             logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
@@ -211,8 +211,8 @@ def _build_update_expression(
 ) -> tuple[str, dict[str, Any]]:
     """Build DynamoDB update expression and values."""
     updates = [
-        f"{DocumentMetadata.PROCESS_STATUS} = :processStatus",
-        f"{DocumentMetadata.UPDATED_AT} = :updatedAt",
+        f"{DocumentMetadata.field_alias('process_status')} = :processStatus",
+        f"{DocumentMetadata.field_alias('updated_at')} = :updatedAt",
     ]
 
     values: dict[str, Any] = {":processStatus": status, ":updatedAt": datetime.now(UTC).isoformat()}
@@ -221,17 +221,27 @@ def _build_update_expression(
         metrics = _calculate_field_metrics(data)
 
         field_mappings = {
-            DocumentMetadata.BDA_OUTPUT_S3_URI: data.bda_output_s3_uri,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_NAME: data.matched_blueprint_name,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_CONFIDENCE: data.matched_blueprint_confidence,
-            DocumentMetadata.FIELD_CONFIDENCE_SCORES: data.field_confidence_scores,
-            DocumentMetadata.ADDITIONAL_INFO: data.additional_info,
-            DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: data.matched_document_class,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_EMPTY_LIST: data.field_empty_list,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_BELOW_THRESHOLD_LIST: data.field_below_threshold_list,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_COUNT: metrics.field_count,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_COUNT_NOT_EMPTY: metrics.field_count_not_empty,
-            DocumentMetadata.BDA_MATCHED_BLUEPRINT_FIELD_NOT_EMPTY_AVG_CONFIDENCE: metrics.field_not_empty_avg_confidence,
+            DocumentMetadata.field_alias("bda_output_s3_uri"): data.bda_output_s3_uri,
+            DocumentMetadata.field_alias("matched_blueprint_name"): data.matched_blueprint_name,
+            DocumentMetadata.field_alias(
+                "matched_blueprint_confidence"
+            ): data.matched_blueprint_confidence,
+            DocumentMetadata.field_alias("field_confidence_scores"): data.field_confidence_scores,
+            DocumentMetadata.field_alias("additional_info"): data.additional_info,
+            DocumentMetadata.field_alias("bda_matched_document_class"): data.matched_document_class,
+            DocumentMetadata.field_alias(
+                "matched_blueprint_field_empty_list"
+            ): data.field_empty_list,
+            DocumentMetadata.field_alias(
+                "matched_blueprint_field_below_threshold_list"
+            ): data.field_below_threshold_list,
+            DocumentMetadata.field_alias("matched_blueprint_field_count"): metrics.field_count,
+            DocumentMetadata.field_alias(
+                "matched_blueprint_field_count_not_empty"
+            ): metrics.field_count_not_empty,
+            DocumentMetadata.field_alias(
+                "matched_blueprint_field_not_empty_avg_confidence"
+            ): metrics.field_not_empty_avg_confidence,
         }
 
         for ddb_field, value in field_mappings.items():
@@ -247,29 +257,29 @@ def _build_update_expression(
                     values[param_key] = value
 
     if internal_api_response:
-        updates.append(f"{DocumentMetadata.RESPONSE_JSON} = :responseJson")
+        updates.append(f"{DocumentMetadata.field_alias('response_json')} = :responseJson")
         values[":responseJson"] = json.dumps(internal_api_response.__dict__)
 
-        updates.append(f"{DocumentMetadata.RESPONSE_CODE} = :responseCode")
+        updates.append(f"{DocumentMetadata.field_alias('response_code')} = :responseCode")
         values[":responseCode"] = internal_api_response.response_code
 
     if v1_api_response:
-        updates.append(f"{DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson")
+        updates.append(f"{DocumentMetadata.field_alias('v1_api_response_json')} = :v1ResponseJson")
         values[":v1ResponseJson"] = json.dumps(v1_api_response)
 
     if bda_invocation_arn:
-        updates.append(f"{DocumentMetadata.BDA_INVOCATION_ARN} = :bdaInvocationArn")
+        updates.append(f"{DocumentMetadata.field_alias('bda_invocation_arn')} = :bdaInvocationArn")
         values[":bdaInvocationArn"] = bda_invocation_arn
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
             or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
         )
-        updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
+        updates.append(f"{DocumentMetadata.field_alias('bda_region_used')} = :bdaRegion")
         values[":bdaRegion"] = bda_region
 
     if error_message:
-        updates.append(f"{DocumentMetadata.ERROR_MESSAGE} = :errorMessage")
+        updates.append(f"{DocumentMetadata.field_alias('error_message')} = :errorMessage")
         values[":errorMessage"] = error_message
 
     return "SET " + ", ".join(updates), values
@@ -292,21 +302,19 @@ def get_user_provided_document_category(object_key: str) -> DocumentCategory | N
     is first processed. If this fails, we have a data pipeline problem.
     """
     ddb_record = get_ddb_record(object_key)
-    user_provided_document_category = ddb_record.get(
-        DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY
-    )
+    user_provided_document_category = ddb_record.user_provided_document_category
 
-    if not user_provided_document_category:
+    if (
+        not user_provided_document_category
+        or user_provided_document_category == ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
+    ):
         logger.warning(f"User specified document type not found for file: {object_key}")
+        return None
 
-    return (
-        DocumentCategory(user_provided_document_category)
-        if user_provided_document_category
-        else None
-    )
+    return DocumentCategory(user_provided_document_category)
 
 
-def get_ddb_record(object_key: str) -> dict[str, Any]:
+def get_ddb_record(object_key: str) -> DocumentMetadata:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
         table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
@@ -316,19 +324,19 @@ def get_ddb_record(object_key: str) -> dict[str, Any]:
         if not item:
             raise ValueError(f"DDB record not found for file: {object_key}")
 
-        return item
+        return DocumentMetadata(**item)
     except Exception as e:
         logger.error(f"Failed to get DDB record for {object_key}: {e}")
         raise
 
 
-def get_ddb_by_job_id(job_id: str) -> dict[str, Any] | None:
+def get_ddb_by_job_id(job_id: str) -> DocumentMetadata | None:
     """Get document metadata record by job ID."""
     table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
     index_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
 
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
-    return items[0] if items else None
+    return DocumentMetadata(**items[0]) if items else None
 
 
 def update_ddb(
@@ -365,7 +373,9 @@ def update_ddb(
         v1_response = build_v1_api_response(object_key, status, data, error_message=error_message)
 
         # update ddb again with v1_response
-        update_expr = f"SET {DocumentMetadata.V1_API_RESPONSE_JSON} = :v1ResponseJson"
+        update_expr = (
+            f"SET {DocumentMetadata.field_alias('v1_api_response_json')} = :v1ResponseJson"
+        )
         expr_values = {":v1ResponseJson": json.dumps(v1_response)}
         _execute_ddb_update(object_key, update_expr, expr_values)
 
@@ -374,78 +384,13 @@ def update_ddb(
         raise
 
 
-def insert_ddb(
-    object_key: str,
-    original_file_name: str,
-    user_provided_document_category: str | None = None,
-    process_status: str | None = None,
-    internal_api_response: InternalApiResponse | None = None,
-    file_size_bytes: int | None = None,
-    content_type: str | None = None,
-    pages_detected: int | None = None,
-    job_id: str | None = None,
-    trace_id: str | None = None,
-    is_password_protected: bool | None = False,
-    is_document_blurry: bool | None = False,
-    document_profile_raw_metrics: QualityMetricsRaw | None = None,
-    document_profile_normalized_metrics: QualityMetricsNormalized | None = None,
-    overall_blur_score: float | None = None,
-) -> None:
+def insert_ddb(record: DocumentMetadata) -> None:
     try:
         table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
-
-        item: dict[str, Any] = {
-            DocumentMetadata.FILE_NAME: object_key,
-            DocumentMetadata.ORIGINAL_FILE_NAME: original_file_name,
-            DocumentMetadata.PROCESS_STATUS: process_status,
-            DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category
-                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
-            ),
-            DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
-            DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
-        }
-
-        if file_size_bytes is not None:
-            item[DocumentMetadata.FILE_SIZE_BYTES] = file_size_bytes
-        if content_type:
-            item[DocumentMetadata.CONTENT_TYPE] = content_type
-
-        if pages_detected is not None:
-            item[DocumentMetadata.PAGES_DETECTED] = pages_detected
-
-        if internal_api_response:
-            item[DocumentMetadata.RESPONSE_JSON] = json.dumps(internal_api_response.__dict__)
-
-        if job_id:
-            item[DocumentMetadata.JOB_ID] = job_id
-
-        if trace_id:
-            item[DocumentMetadata.TRACE_ID] = trace_id
-
-        if is_password_protected is not None:
-            item[DocumentMetadata.IS_PASSWORD_PROTECTED] = bool(is_password_protected)
-
-        if is_document_blurry is not None:
-            item[DocumentMetadata.IS_DOCUMENT_BLURRY] = bool(is_document_blurry)
-
-        if document_profile_raw_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_RAW] = json.dumps(
-                document_profile_raw_metrics.to_json_dict()
-            )
-
-        if document_profile_normalized_metrics is not None:
-            item[DocumentMetadata.DOCUMENT_METRICS_NORMALIZED] = json.dumps(
-                document_profile_normalized_metrics.to_json_dict()
-            )
-
-        if overall_blur_score is not None:
-            item[DocumentMetadata.OVERALL_BLUR_SCORE] = Decimal(str(overall_blur_score))
-
+        item = record.model_dump(by_alias=True, exclude_none=True)
         ddb_service.put_item(table_name, item)
-
     except Exception as e:
-        logger.error(f"Failed to create DDB record for {object_key}: {e}")
+        logger.error(f"Failed to create DDB record for {record.file_name}: {e}")
         raise
 
 
@@ -539,23 +484,36 @@ def insert_initial_ddb_record(
             user_provided_document_category=user_provided_document_category,
         )
 
-    insert_ddb(
-        object_key=ddb_key,
+    now = datetime.now(UTC).isoformat()
+
+    ddb_record = DocumentMetadata(
+        file_name=ddb_key,
         original_file_name=original_file_name,
-        user_provided_document_category=user_provided_document_category,
+        user_provided_document_category=user_provided_document_category
+        or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED,
         process_status=process_status,
-        internal_api_response=internal_api_response,
+        created_at=now,
+        updated_at=now,
         file_size_bytes=file_size_bytes,
         content_type=content_type,
         pages_detected=pages_detected,
         job_id=job_id,
         trace_id=trace_id,
-        is_document_blurry=is_document_blurry,
         is_password_protected=is_password_protected,
-        document_profile_raw_metrics=document_profile_raw_metrics,
-        document_profile_normalized_metrics=document_profile_normalized_metrics,
-        overall_blur_score=overall_blur_score,
+        is_document_blurry=is_document_blurry,
+        overall_blur_score=Decimal(str(overall_blur_score))
+        if overall_blur_score is not None
+        else None,
+        document_metrics_raw=json.dumps(document_profile_raw_metrics.to_json_dict())
+        if document_profile_raw_metrics
+        else None,
+        document_metrics_normalized=json.dumps(document_profile_normalized_metrics.to_json_dict())
+        if document_profile_normalized_metrics
+        else None,
+        response_json=json.dumps(internal_api_response.__dict__) if internal_api_response else None,
     )
+
+    insert_ddb(ddb_record)
 
     # explicity remove file reference to free memory for the lambda
     del file_bytes

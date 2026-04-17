@@ -23,7 +23,6 @@ from documentai_api.config.constants import (
     ProcessStatus,
 )
 from documentai_api.logging import get_logger
-from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
 from documentai_api.utils.ddb import (
@@ -222,7 +221,7 @@ def main(
 
         existing_record = get_ddb_record(ddb_key)
 
-    status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
+    status = existing_record.process_status
 
     if status == ProcessStatus.PENDING_GRAYSCALE_CONVERSION:
         if convert_s3_object_to_grayscale(bucket_name, object_key):

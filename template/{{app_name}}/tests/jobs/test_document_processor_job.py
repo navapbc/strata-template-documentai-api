@@ -238,7 +238,7 @@ def test_main_first_time_pdf(input_pdf, mocker, ddb_doc_metadata_table, mock_inv
     expected_object_key = "test.pdf"
 
     doc_meta_record = ddb_doc_metadata_table.get_item(Key={"fileName": expected_object_key})["Item"]
-    assert doc_meta_record[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED
+    assert doc_meta_record["processStatus"] == ProcessStatus.NOT_STARTED
 
     mock_invoke.assert_called_once_with(input_pdf.bucket_name, input_pdf.key, expected_object_key)
 
@@ -255,7 +255,7 @@ def test_main_first_time_image(input_image, mocker, ddb_doc_metadata_table, mock
     expected_object_key = "test.jpg"
 
     doc_meta_record = ddb_doc_metadata_table.get_item(Key={"fileName": expected_object_key})["Item"]
-    assert doc_meta_record[DocumentMetadata.PROCESS_STATUS] == ProcessStatus.NOT_STARTED
+    assert doc_meta_record["processStatus"] == ProcessStatus.NOT_STARTED
 
     mock_convert.assert_called_once_with(input_image.bucket_name, input_image.key)
     mock_invoke.assert_called_once_with(
@@ -279,7 +279,9 @@ def test_main_grayscale_conversion_fails(input_image, mocker, mock_invoke):
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
     mock_get.side_effect = [
         ValueError("Record not found"),
-        {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
+        DocumentMetadata(
+            file_name="test.pdf", process_status=ProcessStatus.PENDING_GRAYSCALE_CONVERSION
+        ),
     ]
 
     main(input_image.key, input_image.bucket_name)
@@ -291,7 +293,9 @@ def test_main_grayscale_conversion_fails(input_image, mocker, mock_invoke):
 def test_main_already_processed(input_pdf, mocker, mock_invoke):
     """Test that already processed files are skipped."""
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
-    mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.SUCCESS.value}
+    mock_get.return_value = DocumentMetadata(
+        file_name="test.pdf", process_status=ProcessStatus.SUCCESS.value
+    )
 
     main(input_pdf.key, input_pdf.bucket_name)
 
@@ -308,7 +312,9 @@ def test_main_uses_env_bucket_when_not_provided(input_pdf, mocker, mock_invoke):
 def test_main_idempotent_on_duplicate_events(input_pdf, mocker, mock_invoke):
     """Test job is idempotent when receiving duplicate S3 events."""
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
-    mock_get.return_value = {DocumentMetadata.PROCESS_STATUS: ProcessStatus.STARTED.value}
+    mock_get.return_value = DocumentMetadata(
+        file_name="test.pdf", process_status=ProcessStatus.STARTED.value
+    )
 
     main(input_pdf.key, input_pdf.bucket_name)
 
@@ -324,7 +330,7 @@ def test_main_propagates_s3_metadata(input_pdf, mocker):
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
     mock_get.side_effect = [
         ValueError("Record not found"),
-        {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
+        DocumentMetadata(file_name="test.pdf", process_status=ProcessStatus.NOT_STARTED.value),
     ]
 
     main(input_pdf.key, input_pdf.bucket_name)

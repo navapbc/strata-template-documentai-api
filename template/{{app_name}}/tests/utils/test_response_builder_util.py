@@ -7,7 +7,6 @@ from documentai_api.config.constants import (
     BdaResponseFields,
     ProcessStatus,
 )
-from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils import response_builder as response_builder_util
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
@@ -23,8 +22,8 @@ from documentai_api.utils.response_codes import ResponseCodes
 )
 def test_get_internal_api_response(response_code, matched_document_class, ddb_doc_metadata_table):
     ddb_record = {
-        DocumentMetadata.FILE_NAME: "test-key",
-        DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
+        "fileName": "test-key",
+        "userProvidedDocumentCategory": "income",
     }
     ddb_doc_metadata_table.put_item(Item=ddb_record)
 
@@ -159,14 +158,14 @@ def test_build_v1_api_response(
     bda_results_object = s3_bucket.put_object(Key="key.json", Body=json.dumps(bda_results))
 
     ddb_record = {
-        DocumentMetadata.FILE_NAME: "test-key",
-        DocumentMetadata.JOB_ID: "test-job-id",
-        DocumentMetadata.BDA_OUTPUT_S3_URI: f"s3://{bda_results_object.bucket_name}/{bda_results_object.key}",
-        DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: "paystub",
-        DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS: 10,
-        DocumentMetadata.BDA_COMPLETED_AT: bda_completed_at.isoformat(),
-        DocumentMetadata.CREATED_AT: created_at.isoformat(),
-        DocumentMetadata.FIELD_CONFIDENCE_SCORES: '[{"field_name_1": 0.95}, {"field_name_2": 0.85}]',
+        "fileName": "test-key",
+        "jobId": "test-job-id",
+        "bdaOutputS3Uri": f"s3://{bda_results_object.bucket_name}/{bda_results_object.key}",
+        "bdaMatchedDocumentClass": "paystub",
+        "totalProcessingTimeSeconds": 10,
+        "bdaCompletedAt": bda_completed_at.isoformat(),
+        "createdAt": created_at.isoformat(),
+        "fieldConfidenceScores": '[{"field_name_1": 0.95}, {"field_name_2": 0.85}]',
     }
     ddb_doc_metadata_table.put_item(Item=ddb_record)
 
@@ -230,7 +229,7 @@ def test_build_v1_api_response_empty_record(
     # found"
 
     ddb_record = {
-        DocumentMetadata.FILE_NAME: "test-key",
+        "fileName": "test-key",
     }
     ddb_doc_metadata_table.put_item(Item=ddb_record)
 

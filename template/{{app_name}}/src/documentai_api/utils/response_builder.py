@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 # TODO: Refactor to improve testability - consider making public along with
 # restructuring to reduce mocking in tests
 def _extract_field_values(
-    ddb_record: dict[str, Any], include_extracted_data: bool
+    ddb_record: DocumentMetadata, include_extracted_data: bool
 ) -> dict[str, Any]:
     """Extract field data for API response."""
     if not ddb_record:
@@ -31,7 +31,7 @@ def _extract_field_values(
 
     # get confidence scores and extracted values if requested
     if include_extracted_data:
-        s3_uri = ddb_record.get(DocumentMetadata.BDA_OUTPUT_S3_URI)
+        s3_uri = ddb_record.bda_output_s3_uri
 
         if not s3_uri:
             return {}
@@ -44,9 +44,7 @@ def _extract_field_values(
         metadata, field_values = extract_field_values_from_bda_results(bda_results)
         field_confidence_map_list = metadata.field_confidence_map_list
     else:
-        field_confidence_map_list = json.loads(
-            ddb_record.get(DocumentMetadata.FIELD_CONFIDENCE_SCORES, "[]")
-        )
+        field_confidence_map_list = json.loads(ddb_record.field_confidence_scores or "[]")
         field_values = {}
 
     # build response
@@ -116,13 +114,17 @@ def build_v1_api_response(
     from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
-    job_id = ddb_record.get(DocumentMetadata.JOB_ID)
-    matched_document_class = ddb_record.get(DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS)
-    total_time = ddb_record.get(DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS)
-    created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
-    completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
+    job_id = ddb_record.job_id
+    matched_document_class = ddb_record.bda_matched_document_class
+    total_time = ddb_record.total_processing_time_seconds
+    created_at = ddb_record.created_at
+    completed_at = ddb_record.bda_completed_at
 
-    base_response = {"jobId": job_id, "jobStatus": job_status, "createdAt": created_at}
+    base_response: dict[str, Any] = {
+        "jobId": job_id,
+        "jobStatus": job_status,
+        "createdAt": created_at,
+    }
 
     if completed_at:
         base_response["completedAt"] = completed_at

@@ -58,13 +58,12 @@ def test_document_status_not_found(ddb_doc_metadata_table_resource, api_client):
 def test_get_job_status_found(ddb_doc_metadata_table):
     """Test _get_job_status when job exists."""
     from documentai_api.config.constants import ProcessStatus
-    from documentai_api.schemas.document_metadata import DocumentMetadata
 
     ddb_record = {
-        DocumentMetadata.FILE_NAME: "test.pdf",
-        DocumentMetadata.JOB_ID: "test-job-id",
-        DocumentMetadata.PROCESS_STATUS: ProcessStatus.SUCCESS.value,
-        DocumentMetadata.V1_API_RESPONSE_JSON: '{"jobStatus": "success"}',
+        "fileName": "test.pdf",
+        "jobId": "test-job-id",
+        "processStatus": ProcessStatus.SUCCESS.value,
+        "v1ApiResponseJson": '{"jobStatus": "success"}',
     }
 
     ddb_doc_metadata_table.put_item(Item=ddb_record)
