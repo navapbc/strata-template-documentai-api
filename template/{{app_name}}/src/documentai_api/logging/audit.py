@@ -93,6 +93,7 @@ def log_audit_event(event_name: str, args: Sequence[Any], arg_names: Sequence[st
 
     logger.log(AUDIT, event_name, extra=extra)
 
+
 class LeastRecentlyUsedDict(collections.OrderedDict[Hashable, int]):
     """A dict with a maximum size, evicting the least recently written key when full.
 
