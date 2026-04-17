@@ -98,7 +98,7 @@ stop: ## Stop containers
 	docker compose down
 
 check: ## Run all checks
-check: format lint test
+check: format lint test test-audit
 
 release-build: ## Build production Docker image
 	docker buildx build \
