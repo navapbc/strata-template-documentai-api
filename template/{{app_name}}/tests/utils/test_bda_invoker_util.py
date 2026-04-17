@@ -1,21 +1,12 @@
 from unittest.mock import MagicMock, patch
 
 from documentai_api.utils import bda_invoker as bda_invoker_util
-from documentai_api.utils import env
 
 
-def test_invoke_bedrock_data_automation_single_page():
+def test_invoke_bedrock_data_automation_single_page(runtime_required_env):
     bda_invocation_arn = "arn:aws:invocation:123"
 
     with (
-        patch.dict(
-            "os.environ",
-            {
-                env.BDA_PROJECT_ARN: "arn:aws:project",
-                env.BDA_PROFILE_ARN: "arn:aws:profile",
-                env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
-            },
-        ),
         patch(
             "documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client"
         ) as mock_get_bda_client,
@@ -38,18 +29,10 @@ def test_invoke_bedrock_data_automation_single_page():
         mock_bda.invoke_data_automation_async.assert_called_once()
 
 
-def test_invoke_bedrock_data_automation_document_truncation():
+def test_invoke_bedrock_data_automation_document_truncation(runtime_required_env):
     bda_invocation_arn = "arn:aws:invocation:123"
 
     with (
-        patch.dict(
-            "os.environ",
-            {
-                env.BDA_PROJECT_ARN: "arn:aws:project",
-                env.BDA_PROFILE_ARN: "arn:aws:profile",
-                env.DOCUMENTAI_OUTPUT_LOCATION: "s3://output-bucket/path",
-            },
-        ),
         patch(
             "documentai_api.utils.bda_invoker.AWSClientFactory.get_bda_runtime_client"
         ) as mock_get_bda_client,

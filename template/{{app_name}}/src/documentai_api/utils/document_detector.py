@@ -1,9 +1,9 @@
 import io
 import math
 import os
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any, TypeVar
-from collections.abc import Callable
 
 import cv2
 import numpy as np

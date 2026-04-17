@@ -1,63 +1,16 @@
 from datetime import UTC, datetime
-from unittest.mock import patch
 
 import pytest
 
 from documentai_api.config.constants import (
     PROCESSING_STATUSES_SUCCESSFUL,
+    BdaResponseFields,
     ProcessStatus,
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.utils import response_builder as response_builder_util
 from documentai_api.utils.models import ClassificationData, InternalApiResponse
 from documentai_api.utils.response_codes import ResponseCodes
-
-
-# TODO: Remove private method test. Refactor _extract_field_values to be more testable
-# and test through public API (build_v1_api_response) rather than mocking
-def test_extract_field_values_empty_record():
-    """Test with empty ddb_record."""
-    result = response_builder_util._extract_field_values({}, False)
-    assert result == {}
-
-
-# TODO: Remove private method test. Refactor _extract_field_values to be more testable
-# and test through public API (build_v1_api_response) rather than mocking
-@pytest.mark.parametrize("include_extracted_data", [True, False])
-def test_extract_field_values(include_extracted_data):
-    with (
-        patch("documentai_api.utils.response_builder.get_bda_result_json") as mock_get_bda,
-        patch(
-            "documentai_api.utils.response_builder.extract_field_values_from_bda_results"
-        ) as mock_extract_bda,
-    ):
-        from documentai_api.utils.bda import BdaFieldProcessingData
-
-        mock_get_bda.return_value = {"fake": "bda_result"}
-
-        # mock metadata with field_confidence_map_list
-        mock_metadata = BdaFieldProcessingData(
-            confidence_scores=[0.95, 0.85],
-            empty_fields=[],
-            field_confidence_map_list=[{"field_name_1": 0.95}, {"field_name_2": 0.85}],
-        )
-        mock_field_values = {"field_name_1": "value1", "field_name_2": "value2"}
-        mock_extract_bda.return_value = (mock_metadata, mock_field_values)
-
-        mock_ddb_record = {
-            DocumentMetadata.BDA_OUTPUT_S3_URI: "s3://bucket/key",
-            DocumentMetadata.FIELD_CONFIDENCE_SCORES: '[{"field_name_1": 0.95}, {"field_name_2": 0.85}]',
-        }
-
-        result = response_builder_util._extract_field_values(
-            mock_ddb_record, include_extracted_data
-        )
-
-        assert "fieldName1" in result
-        assert result["fieldName1"]["confidence"] == 0.95
-        assert result["fieldName1"]["value"] == (
-            "value1" if include_extracted_data else "<redacted>"
-        )
 
 
 @pytest.mark.parametrize(
@@ -68,21 +21,24 @@ def test_extract_field_values(include_extracted_data):
         (ResponseCodes.SUCCESS, None),
     ],
 )
-def test_get_internal_api_response(response_code, matched_document_class):
-    with patch("documentai_api.utils.ddb.get_user_provided_document_category") as mock_get_category:
-        mock_get_category.return_value = "income"
+def test_get_internal_api_response(response_code, matched_document_class, ddb_doc_metadata_table):
+    ddb_record = {
+        DocumentMetadata.FILE_NAME: "test-key",
+        DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: "income",
+    }
+    ddb_doc_metadata_table.put_item(Item=ddb_record)
 
-        response = response_builder_util.get_internal_api_response(
-            "test-key", response_code, matched_document_class
-        )
+    response = response_builder_util.get_internal_api_response(
+        "test-key", response_code, matched_document_class
+    )
 
-        assert response == InternalApiResponse(
-            validation_passed=ResponseCodes.is_success_response_code(response_code),
-            document_category=mock_get_category.return_value,
-            matched_document_class=matched_document_class,
-            response_code=response_code,
-            response_message=ResponseCodes.get_message(response_code),
-        )
+    assert response == InternalApiResponse(
+        validation_passed=ResponseCodes.is_success_response_code(response_code),
+        document_category="income",
+        matched_document_class=matched_document_class,
+        response_code=response_code,
+        response_message=ResponseCodes.get_message(response_code),
+    )
 
 
 @pytest.mark.parametrize(
@@ -178,7 +134,12 @@ def test_build_v1_api_response(
     expected_status: str | None,
     expected_message: str | None,
     expected_error: str | None,
+    s3_bucket,
+    ddb_doc_metadata_table,
+    mocker,
 ):
+    import json
+
     year = datetime.now().year
     created_at = datetime(year, 1, 1, 12, 0, 0, tzinfo=UTC)
     bda_completed_at = datetime(year, 1, 1, 12, 0, 10, tzinfo=UTC)
@@ -187,61 +148,102 @@ def test_build_v1_api_response(
         matched_document_class=matched_document_class, additional_info=additional_info
     )
 
-    with (
-        patch("documentai_api.utils.ddb.get_ddb_record") as mock_get_ddb_record,
-        patch(
-            "documentai_api.utils.response_builder._extract_field_values"
-        ) as mock_extract_field_values,
-    ):
-        mock_get_ddb_record.return_value = {
-            DocumentMetadata.JOB_ID: "test-job-id",
-            DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: "paystub",
-            DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS: 10,
-            DocumentMetadata.BDA_COMPLETED_AT: bda_completed_at.isoformat(),
-            DocumentMetadata.CREATED_AT: created_at.isoformat(),
-        }
+    bda_results = {
+        BdaResponseFields.EXPLAINABILITY_INFO: [
+            {
+                "field_name_1": {"confidence": 0.95, "value": "value1"},
+                "field_name_2": {"confidence": 0.85, "value": "value2"},
+            }
+        ]
+    }
+    bda_results_object = s3_bucket.put_object(Key="key.json", Body=json.dumps(bda_results))
 
-        mock_extract_field_values.return_value = {
-            "field1": {
-                "confidence": 0.95,
-                "value": "data1" if include_extracted_data else "<redacted>",
-            },
-            "field2": {
-                "confidence": 0.95,
-                "value": "data2" if include_extracted_data else "<redacted>",
-            },
-        }
+    ddb_record = {
+        DocumentMetadata.FILE_NAME: "test-key",
+        DocumentMetadata.JOB_ID: "test-job-id",
+        DocumentMetadata.BDA_OUTPUT_S3_URI: f"s3://{bda_results_object.bucket_name}/{bda_results_object.key}",
+        DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS: "paystub",
+        DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS: 10,
+        DocumentMetadata.BDA_COMPLETED_AT: bda_completed_at.isoformat(),
+        DocumentMetadata.CREATED_AT: created_at.isoformat(),
+        DocumentMetadata.FIELD_CONFIDENCE_SCORES: '[{"field_name_1": 0.95}, {"field_name_2": 0.85}]',
+    }
+    ddb_doc_metadata_table.put_item(Item=ddb_record)
 
-        response = response_builder_util.build_v1_api_response(
-            "test-key", status, data, error_message, include_extracted_data
+    expected_fields_value = {
+        "fieldName1": {
+            "confidence": 0.95,
+            "value": "value1" if include_extracted_data else "<redacted>",
+        },
+        "fieldName2": {
+            "confidence": 0.85,
+            "value": "value2" if include_extracted_data else "<redacted>",
+        },
+    }
+
+    response = response_builder_util.build_v1_api_response(
+        "test-key", status, data, error_message, include_extracted_data
+    )
+
+    expected_response = {
+        "jobId": "test-job-id",
+        "status": expected_status,
+        "createdAt": created_at.isoformat(),
+        "completedAt": bda_completed_at.isoformat(),
+        "totalProcessingTimeSeconds": 10.0,
+        "matchedDocumentClass": matched_document_class,
+    }
+
+    if expected_message:
+        expected_response["message"] = expected_message
+
+    if expected_error:
+        expected_response["error"] = expected_error
+
+    if additional_info:
+        expected_response["additionalInfo"] = additional_info
+
+    if status in PROCESSING_STATUSES_SUCCESSFUL:
+        expected_response["fields"] = expected_fields_value
+
+    assert response == expected_response
+
+
+def test_build_v1_api_response_no_record(
+    ddb_doc_metadata_table,
+):
+    with pytest.raises(ValueError, match="DDB record not found for file: test-does-not-exist"):
+        response_builder_util.build_v1_api_response(
+            "test-does-not-exist",
+            ProcessStatus.SUCCESS,
+            data=None,
+            error_message=None,
+            include_extracted_data=False,
         )
 
-        expected_response = {
-            "jobId": "test-job-id",
-            "status": expected_status,
-            "createdAt": created_at.isoformat(),
-            "completedAt": bda_completed_at.isoformat(),
-            "totalProcessingTimeSeconds": 10.0,
-            "matchedDocumentClass": matched_document_class,
-        }
 
-        if expected_message:
-            expected_response["message"] = expected_message
+def test_build_v1_api_response_empty_record(
+    ddb_doc_metadata_table,
+):
+    # Not really possible to have a truly empty dictionary returned, it needs to
+    # at least have the primary key to be able to find at all/no error with "not
+    # found"
 
-        if expected_error:
-            expected_response["error"] = expected_error
+    ddb_record = {
+        DocumentMetadata.FILE_NAME: "test-key",
+    }
+    ddb_doc_metadata_table.put_item(Item=ddb_record)
 
-        if additional_info:
-            expected_response["additionalInfo"] = additional_info
+    response = response_builder_util.build_v1_api_response(
+        "test-key",
+        ProcessStatus.SUCCESS,
+        data=None,
+        error_message=None,
+        include_extracted_data=False,
+    )
 
-        if status in PROCESSING_STATUSES_SUCCESSFUL:
-            expected_response["fields"] = mock_extract_field_values.return_value
-
-        assert response == expected_response
-
-        if status in PROCESSING_STATUSES_SUCCESSFUL:
-            mock_extract_field_values.assert_called_once_with(
-                mock_get_ddb_record.return_value, include_extracted_data
-            )
-        else:
-            mock_extract_field_values.assert_not_called()
+    assert response == {
+        "fields": dict(),
+        "message": "Document processed successfully",
+        "status": "completed",
+    }

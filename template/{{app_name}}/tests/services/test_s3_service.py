@@ -28,7 +28,7 @@ def test_upload_file_no_args(s3_client, s3_bucket):
     assert obj["Body"].read() == b"test data"
 
 
-def test_get_object(s3_client, s3_bucket):
+def test_get_object(s3_bucket):
     """Get object from S3."""
     s3_bucket.put_object(Key="test-key", Body=b"data")
 
@@ -36,7 +36,7 @@ def test_get_object(s3_client, s3_bucket):
     assert result["Body"].read() == b"data"
 
 
-def test_head_object(s3_client, s3_bucket):
+def test_head_object(s3_bucket):
     """Get object metadata from S3."""
     s3_bucket.put_object(Key="test-key", Body=b"data", ContentType="application/pdf")
 
@@ -62,7 +62,7 @@ def test_put_object_no_content_type(s3_client, s3_bucket):
     assert obj["Body"].read() == b"data"
 
 
-def test_get_content_type(s3_client, s3_bucket):
+def test_get_content_type(s3_bucket):
     """Get file content type."""
     s3_bucket.put_object(Key="test-key", Body=b"data", ContentType="application/pdf")
 
@@ -70,7 +70,7 @@ def test_get_content_type(s3_client, s3_bucket):
     assert result == "application/pdf"
 
 
-def test_get_content_type_default(s3_client, s3_bucket):
+def test_get_content_type_default(s3_bucket):
     """Get file content type with default fallback."""
     s3_bucket.put_object(Key="test-key", Body=b"data")
 
@@ -78,7 +78,7 @@ def test_get_content_type_default(s3_client, s3_bucket):
     assert result == "binary/octet-stream"
 
 
-def test_get_file_size_bytes(s3_client, s3_bucket):
+def test_get_file_size_bytes(s3_bucket):
     """Get file size in bytes."""
     s3_bucket.put_object(Key="test-key", Body=b"12345")
 
@@ -86,7 +86,7 @@ def test_get_file_size_bytes(s3_client, s3_bucket):
     assert result == 5
 
 
-def test_get_file_bytes(s3_client, s3_bucket):
+def test_get_file_bytes(s3_bucket):
     """Get file content as bytes."""
     s3_bucket.put_object(Key="test-key", Body=b"file content")
 
@@ -122,7 +122,7 @@ def test_is_password_protected_not_pdf(s3_bucket):
     assert result is False
 
 
-def test_get_last_modified_at(s3_client, s3_bucket):
+def test_get_last_modified_at(s3_bucket):
     """Get LastModified timestamp from S3 object."""
     from datetime import datetime
 
