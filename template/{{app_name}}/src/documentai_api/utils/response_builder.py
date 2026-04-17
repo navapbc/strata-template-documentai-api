@@ -97,7 +97,7 @@ def get_internal_api_response(
 
 def build_v1_api_response(
     object_key: str,
-    status: str,
+    job_status: str,
     data: ClassificationData | None = None,
     error_message: str | None = None,
     include_extracted_data: bool = False,
@@ -112,7 +112,7 @@ def build_v1_api_response(
     Returns:
         dict: Response data for DDB JSON storage
     """
-    status = status.value if isinstance(status, ProcessStatus) else status
+    job_status = job_status.value if isinstance(job_status, ProcessStatus) else job_status
     from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
@@ -122,7 +122,7 @@ def build_v1_api_response(
     created_at = ddb_record.get(DocumentMetadata.CREATED_AT)
     completed_at = ddb_record.get(DocumentMetadata.BDA_COMPLETED_AT)
 
-    base_response = {"jobId": job_id, "status": status, "createdAt": created_at}
+    base_response = {"jobId": job_id, "jobStatus": job_status, "createdAt": created_at}
 
     if completed_at:
         base_response["completedAt"] = completed_at
@@ -134,46 +134,48 @@ def build_v1_api_response(
         base_response["matchedDocumentClass"] = matched_document_class
 
     # success response with full results
-    if status in PROCESSING_STATUSES_SUCCESSFUL:
-        base_response["status"] = "completed"
+    if job_status in PROCESSING_STATUSES_SUCCESSFUL:
+        base_response["jobStatus"] = "completed"
 
-        if status == ProcessStatus.SUCCESS.value:
+        if job_status == ProcessStatus.SUCCESS.value:
             base_response["message"] = "Document processed successfully"
-        elif status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
+        elif job_status == ProcessStatus.NO_CUSTOM_BLUEPRINT_MATCHED.value:
             base_response["message"] = "Document processed but no matching template found"
 
         base_response.update({"fields": _extract_field_values(ddb_record, include_extracted_data)})
 
     # error responses
-    elif status == ProcessStatus.FAILED.value:
+    elif job_status == ProcessStatus.FAILED.value:
         base_response.update(
             {
-                "status": "failed",
+                "jobStatus": "failed",
                 "error": error_message or "Processing failed",
                 "additionalInfo": data.additional_info if data else None,
             }
         )
 
-    elif status == ProcessStatus.NO_DOCUMENT_DETECTED.value:
+    elif job_status == ProcessStatus.NO_DOCUMENT_DETECTED.value:
         base_response.update(
             {
-                "status": "not_supported",
+                "jobStatus": "not_supported",
                 "message": "Unable to extract meaningful document content",
                 "additionalInfo": data.additional_info if data else None,
             }
         )
 
-    elif status in PROCESSING_STATUS_NOT_SUPPORTED:
+    elif job_status in PROCESSING_STATUS_NOT_SUPPORTED:
         base_response.update(
             {
-                "status": "not_supported",
+                "jobStatus": "not_supported",
                 "message": "Document type not supported",
                 "additionalInfo": data.additional_info if data else None,
             }
         )
 
     else:
-        base_response.update({"status": "processing", "message": "Document processing in progress"})
+        base_response.update(
+            {"jobStatus": "processing", "message": "Document processing in progress"}
+        )
 
     # Remove None values for cleaner response
     return {k: v for k, v in base_response.items() if v is not None}

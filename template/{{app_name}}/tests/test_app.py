@@ -9,6 +9,7 @@ from documentai_api.app import (
     upload_document_for_processing,
     verify_api_key,
 )
+from documentai_api.schemas.api_responses import JobStatusResponse
 
 
 def mock_verify_api_key():
@@ -61,14 +62,14 @@ def test_get_job_status_found(ddb_doc_metadata_table):
 
     ddb_record = {
         DocumentMetadata.FILE_NAME: "test.pdf",
-        DocumentMetadata.JOB_ID: "job-123",
+        DocumentMetadata.JOB_ID: "test-job-id",
         DocumentMetadata.PROCESS_STATUS: ProcessStatus.SUCCESS.value,
         DocumentMetadata.V1_API_RESPONSE_JSON: '{"jobStatus": "success"}',
     }
 
     ddb_doc_metadata_table.put_item(Item=ddb_record)
 
-    result = _get_job_status("job-123")
+    result = _get_job_status("test-job-id")
 
     assert result.object_key == "test.pdf"
     assert result.process_status == "success"
@@ -77,7 +78,7 @@ def test_get_job_status_found(ddb_doc_metadata_table):
 
 def test_get_job_status_not_found(ddb_doc_metadata_table):
     """Test _get_job_status when job doesn't exist."""
-    result = _get_job_status("job-123")
+    result = _get_job_status("test-job-id")
 
     assert result.ddb_record is None
     assert result.object_key is None
@@ -130,12 +131,12 @@ async def test_get_v1_document_processing_results_success(mocker):
         ddb_record={"fileName": "test.pdf"},
         object_key="test.pdf",
         process_status="success",
-        v1_response_json='{"jobStatus": "success", "data": {}}',
+        v1_response_json='{"jobId": "test-job-id", "jobStatus": "success"}',
     )
 
-    result = await get_v1_document_processing_results("job-123", timeout=10)
+    result = await get_v1_document_processing_results("test-job-id", timeout=10)
 
-    assert result == {"jobStatus": "success", "data": {}}
+    assert result.job_status == "success"
 
 
 @pytest.mark.asyncio
@@ -150,12 +151,16 @@ async def test_get_v1_document_processing_results_timeout(mocker):
     )
 
     mock_classify_as_failed = mocker.patch("documentai_api.app.classify_as_failed")
-    mock_classify_as_failed.return_value = {"jobStatus": "failed", "message": "timeout"}
+    mock_classify_as_failed.return_value = {
+        "jobId": "test-job-id",
+        "jobStatus": "failed",
+        "message": "timeout",
+    }
 
-    result = await get_v1_document_processing_results("job-123", timeout=1)
+    result = await get_v1_document_processing_results("test-job-id", timeout=1)
 
     mock_classify_as_failed.assert_called_once()
-    assert result["jobStatus"] == "failed"
+    assert result.job_status == "failed"
 
 
 @pytest.mark.asyncio
@@ -169,10 +174,10 @@ async def test_get_v1_document_processing_results_timeout_no_object_key(mocker):
         v1_response_json=None,
     )
 
-    result = await get_v1_document_processing_results("job-123", timeout=1)
+    result = await get_v1_document_processing_results("test-job-id", timeout=1)
 
-    assert result["jobStatus"] == "failed"
-    assert "timeout" in result["message"]
+    assert result.job_status == "failed"
+    assert "timeout" in result.message
 
 
 def test_get_document_results_with_extracted_data(api_client, mocker):
@@ -188,14 +193,18 @@ def test_get_document_results_with_extracted_data(api_client, mocker):
     mock_build_api_response = mocker.patch(
         "documentai_api.utils.response_builder.build_v1_api_response"
     )
-    mock_build_api_response.return_value = {"jobStatus": "success", "extractedData": {}}
+    mock_build_api_response.return_value = {
+        "jobId": "test-job-id",
+        "jobStatus": "success",
+        "extractedData": {},
+    }
 
-    response = api_client.get("/v1/documents/job-123?include_extracted_data=true")
+    response = api_client.get("/v1/documents/test-job-id?include_extracted_data=true")
 
     assert response.status_code == 200
     mock_build_api_response.assert_called_once_with(
         object_key="test.pdf",
-        status="success",
+        job_status="success",
         include_extracted_data=True,
     )
 
@@ -210,7 +219,7 @@ def test_get_document_results_in_progress(api_client, mocker):
         v1_response_json=None,
     )
 
-    response = api_client.get("/v1/documents/job-123")
+    response = api_client.get("/v1/documents/test-job-id")
 
     assert response.status_code == 200
     data = response.json()
@@ -232,7 +241,7 @@ def test_list_schemas(api_client, mocker):
 def test_get_schema_found(api_client, mocker):
     """Test getting specific schema."""
     mock_get_schema = mocker.patch("documentai_api.app.get_document_schema")
-    mock_get_schema.return_value = {"fields": []}
+    mock_get_schema.return_value = {"documentType": "invoice", "fields": []}
 
     response = api_client.get("/v1/schemas/invoice")
 
@@ -252,9 +261,7 @@ def test_get_schema_not_found(api_client, mocker):
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_bucket, monkeypatch):
     """Test S3 upload failure raises HTTPException."""
-    from documentai_api.utils import env
-
-    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, f"s3://{s3_bucket.name}-foo/input")
+    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}-foo/input")
 
     with pytest.raises(HTTPException) as exc_info:
         await upload_document_for_processing(
@@ -294,13 +301,13 @@ async def test_get_v1_document_processing_results_polling_error(mocker):
             ddb_record={"fileName": "test.pdf"},
             object_key="test.pdf",
             process_status="success",
-            v1_response_json='{"jobStatus": "success"}',
+            v1_response_json='{"jobId": "test-job-id", "jobStatus": "success"}',
         ),
     ]
 
-    result = await get_v1_document_processing_results("job-123", timeout=10)
+    result = await get_v1_document_processing_results("test-job-id", timeout=10)
 
-    assert result == {"jobStatus": "success"}
+    assert result.job_status == "success"
 
 
 def test_create_document_invalid_file_type(api_client, empty_zip_bytes):
@@ -327,7 +334,7 @@ def test_create_document_asynchronous(api_client, blank_pdf_bytes):
 def test_create_document_synchronous(api_client, blank_pdf_bytes, mocker):
     """Test synchronous document upload (wait=true)."""
     mock_get_results = mocker.patch("documentai_api.app.get_v1_document_processing_results")
-    mock_get_results.return_value = {"jobStatus": "success", "data": {}}
+    mock_get_results.return_value = JobStatusResponse(job_id="test-id", job_status="success")
 
     files = {"file": ("test.pdf", blank_pdf_bytes, "application/pdf")}
     response = api_client.post("/v1/documents?wait=true", files=files)
@@ -341,7 +348,7 @@ def test_get_document_results_error_handling(api_client, mocker):
     mock_get_job_status = mocker.patch("documentai_api.app._get_job_status")
     mock_get_job_status.side_effect = Exception("Unexpected error")
 
-    response = api_client.get("/v1/documents/job-123")
+    response = api_client.get("/v1/documents/test-job-id")
 
     assert response.status_code == 500
     assert "Failed to retrieve results" in response.json()["detail"]

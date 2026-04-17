@@ -47,6 +47,7 @@ pretty = true
 show_error_context = true
 strict = true
 enable_error_code = ["ignore-without-code", "exhaustive-match"]
+plugins = ["pydantic.mypy"]
 # prep for mypy 2.0
 local_partial_types = true
 allow_redefinition_new = true
