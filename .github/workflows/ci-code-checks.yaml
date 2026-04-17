@@ -1,0 +1,70 @@
+name: Template Code Checks
+run-name: ${{ github.workflow }} - ${{ inputs.action || github.event.pull_request.state }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "template/**"
+      - "copier.yml"
+      - .github/workflows/ci-code-checks.yaml
+  pull_request:
+    paths:
+      - "template/**"
+      - "copier.yml"
+      - .github/workflows/ci-code-checks.yaml
+
+# TODO: at least until we have a working app in platform-test
+jobs:
+  code-checks:
+    name: Run template CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project repo
+        uses: actions/checkout@v4
+        with:
+          path: template-repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install nava-platform CLI
+        run: pipx install --python "$(which python)" git+https://github.com/navapbc/platform-cli
+
+      - name: Create project dir
+        run: mkdir -p project-dir
+
+      - name: Install application template
+        working-directory: project-dir
+        run: |
+          nava-platform app install \
+            --template-uri ../template-repo \
+            --version HEAD \
+            --data app_local_port=3000 \
+            . \
+            app-documentai-api
+
+      - name: Build container image
+        id: container
+        working-directory: project-dir/app-documentai-api
+        run: make build
+
+      - name: Check formatting
+        if: always() && steps.container.outcome == 'success'
+        working-directory: project-dir/app-documentai-api
+        run: make format
+
+      - name: Lint
+        if: always() && steps.container.outcome == 'success'
+        working-directory: project-dir/app-documentai-api
+        run: make lint
+
+      - name: Run tests
+        if: always() && steps.container.outcome == 'success'
+        working-directory: project-dir/app-documentai-api
+        run: |
+          make test-audit
+          make test-coverage
