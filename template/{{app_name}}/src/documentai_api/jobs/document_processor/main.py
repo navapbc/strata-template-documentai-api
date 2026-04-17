@@ -35,7 +35,6 @@ from documentai_api.utils.ddb import (
     set_bda_processing_status_started,
 )
 from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION, MAX_BDA_INVOKE_RETRY_ATTEMPTS
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 

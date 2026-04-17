@@ -38,7 +38,6 @@ from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
 from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema

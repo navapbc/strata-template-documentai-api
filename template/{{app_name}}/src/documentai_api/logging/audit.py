@@ -65,7 +65,7 @@ def handle_audit_event(event_name: str, args: tuple[Any, ...]) -> None:
 # According to the docs for sys.addaudithook, the audit hook is only traced if the callable
 # has a __cantrace__ member that is set to a true value.
 # (See https://docs.python.org/3/library/sys.html#sys.addaudithook)
-handle_audit_event.__cantrace__ = True  # type: ignore
+handle_audit_event.__cantrace__ = True  # type: ignore[attr-defined]
 
 
 def log_audit_event(event_name: str, args: Sequence[Any], arg_names: Sequence[str]) -> None:
@@ -93,8 +93,7 @@ def log_audit_event(event_name: str, args: Sequence[Any], arg_names: Sequence[st
 
     logger.log(AUDIT, event_name, extra=extra)
 
-
-class LeastRecentlyUsedDict(collections.OrderedDict):
+class LeastRecentlyUsedDict(collections.OrderedDict[Hashable, int]):
     """A dict with a maximum size, evicting the least recently written key when full.
 
     Getting a key that is not present returns a default value of 0.

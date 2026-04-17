@@ -23,7 +23,7 @@ NO_COLOUR = ""
 
 DEFAULT_MESSAGE_WIDTH = 50
 
-output_dates = None
+output_dates: bool | None = None
 
 
 def main() -> None:

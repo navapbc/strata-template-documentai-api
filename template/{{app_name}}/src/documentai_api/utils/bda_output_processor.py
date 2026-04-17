@@ -16,7 +16,6 @@ from documentai_api.utils.ddb import (
     classify_as_success,
     get_user_provided_document_category,
 )
-from documentai_api.utils.logger import get_logger
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.response_codes import ResponseCodes
 
