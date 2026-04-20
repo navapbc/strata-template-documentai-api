@@ -34,7 +34,7 @@ from documentai_api.config.constants import (
     ProcessStatus,
 )
 from documentai_api.logging import get_logger
-from documentai_api.schemas.api_responses import (
+from documentai_api.models.api_responses import (
     ConfigResponse,
     HealthResponse,
     JobStatusResponse,
@@ -255,7 +255,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> JobSt
     else:
         # fallback if we never got a record
         return JobStatusResponse(
-            job_id=job_id or "None",
+            job_id=job_id,
             job_status="failed",
             message=f"Processing timeout after {timeout} seconds",
         )

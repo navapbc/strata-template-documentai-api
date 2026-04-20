@@ -9,7 +9,7 @@ from documentai_api.app import (
     upload_document_for_processing,
     verify_api_key,
 )
-from documentai_api.schemas.api_responses import JobStatusResponse
+from documentai_api.models.api_responses import JobStatusResponse
 
 
 def mock_verify_api_key():
