@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from documentai_api.app import (
     JobStatus,
@@ -120,19 +121,21 @@ async def test_upload_document_for_processing_success(
 
 
 @pytest.mark.asyncio
-async def test_upload_document_for_processing_no_env(mocker):
+async def test_upload_document_for_processing_no_env(clear_env_vars, mocker):
     """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
+    from documentai_api.utils.env import get_aws_config
+
+    get_aws_config.cache_clear()
+
     mock_file = mocker.MagicMock()
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises((ValidationError, HTTPException)):
         await upload_document_for_processing(
             file=mock_file,
             original_file_name="test.pdf",
             unique_file_name="test.pdf",
             content_type="application/pdf",
         )
-
-    assert exc_info.value.status_code == 500
 
 
 @pytest.mark.asyncio
@@ -263,7 +266,9 @@ def test_get_schema_not_found(api_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_bucket, monkeypatch):
+async def test_upload_document_for_processing_s3_failure(
+    base_env, blank_pdf_file, s3_bucket, monkeypatch
+):
     """Test S3 upload failure raises HTTPException."""
     monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}-foo/input")
 

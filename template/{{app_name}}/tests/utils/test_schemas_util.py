@@ -123,7 +123,7 @@ def test_get_all_schemas_from_cache(mock_cache):
     mock_cache.add.assert_not_called()
 
 
-def test_get_all_schemas_fetch_and_cache(mock_cache, mock_bda_services):
+def test_get_all_schemas_fetch_and_cache(base_env, mock_cache, mock_bda_services):
     """Fetch schemas from BDA and cache them."""
     mock_cache.get.return_value = None
 
