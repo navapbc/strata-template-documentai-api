@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 def test_verify_api_key_missing_env_var(api_client):
     config = MagicMock()
     config.api_auth_insecure_shared_key = ""
-    with patch("documentai_api.app.get_aws_config", return_value=config):
+    with patch("documentai_api.app.get_app_env_config", return_value=config):
         response = api_client.get("/v1/schemas")
     assert response.status_code == 500
 

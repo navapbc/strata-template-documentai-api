@@ -9,6 +9,7 @@ from documentai_api.config.constants import (
     DocumentCategory,
     ProcessStatus,
 )
+from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
@@ -19,7 +20,6 @@ from documentai_api.utils.document_detector import (
     QualityMetricsNormalized,
     QualityMetricsRaw,
 )
-from documentai_api.utils.env import get_aws_config
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,

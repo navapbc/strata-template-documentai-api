@@ -85,7 +85,7 @@ def test_get_bda_region_default(base_env):
 
 def test_get_bda_region_from_env(base_env, monkeypatch):
     """Test that _get_bda_region() returns value from BDA_REGION env var."""
-    from documentai_api.utils.env import get_aws_config
+    from documentai_api.config.env import get_aws_config
 
     monkeypatch.setenv("BDA_REGION", "eu-west-1")
     get_aws_config.cache_clear()

@@ -37,7 +37,7 @@ class AWSClientFactory:
 
     @classmethod
     def _get_bda_region(cls) -> str:
-        from documentai_api.utils import env
+        from documentai_api.config import env
 
         return env.get_aws_config().bda_region
 

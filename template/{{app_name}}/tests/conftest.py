@@ -35,11 +35,13 @@ def reset_env():
 
 @pytest.fixture(autouse=True)
 def clear_config_cache():
-    from documentai_api.utils.env import get_aws_config
+    from documentai_api.config.env import get_app_env_config, get_aws_config
 
     get_aws_config.cache_clear()
+    get_app_env_config.cache_clear()
     yield
     get_aws_config.cache_clear()
+    get_app_env_config.cache_clear()
 
 
 @pytest.fixture

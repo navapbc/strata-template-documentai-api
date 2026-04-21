@@ -27,11 +27,11 @@ from documentai_api.config.constants import (
     ProcessStatus,
     S3MetadataKeys,
 )
+from documentai_api.config.env import get_app_env_config, get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
-from documentai_api.utils.env import get_aws_config
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
@@ -58,7 +58,7 @@ api_key_header = APIKeyHeader(name=APIConfig.AUTH_KEY_HEADER_NAME, auto_error=Fa
 
 def verify_api_key(api_key: str = Depends(api_key_header)) -> None:
     """Simple placeholder API key check."""
-    expected_key = get_aws_config().api_auth_insecure_shared_key
+    expected_key = get_app_env_config().api_auth_insecure_shared_key
 
     if not expected_key:
         raise HTTPException(
@@ -85,8 +85,8 @@ def get_config(request: Request) -> dict[str, Any]:
     return {
         "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
         "version": APIConfig.VERSION,
-        "imageTag": get_aws_config().image_tag,
-        "environment": get_aws_config().environment,
+        "imageTag": get_app_env_config().image_tag,
+        "environment": get_app_env_config().environment,
         "endpoints": {
             "upload": "/v1/documents",
             "uploadSync": "/v1/documents?wait=true",

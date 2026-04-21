@@ -4,10 +4,10 @@ import json
 from typing import Any, cast
 
 from documentai_api.config.constants import Cache
+from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.services.bda import get_blueprint, get_data_automation_project
 from documentai_api.utils.cache import get_cache
-from documentai_api.utils.env import get_aws_config
 
 logger = get_logger(__name__)
 

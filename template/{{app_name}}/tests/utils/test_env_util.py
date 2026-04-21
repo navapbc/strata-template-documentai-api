@@ -1,6 +1,6 @@
 """Tests for utils/env.py."""
 
-from documentai_api.utils.env import AWSEnvConfig
+from documentai_api.config.env import AppEnvConfig, AWSEnvConfig
 
 
 def test_aws_env_config_has_required_fields():
@@ -14,7 +14,7 @@ def test_aws_env_config_has_required_fields():
 
 
 def test_aws_env_config_defaults():
-    fields = AWSEnvConfig.model_fields
+    fields = AWSEnvConfig.model_fields | AppEnvConfig.model_fields
     assert fields["bda_region"].default == "us-east-1"
     assert fields["environment"].default == "local"
     assert fields["max_bda_invoke_retry_attempts"].default == 3

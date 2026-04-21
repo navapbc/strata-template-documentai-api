@@ -123,7 +123,7 @@ async def test_upload_document_for_processing_success(
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_no_env(clear_env_vars, mocker):
     """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
-    from documentai_api.utils.env import get_aws_config
+    from documentai_api.config.env import get_aws_config
 
     get_aws_config.cache_clear()
 

@@ -19,6 +19,7 @@ from documentai_api.config.constants import (
     ProcessStatus,
     S3MetadataKeys,
 )
+from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
@@ -31,7 +32,6 @@ from documentai_api.utils.ddb import (
     set_bda_processing_status_not_started,
     set_bda_processing_status_started,
 )
-from documentai_api.utils.env import get_aws_config
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
