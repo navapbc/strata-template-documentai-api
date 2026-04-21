@@ -2,16 +2,16 @@ from typing import Any
 
 from pydantic import AwareDatetime, HttpUrl
 
-from documentai_api.models.base import CamelCaseResponse
+from documentai_api.models.base import BaseApiResponse
 
 
-class UploadAsyncResponse(CamelCaseResponse):
+class UploadAsyncResponse(BaseApiResponse):
     job_id: str
     job_status: str
     message: str
 
 
-class JobStatusResponse(CamelCaseResponse):
+class JobStatusResponse(BaseApiResponse):
     job_id: str
     job_status: str
     message: str
@@ -24,11 +24,11 @@ class JobStatusResponse(CamelCaseResponse):
     additional_info: str | None = None
 
 
-class HealthResponse(CamelCaseResponse):
+class HealthResponse(BaseApiResponse):
     message: str
 
 
-class ConfigResponse(CamelCaseResponse):
+class ConfigResponse(BaseApiResponse):
     api_url: HttpUrl
     version: str
     image_tag: str | None
@@ -37,16 +37,16 @@ class ConfigResponse(CamelCaseResponse):
     supported_file_types: list[str]
 
 
-class SchemaListResponse(CamelCaseResponse):
+class SchemaListResponse(BaseApiResponse):
     schemas: list[str]
 
 
-class SchemaFieldResponse(CamelCaseResponse):
+class SchemaFieldResponse(BaseApiResponse):
     name: str
     type: str
     description: str
 
 
-class SchemaDetailResponse(CamelCaseResponse):
+class SchemaDetailResponse(BaseApiResponse):
     document_type: str
     fields: list[SchemaFieldResponse]
