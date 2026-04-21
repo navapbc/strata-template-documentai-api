@@ -45,11 +45,22 @@ def clear_config_cache():
 @pytest.fixture
 def runtime_required_env(monkeypatch, s3_bucket, ddb_doc_metadata_table):
     """Required configuration to run the application in general."""
+    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:profile")
+    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:project")
+    monkeypatch.setenv("BDA_REGION", "us-east-1")
     monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}/input")
     monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", f"s3://{s3_bucket.name}/output")
-    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:project")
-    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:profile")
+
+
+@pytest.fixture
+def base_env(monkeypatch):
+    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:test")
+    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:test")
     monkeypatch.setenv("BDA_REGION", "us-east-1")
+    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME", "test")
+    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME", "test")
+    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", "s3://test/input")
+    monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", "s3://test/output")
 
 
 @pytest.fixture
