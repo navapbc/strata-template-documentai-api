@@ -131,7 +131,7 @@ async def test_get_v1_document_processing_results_success(mocker):
         ddb_record={"fileName": "test.pdf"},
         object_key="test.pdf",
         process_status="success",
-        v1_response_json='{"jobId": "test-job-id", "jobStatus": "success"}',
+        v1_response_json='{"jobId": "test-job-id", "jobStatus": "success", "message": "Document processed successfully"}',
     )
 
     result = await get_v1_document_processing_results("test-job-id", timeout=10)
@@ -187,7 +187,7 @@ def test_get_document_results_with_extracted_data(api_client, mocker):
         ddb_record={"fileName": "test.pdf"},
         object_key="test.pdf",
         process_status="success",
-        v1_response_json='{"jobStatus": "success"}',
+        v1_response_json='{"jobId": "test-job-id", "jobStatus": "success", "message": "Document processed successfully"}',
     )
 
     mock_build_api_response = mocker.patch(
@@ -196,6 +196,7 @@ def test_get_document_results_with_extracted_data(api_client, mocker):
     mock_build_api_response.return_value = {
         "jobId": "test-job-id",
         "jobStatus": "success",
+        "message": "Document processed successfully",
         "extractedData": {},
     }
 
@@ -301,7 +302,7 @@ async def test_get_v1_document_processing_results_polling_error(mocker):
             ddb_record={"fileName": "test.pdf"},
             object_key="test.pdf",
             process_status="success",
-            v1_response_json='{"jobId": "test-job-id", "jobStatus": "success"}',
+            v1_response_json='{"jobId": "test-job-id", "jobStatus": "success", "message": "Document processed successfully"}',
         ),
     ]
 
@@ -334,7 +335,9 @@ def test_create_document_asynchronous(api_client, blank_pdf_bytes):
 def test_create_document_synchronous(api_client, blank_pdf_bytes, mocker):
     """Test synchronous document upload (wait=true)."""
     mock_get_results = mocker.patch("documentai_api.app.get_v1_document_processing_results")
-    mock_get_results.return_value = JobStatusResponse(job_id="test-id", job_status="success")
+    mock_get_results.return_value = JobStatusResponse(
+        job_id="test-id", job_status="success", message="Document processed successfully"
+    )
 
     files = {"file": ("test.pdf", blank_pdf_bytes, "application/pdf")}
     response = api_client.post("/v1/documents?wait=true", files=files)

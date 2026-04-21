@@ -1,13 +1,8 @@
 from typing import Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, HttpUrl
-from pydantic.alias_generators import to_camel
+from pydantic import AwareDatetime, HttpUrl
 
-
-class CamelCaseResponse(BaseModel):
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True, serialize_by_alias=True
-    )
+from documentai_api.models.base import CamelCaseResponse
 
 
 class UploadAsyncResponse(CamelCaseResponse):
@@ -17,9 +12,9 @@ class UploadAsyncResponse(CamelCaseResponse):
 
 
 class JobStatusResponse(CamelCaseResponse):
-    job_id: str | None = None
-    job_status: str | None = None
-    message: str | None = None
+    job_id: str
+    job_status: str
+    message: str
     created_at: AwareDatetime | None = None
     completed_at: AwareDatetime | None = None
     total_processing_time_seconds: float | None = None
