@@ -39,7 +39,7 @@ def test_get_internal_api_response(response_code, matched_document_class, ddb_do
 
 @pytest.mark.parametrize(
     (
-        "status",
+        "job_status",
         "error_message",
         "additional_info",
         "include_extracted_data",
@@ -123,7 +123,7 @@ def test_get_internal_api_response(response_code, matched_document_class, ddb_do
     ],
 )
 def test_build_v1_api_response(
-    status: str,
+    job_status: str,
     error_message: str | None,
     additional_info: str | None,
     include_extracted_data: bool,
@@ -178,12 +178,12 @@ def test_build_v1_api_response(
     }
 
     response = response_builder_util.build_v1_api_response(
-        "test-key", status, data, error_message, include_extracted_data
+        "test-key", job_status, data, error_message, include_extracted_data
     )
 
     expected_response = {
         "jobId": "test-job-id",
-        "status": expected_status,
+        "jobStatus": expected_status,
         "createdAt": created_at.isoformat(),
         "completedAt": bda_completed_at.isoformat(),
         "totalProcessingTimeSeconds": 10.0,
@@ -241,5 +241,5 @@ def test_build_v1_api_response_empty_record(
     assert response == {
         "fields": dict(),
         "message": "Document processed successfully",
-        "status": "completed",
+        "jobStatus": "completed",
     }

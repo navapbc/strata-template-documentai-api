@@ -3,7 +3,7 @@ import json
 import secrets
 import uuid
 from dataclasses import dataclass
-from typing import Annotated, Any, BinaryIO, cast
+from typing import Annotated, Any, BinaryIO
 
 import magic
 from fastapi import (
@@ -29,6 +29,14 @@ from documentai_api.config.constants import (
 )
 from documentai_api.config.env import get_app_env_config, get_aws_config
 from documentai_api.logging import get_logger
+from documentai_api.models.api_responses import (
+    ConfigResponse,
+    HealthResponse,
+    JobStatusResponse,
+    SchemaDetailResponse,
+    SchemaListResponse,
+    UploadAsyncResponse,
+)
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
@@ -76,18 +84,18 @@ def root() -> dict[str, Any]:
 
 
 @app.get("/health")
-async def health() -> dict[str, Any]:
-    return {"message": "healthy"}
+async def health() -> HealthResponse:
+    return HealthResponse(message="healthy")
 
 
 @app.get("/config")
-def get_config(request: Request) -> dict[str, Any]:
-    return {
-        "apiUrl": f"{request.url.scheme}://{request.url.netloc}",
-        "version": APIConfig.VERSION,
-        "imageTag": get_app_env_config().image_tag,
-        "environment": get_app_env_config().environment,
-        "endpoints": {
+def get_config(request: Request) -> ConfigResponse:
+    return ConfigResponse(
+        api_url=f"{request.url.scheme}://{request.url.netloc}",
+        version=APIConfig.VERSION,
+        image_tag=get_app_env_config().image_tag,
+        environment=get_app_env_config().environment,
+        endpoints={
             "upload": "/v1/documents",
             "uploadSync": "/v1/documents?wait=true",
             "status": "/v1/documents/{job_id}",
@@ -96,8 +104,8 @@ def get_config(request: Request) -> dict[str, Any]:
             "schemaDetail": "/v1/schemas/{document_type}",
             "health": "/health",
         },
-        "supportedFileTypes": FileValidation.SUPPORTED_CONTENT_TYPES,
-    }
+        supported_file_types=list(FileValidation.SUPPORTED_CONTENT_TYPES),
+    )
 
 
 @dataclass
@@ -197,7 +205,7 @@ async def upload_document_for_processing(
         ) from e
 
 
-async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict[str, Any]:
+async def get_v1_document_processing_results(job_id: str, timeout: int) -> JobStatusResponse:
     """Poll for document processing completion with timeout."""
     elapsed_time = 0
     object_key = None
@@ -216,7 +224,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict[
                 and ProcessStatus(job_status.process_status).is_completed()
                 and job_status.v1_response_json
             ):
-                return cast(dict[str, Any], json.loads(job_status.v1_response_json))
+                return JobStatusResponse(**json.loads(job_status.v1_response_json))
 
             # still processing, wait and poll again
             await asyncio.sleep(polling_interval)
@@ -231,20 +239,22 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> dict[
 
     # timeout - update ddb with failure if we have object_key
     if object_key:
-        return classify_as_failed(
+        result = classify_as_failed(
             object_key=object_key,
             error_message="Processing timeout",
             data=ClassificationData(
                 additional_info=f"Processing did not complete within {timeout} seconds"
             ),
         )
+
+        return JobStatusResponse(**result)
     else:
         # fallback if we never got a record
-        return {
-            "jobStatus": "failed",
-            "message": f"Processing timeout after {timeout} seconds",
-            "processedAt": None,
-        }
+        return JobStatusResponse(
+            job_id=job_id,
+            job_status="failed",
+            message=f"Processing timeout after {timeout} seconds",
+        )
 
 
 # protected endpoints (require authorization)
@@ -259,7 +269,7 @@ async def create_document(
     trace_id: Annotated[str | None, Header(alias="X-Trace-ID")] = None,
     wait: bool = False,  # async by default
     timeout: int = 180,  # accounts for ECS cold starts and BDA processing time
-) -> dict[str, Any]:
+) -> UploadAsyncResponse | JobStatusResponse:
     """Upload a document for processing.
 
     Args:
@@ -307,18 +317,19 @@ async def create_document(
 
     response.headers["X-Trace-ID"] = trace_id
     if not wait:
-        return {
-            "jobId": job_id,
-            "jobStatus": ProcessStatus.NOT_STARTED.value,
-            "message": "Document uploaded successfully",
-        }
+        return UploadAsyncResponse(
+            job_id=job_id,
+            job_status=ProcessStatus.NOT_STARTED.value,
+            message="Document uploaded successfully",
+        )
     else:
-        results = await get_v1_document_processing_results(job_id, timeout)
-        return results
+        return await get_v1_document_processing_results(job_id, timeout)
 
 
 @app.get("/v1/documents/{job_id}", dependencies=[Depends(verify_api_key)])
-async def get_document_results(job_id: str, include_extracted_data: bool = False) -> dict[str, Any]:
+async def get_document_results(
+    job_id: str, include_extracted_data: bool = False
+) -> JobStatusResponse:
     """Get processing results by job ID."""
     try:
         job_status = _get_job_status(job_id)
@@ -327,11 +338,11 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
             raise HTTPException(status_code=404, detail=f"Job ID {job_id} not found")
 
         if not job_status.v1_response_json:
-            return {
-                "jobId": job_id,
-                "jobStatus": job_status.process_status,
-                "message": "Processing in progress",
-            }
+            return JobStatusResponse(
+                job_id=job_id,
+                job_status=job_status.process_status or "processing",
+                message="Processing in progress",
+            )
 
         # processing complete
         if include_extracted_data:
@@ -341,14 +352,16 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
             if not job_status.object_key or not job_status.process_status:
                 raise HTTPException(status_code=500, detail=f"Incomplete record for job {job_id}")
 
-            return build_v1_api_response(
-                object_key=job_status.object_key,
-                status=job_status.process_status,
-                include_extracted_data=True,
+            return JobStatusResponse(
+                **build_v1_api_response(
+                    object_key=job_status.object_key,
+                    job_status=job_status.process_status,
+                    include_extracted_data=True,
+                )
             )
         else:
             # return cached response without extracted data
-            return cast(dict[str, Any], json.loads(job_status.v1_response_json))
+            return JobStatusResponse(**json.loads(job_status.v1_response_json))
 
     except HTTPException:
         raise
@@ -359,14 +372,14 @@ async def get_document_results(job_id: str, include_extracted_data: bool = False
 
 
 @app.get("/v1/schemas", dependencies=[Depends(verify_api_key)])
-async def list_schemas() -> dict[str, Any]:
+async def list_schemas() -> SchemaListResponse:
     """List all supported document types."""
     schemas = get_all_schemas()
-    return {"schemas": list(schemas.keys())}
+    return SchemaListResponse(schemas=list(schemas.keys()))
 
 
 @app.get("/v1/schemas/{document_type}", dependencies=[Depends(verify_api_key)])
-async def get_schema(document_type: str) -> dict[str, Any]:
+async def get_schema(document_type: str) -> SchemaDetailResponse:
     """Get field schema for a specific document type."""
     schema = get_document_schema(document_type)
 
@@ -375,4 +388,4 @@ async def get_schema(document_type: str) -> dict[str, Any]:
             status_code=404, detail=f"Schema not found for document type: {document_type}"
         )
 
-    return schema
+    return SchemaDetailResponse(**schema)
