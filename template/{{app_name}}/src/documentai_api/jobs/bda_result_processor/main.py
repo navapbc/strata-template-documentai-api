@@ -6,10 +6,9 @@ from typing import Any
 
 import typer
 
+from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
-from documentai_api.utils import env
 from documentai_api.utils.bda_output_processor import process_bda_output
-from documentai_api.utils.env import get_required_env
 from documentai_api.utils.s3 import get_s3_prefix_from_location
 
 logger = get_logger(__name__)
@@ -22,8 +21,8 @@ def extract_uploaded_filename(object_key: str) -> str:
     BDA output: processed/input/w2-xxx.pdf/uuid/0/custom_output/0/result.json
     Extract: w2-xxx.pdf
     """
-    output_prefix = get_s3_prefix_from_location(get_required_env(env.DOCUMENTAI_OUTPUT_LOCATION))
-    input_prefix = get_s3_prefix_from_location(get_required_env(env.DOCUMENTAI_INPUT_LOCATION))
+    output_prefix = get_s3_prefix_from_location(get_aws_config().documentai_output_location)
+    input_prefix = get_s3_prefix_from_location(get_aws_config().documentai_input_location)
 
     # remove prefixes: processed/input/filename.pdf/... -> filename.pdf
     filename = object_key

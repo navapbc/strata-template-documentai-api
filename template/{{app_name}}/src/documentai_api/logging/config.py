@@ -11,7 +11,7 @@ from pydantic_settings import SettingsConfigDict
 import documentai_api.logging.audit
 import documentai_api.logging.formatters as formatters
 import documentai_api.logging.pii as pii
-from documentai_api.utils.env import PydanticBaseEnvConfig
+from documentai_api.config.env import PydanticBaseEnvConfig
 
 logger = logging.getLogger(__name__)
 

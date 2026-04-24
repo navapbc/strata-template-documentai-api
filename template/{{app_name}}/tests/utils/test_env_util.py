@@ -1,23 +1,22 @@
 """Tests for utils/env.py."""
 
-from documentai_api.utils import env
+from documentai_api.config.env import AppEnvConfig, AWSEnvConfig
 
 
-def test_environment_variable_names_are_defined():
-    """Test that all environment variable names are defined as constants."""
-    assert hasattr(env, "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME")
-    assert hasattr(env, "DOCUMENTAI_INPUT_LOCATION")
-    assert hasattr(env, "DOCUMENTAI_OUTPUT_LOCATION")
-    assert hasattr(env, "BDA_PROFILE_ARN")
-    assert hasattr(env, "BDA_PROJECT_ARN")
-    assert hasattr(env, "BDA_REGION")
+def test_aws_env_config_has_required_fields():
+    fields = AWSEnvConfig.model_fields
+    assert "bda_project_arn" in fields
+    assert "bda_profile_arn" in fields
+    assert "documentai_input_location" in fields
+    assert "documentai_output_location" in fields
+    assert "documentai_document_metadata_table_name" in fields
+    assert "documentai_document_metadata_job_id_index_name" in fields
 
 
-def test_environment_variable_values():
-    """Test that environment variable names have expected string values."""
-    assert env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME == "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME"
-    assert env.DOCUMENTAI_INPUT_LOCATION == "DOCUMENTAI_INPUT_LOCATION"
-    assert env.DOCUMENTAI_OUTPUT_LOCATION == "DOCUMENTAI_OUTPUT_LOCATION"
-    assert env.BDA_PROFILE_ARN == "BDA_PROFILE_ARN"
-    assert env.BDA_PROJECT_ARN == "BDA_PROJECT_ARN"
-    assert env.BDA_REGION == "BDA_REGION"
+def test_aws_env_config_defaults():
+    fields = AWSEnvConfig.model_fields | AppEnvConfig.model_fields
+    assert fields["bda_region"].default == "us-east-1"
+    assert fields["environment"].default == "local"
+    assert fields["max_bda_invoke_retry_attempts"].default == 3
+    assert fields["api_auth_insecure_shared_key"].default == ""
+    assert fields["image_tag"].default == ""

@@ -8,7 +8,7 @@
 import collections
 import logging
 import sys
-from collections.abc import Hashable, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ def log_audit_event(event_name: str, args: Sequence[Any], arg_names: Sequence[st
     logger.log(AUDIT, event_name, extra=extra)
 
 
-class LeastRecentlyUsedDict(collections.OrderedDict[Hashable, int]):
+class LeastRecentlyUsedDict(collections.OrderedDict[tuple[str, str], int]):
     """A dict with a maximum size, evicting the least recently written key when full.
 
     Getting a key that is not present returns a default value of 0.
@@ -112,12 +112,12 @@ class LeastRecentlyUsedDict(collections.OrderedDict[Hashable, int]):
         self.maxsize = maxsize
         super().__init__(*args, **kwargs)
 
-    def __getitem__(self, key: Hashable) -> int:
+    def __getitem__(self, key: tuple[str, str]) -> int:
         if key in self:
             return super().__getitem__(key)
         return 0
 
-    def __setitem__(self, key: Hashable, value: int) -> None:
+    def __setitem__(self, key: tuple[str, str], value: int) -> None:
         if key in self:
             self.move_to_end(key)
         super().__setitem__(key, value)

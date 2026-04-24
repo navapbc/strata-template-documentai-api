@@ -33,16 +33,36 @@ def reset_env():
 #######################
 
 
+@pytest.fixture(autouse=True)
+def clear_config_cache():
+    from documentai_api.config.env import get_app_env_config, get_aws_config
+
+    get_aws_config.cache_clear()
+    get_app_env_config.cache_clear()
+    yield
+    get_aws_config.cache_clear()
+    get_app_env_config.cache_clear()
+
+
 @pytest.fixture
 def runtime_required_env(monkeypatch, s3_bucket, ddb_doc_metadata_table):
     """Required configuration to run the application in general."""
-    from documentai_api.utils import env
+    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:profile")
+    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:project")
+    monkeypatch.setenv("BDA_REGION", "us-east-1")
+    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}/input")
+    monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", f"s3://{s3_bucket.name}/output")
 
-    monkeypatch.setenv(env.DOCUMENTAI_INPUT_LOCATION, f"s3://{s3_bucket.name}/input")
-    monkeypatch.setenv(env.DOCUMENTAI_OUTPUT_LOCATION, f"s3://{s3_bucket.name}/output")
-    monkeypatch.setenv(env.BDA_PROJECT_ARN, "arn:aws:project")
-    monkeypatch.setenv(env.BDA_PROFILE_ARN, "arn:aws:profile")
-    monkeypatch.setenv(env.BDA_REGION, "us-east-1")
+
+@pytest.fixture
+def base_env(monkeypatch):
+    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:test")
+    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:test")
+    monkeypatch.setenv("BDA_REGION", "us-east-1")
+    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME", "test")
+    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME", "test")
+    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", "s3://test/input")
+    monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", "s3://test/output")
 
 
 @pytest.fixture

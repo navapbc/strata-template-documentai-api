@@ -5,24 +5,21 @@ from decimal import Decimal
 from typing import Any
 
 from documentai_api.config.constants import (
-    PROCESSING_STATUS_COMPLETED,
-    PROCESSING_STATUS_PENDING_EXTRACTION,
     ConfigDefaults,
     DocumentCategory,
     ProcessStatus,
 )
+from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import ddb as ddb_service
 from documentai_api.services import s3 as s3_service
-from documentai_api.utils import env
 from documentai_api.utils import s3 as s3_utils
 from documentai_api.utils.document_detector import (
     DocumentDetector,
     QualityMetricsNormalized,
     QualityMetricsRaw,
 )
-from documentai_api.utils.env import get_required_env
 from documentai_api.utils.models import (
     ClassificationData,
     FieldMetrics,
@@ -191,7 +188,7 @@ def _build_timing_updates(
         except Exception as e:
             logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
-    elif status in PROCESSING_STATUS_COMPLETED:
+    elif ProcessStatus(status).is_completed():
         completion_updates, completion_values = _build_completion_timing(
             object_key, bda_output_s3_uri
         )
@@ -263,7 +260,7 @@ def _build_update_expression(
 
         bda_region = (
             extract_region_from_bda_arn(bda_invocation_arn)
-            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE.value
+            or ConfigDefaults.BDA_REGION_NOT_AVAILABLE
         )
         updates.append(f"{DocumentMetadata.BDA_REGION_USED} = :bdaRegion")
         values[":bdaRegion"] = bda_region
@@ -279,7 +276,7 @@ def _execute_ddb_update(
     object_key: str, update_expression: str, expression_values: dict[str, Any]
 ) -> None:
     """Execute the DynamoDB update."""
-    table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+    table_name = get_aws_config().documentai_document_metadata_table_name
     key = {"fileName": object_key}
 
     ddb_service.update_item(table_name, key, update_expression, expression_values)
@@ -309,7 +306,7 @@ def get_user_provided_document_category(object_key: str) -> DocumentCategory | N
 def get_ddb_record(object_key: str) -> dict[str, Any]:
     """Get DDB record by file name. Raises ValueError if not found."""
     try:
-        table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+        table_name = get_aws_config().documentai_document_metadata_table_name
         key = {"fileName": object_key}
         item = ddb_service.get_item(table_name, key)
 
@@ -324,9 +321,8 @@ def get_ddb_record(object_key: str) -> dict[str, Any]:
 
 def get_ddb_by_job_id(job_id: str) -> dict[str, Any] | None:
     """Get document metadata record by job ID."""
-    table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
-    index_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME)
-
+    table_name = get_aws_config().documentai_document_metadata_table_name
+    index_name = get_aws_config().documentai_document_metadata_job_id_index_name
     items = ddb_service.query_by_key(table_name, index_name, "jobId", job_id)
     return items[0] if items else None
 
@@ -392,15 +388,14 @@ def insert_ddb(
     overall_blur_score: float | None = None,
 ) -> None:
     try:
-        table_name = get_required_env(env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME)
+        table_name = get_aws_config().documentai_document_metadata_table_name
 
         item: dict[str, Any] = {
             DocumentMetadata.FILE_NAME: object_key,
             DocumentMetadata.ORIGINAL_FILE_NAME: original_file_name,
             DocumentMetadata.PROCESS_STATUS: process_status,
             DocumentMetadata.USER_PROVIDED_DOCUMENT_CATEGORY: (
-                user_provided_document_category
-                or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED.value
+                user_provided_document_category or ConfigDefaults.USER_DOCUMENT_TYPE_NOT_PROVIDED
             ),
             DocumentMetadata.CREATED_AT: datetime.now(UTC).isoformat(),
             DocumentMetadata.UPDATED_AT: datetime.now(UTC).isoformat(),
@@ -531,7 +526,7 @@ def insert_initial_ddb_record(
 
     # initial status does not qualify for bda processing
     # create the json response signaling the process is complete
-    if process_status not in PROCESSING_STATUS_PENDING_EXTRACTION:
+    if not ProcessStatus(process_status).is_pending_extraction():
         internal_api_response = get_internal_api_response(
             object_key=ddb_key,
             response_code=response_code,

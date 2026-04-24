@@ -2,9 +2,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from documentai_api.config.constants import (
-    BDA_JOB_STATUS_COMPLETED,
-    BDA_JOB_STATUS_FAILED,
-    BDA_JOB_STATUS_RUNNING,
     BdaResponseFields,
 )
 from documentai_api.logging import get_logger
@@ -23,21 +20,6 @@ class BdaFieldProcessingData:
 class BdaFieldProcessingResult:
     confidence: float
     is_empty: bool
-
-
-def is_bda_job_running(status: str) -> bool:
-    """Check if BDA job is still running."""
-    return status in BDA_JOB_STATUS_RUNNING
-
-
-def is_bda_job_failed(status: str) -> bool:
-    """Check if BDA job has failed."""
-    return status in BDA_JOB_STATUS_FAILED
-
-
-def is_bda_job_completed(status: str) -> bool:
-    """Check if BDA job completed successfully."""
-    return status in BDA_JOB_STATUS_COMPLETED
 
 
 def _extract_fields_recursive(
