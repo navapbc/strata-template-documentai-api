@@ -28,7 +28,7 @@ class AppEnvConfig(PydanticBaseEnvConfig):
 
 @lru_cache
 def get_aws_config() -> AWSEnvConfig:
-    return AWSEnvConfig()  # type: ignore[call-arg]
+    return AWSEnvConfig()
 
 
 @lru_cache
