@@ -1,31 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "customManagers:dockerfileVersions",
-    "schedule:monthly",
-    ":maintainLockFilesMonthly"
+    "github>navapbc/strata-lib-renovate:strataTemplate"
   ],
-  "labels": [
-    "dependencies"
-  ],
-  "github-actions": {
-    "fileMatch": [
-      "^template/\\.github/(?:workflows|actions)/.+\\.ya?ml(?:.jinja)?$"
-    ]
-  },
   "packageRules": [
-    {
-      "groupName": "{{manager}} non-major dependencies",
-      "groupSlug": "{{manager}}-minor-patch",
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "matchPackageNames": [
-        "*"
-      ]
-    },
     {
       "groupName": "Python language",
       "groupSlug": "python-lang",
@@ -46,10 +24,5 @@
       ],
       "commitMessageTopic": "Python language"
     }
-  ],
-  "vulnerabilityAlerts": {
-    "labels": [
-      "security"
-    ]
-  }
+  ]
 }
