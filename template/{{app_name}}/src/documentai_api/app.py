@@ -45,7 +45,11 @@ from documentai_api.models.api_responses import (
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils import env
-from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
+from documentai_api.utils.ddb import (
+    classify_as_failed,
+    get_ddb_by_job_id,
+    insert_minimal_ddb_record,
+)
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
@@ -146,9 +150,9 @@ def _get_job_status(job_id: str) -> JobStatus:
 
 
 async def upload_document_for_processing(
-    file: BinaryIO,
+    src_file: BinaryIO,
+    dest_path: str,
     original_file_name: str,
-    unique_file_name: str,
     content_type: str,
     user_provided_document_category: DocumentCategory | None = None,
     job_id: str | None = None,
@@ -157,15 +161,12 @@ async def upload_document_for_processing(
     logger.debug(
         "S3 upload started",
         extra={
-            "unique_file_name": unique_file_name,
+            "dest_path": dest_path,
             "user_provided_document_category": user_provided_document_category,
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-    input_location = env.get_required_env(env.DOCUMENTAI_INPUT_LOCATION)
-
-    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    bucket_name, object_key = parse_s3_uri(f"{input_location}/{unique_file_name}")
+    bucket_name, object_key = parse_s3_uri(dest_path)
 
     try:
         metadata = {}
@@ -192,13 +193,11 @@ async def upload_document_for_processing(
             "S3: Starting actual upload",
             extra={
                 "metadata": metadata,
-                "file": file,
-                "document_upload_bucket_name": bucket_name,
-                "unique_file_name": unique_file_name,
+                "dest_path": dest_path,
             },
         )
 
-        s3_service.upload_file(bucket_name, object_key, file, content_type, metadata)
+        s3_service.upload_file(bucket_name, object_key, src_file, content_type, metadata)
         logger.info("=== S3 UPLOAD SUCCESS ===")
 
     except Exception as e:
@@ -307,17 +306,40 @@ async def create_document(
     file_extension = file.filename.split(".")[-1]
     file_name = file.filename.split(".")[0]
     unique_file_name = f"{file_name}-{uuid.uuid4()}.{file_extension}"
+    original_file_name = file.filename
     job_id = str(uuid.uuid4())
+    ddb_key = unique_file_name
 
-    await upload_document_for_processing(
-        file=file.file,
-        original_file_name=file.filename,
-        unique_file_name=unique_file_name,
-        content_type=actual_content_type,
-        user_provided_document_category=category,
+    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
+    input_location = env.get_required_env(env.DOCUMENTAI_INPUT_LOCATION)
+    dest_path = f"{input_location}/{unique_file_name}"
+
+    insert_minimal_ddb_record(
+        ddb_key=ddb_key,
+        original_file_name=original_file_name,
         job_id=job_id,
+        user_provided_document_category=category,
         trace_id=trace_id,
+        content_type=actual_content_type,
     )
+
+    try:
+        await upload_document_for_processing(
+            src_file=file.file,
+            dest_path=dest_path,
+            original_file_name=file.filename,
+            content_type=actual_content_type,
+            user_provided_document_category=category,
+            job_id=job_id,
+            trace_id=trace_id,
+        )
+    except HTTPException as e:
+        classify_as_failed(
+            object_key=ddb_key,
+            error_message=e.detail,
+            data=ClassificationData(additional_info=e.detail),
+        )
+        raise
 
     response.headers["X-Trace-ID"] = trace_id
     if not wait:
