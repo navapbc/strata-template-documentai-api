@@ -116,6 +116,9 @@ def build_v1_api_response(
     from documentai_api.utils.ddb import get_ddb_record
 
     ddb_record = get_ddb_record(object_key)
+    if ddb_record is None:
+        raise ValueError(f"DDB record not found for file: {object_key}")
+
     job_id = ddb_record.get(DocumentMetadata.JOB_ID)
     matched_document_class = ddb_record.get(DocumentMetadata.BDA_MATCHED_DOCUMENT_CLASS)
     total_time = ddb_record.get(DocumentMetadata.TOTAL_PROCESSING_TIME_SECONDS)
