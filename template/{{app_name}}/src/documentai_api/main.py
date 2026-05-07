@@ -2,11 +2,11 @@ import os
 
 import uvicorn
 
-from documentai_api.logging.config import LoggingContext
+import documentai_api.logging
 
 
 def main() -> None:  # pragma: no cover
-    with LoggingContext(__package__):
+    with documentai_api.logging.init(__package__):
         host = os.getenv("HOST", "127.0.0.1")
         port = int(os.getenv("PORT", 8000))
 

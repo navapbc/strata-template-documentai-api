@@ -14,6 +14,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+import documentai_api.logging
 from documentai_api.config.constants import (
     S3_METADATA_KEY_JOB_ID,
     S3_METADATA_KEY_ORIGINAL_FILE_NAME,
@@ -22,7 +23,6 @@ from documentai_api.config.constants import (
     ConfigDefaults,
     ProcessStatus,
 )
-from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
@@ -38,7 +38,7 @@ from documentai_api.utils.env import DOCUMENTAI_INPUT_LOCATION, MAX_BDA_INVOKE_R
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
-logger = get_logger(__name__)
+logger = documentai_api.logging.get_logger(__name__)
 app = typer.Typer()
 
 
@@ -257,10 +257,11 @@ def cli(
     ),
 ) -> None:
     """Process uploaded document and invoke BDA."""
-    try:
-        main(object_key, bucket_name, user_provided_document_category, job_id, trace_id)
-    except Exception:
-        raise typer.Exit(1) from None
+    with documentai_api.logging.init(__package__):
+        try:
+            main(object_key, bucket_name, user_provided_document_category, job_id, trace_id)
+        except Exception:
+            raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":
