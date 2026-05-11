@@ -132,7 +132,7 @@ def build_v1_api_response(
         base_response["matchedDocumentClass"] = matched_document_class
 
     # success response with full results
-    if ProcessStatus(job_status).is_successful():
+    if ProcessStatus.is_successful(job_status):
         base_response["jobStatus"] = "completed"
 
         if job_status == ProcessStatus.SUCCESS.value:
@@ -161,7 +161,7 @@ def build_v1_api_response(
             }
         )
 
-    elif ProcessStatus(job_status).is_not_supported():
+    elif ProcessStatus.is_not_supported(job_status):
         base_response.update(
             {
                 "jobStatus": "not_supported",

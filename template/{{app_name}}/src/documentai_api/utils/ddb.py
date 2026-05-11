@@ -188,7 +188,7 @@ def _build_timing_updates(
         except Exception as e:
             logger.error(f"Failed to calculate bda wait time for {object_key}: {e}")
 
-    elif ProcessStatus(status).is_completed():
+    elif ProcessStatus.is_completed(status):
         completion_updates, completion_values = _build_completion_timing(
             object_key, bda_output_s3_uri
         )
@@ -526,7 +526,7 @@ def insert_initial_ddb_record(
 
     # initial status does not qualify for bda processing
     # create the json response signaling the process is complete
-    if not ProcessStatus(process_status).is_pending_extraction():
+    if not ProcessStatus.is_pending_extraction(process_status):
         internal_api_response = get_internal_api_response(
             object_key=ddb_key,
             response_code=response_code,

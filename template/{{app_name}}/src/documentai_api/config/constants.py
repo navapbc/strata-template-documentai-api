@@ -83,29 +83,30 @@ class ProcessStatus(StrEnum):
     STARTED = "started"
     SUCCESS = "success"
 
-    def is_completed(self) -> bool:
-        return self in [
-            self.SUCCESS,
-            self.FAILED,
-            self.NO_DOCUMENT_DETECTED,
-            self.NO_CUSTOM_BLUEPRINT_MATCHED,
+    @classmethod
+    def is_completed(cls, value: str) -> bool:
+        return value in [
+            cls.SUCCESS,
+            cls.FAILED,
+            cls.NO_DOCUMENT_DETECTED,
+            cls.NO_CUSTOM_BLUEPRINT_MATCHED,
         ]
 
-    def is_not_supported(self) -> bool:
-        return self in [
-            self.MULTIPAGE,
-            self.PASSWORD_PROTECTED,
-        ]
+    @classmethod
+    def is_not_supported(cls, value: str) -> bool:
+        return value in [cls.MULTIPAGE, cls.PASSWORD_PROTECTED]
 
-    def is_pending_extraction(self) -> bool:
-        return self in [self.PENDING_GRAYSCALE_CONVERSION, self.NOT_STARTED]
+    @classmethod
+    def is_pending_extraction(cls, value: str) -> bool:
+        return value in [cls.PENDING_GRAYSCALE_CONVERSION, cls.NOT_STARTED]
 
-    def is_successful(self) -> bool:
-        return self in [
-            self.SUCCESS,
-            self.NO_CUSTOM_BLUEPRINT_MATCHED,
-            self.NOT_SAMPLED,
-            self.NOT_IMPLEMENTED,
+    @classmethod
+    def is_successful(cls, value: str) -> bool:
+        return value in [
+            cls.SUCCESS,
+            cls.NO_CUSTOM_BLUEPRINT_MATCHED,
+            cls.NOT_SAMPLED,
+            cls.NOT_IMPLEMENTED,
         ]
 
 

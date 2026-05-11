@@ -8,7 +8,7 @@ import typer
 from botocore.exceptions import ClientError
 from tenacity import (
     RetryError,
-    retry,
+    Retrying,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential_jitter,
@@ -121,22 +121,27 @@ def convert_s3_object_to_grayscale(bucket_name: str, object_key: str) -> bool:
         return False
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential_jitter(initial=10, max=120),
-    retry=retry_if_exception_type(ClientError),
-)
 def _invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict[str, Any]:
     """Invoke BDA for a file that's ready for processing."""
-    invocation_arn = invoke_bedrock_data_automation(bucket_name, object_key)
+    result: dict[str, Any] = {}
 
-    set_bda_processing_status_started(
-        object_key=ddb_key,
-        bda_invocation_arn=invocation_arn,
-    )
+    for attempt in Retrying(
+        stop=stop_after_attempt(get_aws_config().max_bda_invoke_retry_attempts),
+        wait=wait_exponential_jitter(initial=10, max=120),
+        retry=retry_if_exception_type(ClientError),
+    ):
+        with attempt:
+            invocation_arn = invoke_bedrock_data_automation(bucket_name, object_key)
 
-    logger.info(f"BDA job started for {ddb_key}, ARN: {invocation_arn}")
-    return {"invocationArn": invocation_arn}
+            set_bda_processing_status_started(
+                object_key=ddb_key,
+                bda_invocation_arn=invocation_arn,
+            )
+
+            logger.info(f"BDA job started for {ddb_key}, ARN: {invocation_arn}")
+            result = {"invocationArn": invocation_arn}
+
+    return result
 
 
 def invoke_bda(bucket_name: str, object_key: str, ddb_key: str) -> dict[str, Any]:
@@ -232,7 +237,7 @@ def main(
                 object_key=ddb_key,
                 data=ClassificationData(additional_info="File too large after conversion"),
             )
-    elif status == ProcessStatus.NOT_STARTED.value:
+    elif status == ProcessStatus.NOT_STARTED:
         # ready for BDA immediately
         invoke_bda(bucket_name, object_key, ddb_key)
     else:

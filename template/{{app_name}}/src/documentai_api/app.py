@@ -221,7 +221,7 @@ async def get_v1_document_processing_results(job_id: str, timeout: int) -> JobSt
             # processing complete, return results
             if (
                 job_status.process_status
-                and ProcessStatus(job_status.process_status).is_completed()
+                and ProcessStatus.is_completed(job_status.process_status)
                 and job_status.v1_response_json
             ):
                 return JobStatusResponse(**json.loads(job_status.v1_response_json))

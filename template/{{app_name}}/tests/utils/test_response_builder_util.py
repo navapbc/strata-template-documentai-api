@@ -199,7 +199,7 @@ def test_build_v1_api_response(
     if additional_info:
         expected_response["additionalInfo"] = additional_info
 
-    if ProcessStatus(job_status).is_successful():
+    if ProcessStatus.is_successful(job_status):
         expected_response["fields"] = expected_fields_value
 
     assert response == expected_response
