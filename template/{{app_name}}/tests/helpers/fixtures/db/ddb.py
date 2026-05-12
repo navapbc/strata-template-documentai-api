@@ -41,3 +41,23 @@ def set_ddb_doc_metadata_table_env_vars(ddb_doc_metadata_table_resource, monkeyp
         env.DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME, ddb_doc_metadata_table_resource.name
     )
     monkeypatch.setenv(env.DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME, "job-id-index")
+
+
+@pytest.fixture
+def api_keys_table(aws_credentials, monkeypatch):
+    """Create a test api-keys DynamoDB table and set env var."""
+    import boto3
+    from moto import mock_aws
+
+    from documentai_api.utils import env
+
+    with mock_aws():
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.create_table(
+            TableName="api-keys-test",
+            KeySchema=[{"AttributeName": "keyHash", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "keyHash", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        monkeypatch.setenv(env.API_KEYS_TABLE_NAME, "api-keys-test")
+        yield table

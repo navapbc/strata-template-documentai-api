@@ -1,28 +1,20 @@
 # API Authentication
 
-The DocumentAI API currently supports a single shared API key for authentication.
+The DocumentAI API uses API key authentication. Keys are validated against a DynamoDB table, with in-memory caching to minimize latency.
+
+For local development, a single shared key can be used instead (see [Local Development](#local-development)).
 
 ## For API Users
 
 ### Getting Your API Key
 
-**If you have AWS access:**
+Contact your system administrator to obtain an API key for your environment. You will receive a key in the format:
 
-The API key is stored in AWS SSM Parameter Store at `/{app_name}-{env}/api-auth-insecure-shared-key`. 
-
-You can retrieve it via the AWS Console or CLI:
-
-```bash
-aws ssm get-parameter \
-  --name "/{app_name}-{env}/api-auth-insecure-shared-key" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text
+```
+docai_<random>
 ```
 
-**If you do not have AWS access:**
-
-Contact your system administrator to obtain an API Key for your environment.
+Store it securely — it is shown only once at generation time.
 
 ### Making Authenticated Requests
 
@@ -35,8 +27,7 @@ curl -H "API-Key: your-api-key-here" \
      https://documentai.example.com/v1/documents
 ```
 
-**Example with Python**:
-
+**Example with Python:**
 ```python
 import requests
 
@@ -52,73 +43,128 @@ print(response.json())
 ```
 
 ### Endpoint Authentication
-Visit `/docs` to view all available endpoints. 
+
+Visit `/docs` to view all available endpoints.
 
 Protected routes are indicated by the lock icon (🔒). Public routes (e.g., `/health`) do not require authentication.
 
-
 ### Error Responses
 
-**401 Unauthorized** - Invalid API Key
-
+**401 Unauthorized** — Invalid or missing API key:
 ```json
 {
   "detail": "Invalid API key"
 }
 ```
 
-**500 Internal Server Error** - API key not configured (contact administrator)
-
-```json
-{
-  "detail": "API key not configured"
-}
-```
-
 ## For Maintainers
-The DocumentAI API uses the value from `API_AUTH_INSECURE_SHARED_KEY` env var to compare against the `API-Key` header in requests.
 
-### Storing the Key
+### How It Works
 
-**Local Development**:
+When `API_AUTH_ENABLED=true`, the API validates keys against a DynamoDB table (`api-keys`). On each request:
 
-A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started (_you can change the value in .env if desired_):
+1. The presented key is hashed with SHA-256
+2. The hash is looked up in the `api-keys` DynamoDB table (with a 5-minute in-memory cache)
+3. The record is checked for `isActive=true` and an optional `expiresAt` date
+4. If valid, the request proceeds; otherwise a 401 is returned
 
+Keys are never stored or logged in plaintext — only the SHA-256 hash is persisted.
+
+### Required Environment Variables
+
+| Variable | Description |
+|---|---|
+| `API_AUTH_ENABLED` | Set to `true` to enable DynamoDB-based auth (default: `false`) |
+| `API_KEYS_TABLE_NAME` | Name of the DynamoDB api-keys table |
+| `API_AUTH_CACHE_TTL` | Cache TTL in seconds (default: `300`) |
+
+### Generating an API Key
+
+Use the `api-keys generate` command. The plaintext key is displayed once and not stored — share it securely with the client.
+
+```bash
+api-keys generate --client-name "my-service" --environment prod
 ```
+
+With optional expiry:
+```bash
+api-keys generate \
+  --client-name "my-service" \
+  --environment prod \
+  --expires-at "2027-01-01T00:00:00+00:00"
+```
+
+Output:
+```
+API Key (save this — it will not be shown again):
+  docai_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+
+Client:      my-service
+Environment: prod
+Expires:     never
+```
+
+### Listing Keys
+
+```bash
+# all active keys
+api-keys list
+
+# filter by client
+api-keys list --client-name "my-service"
+
+# include inactive keys
+api-keys list --include-inactive
+api-keys list --client-name "my-service" --include-inactive
+```
+
+### Revoking a Key
+
+```bash
+# deactivate a specific key by plaintext key
+api-keys deactivate --client-name "my-service" --api-key docai_a1b2c3...
+
+# deactivate all active keys for a client
+api-keys deactivate --client-name "my-service" --all
+```
+
+Deactivation takes effect within one cache TTL period (default 5 minutes).
+
+### Rotating a Key
+
+1. Generate a new key with `api-keys generate`
+2. Share the new key with the client
+3. Once the client confirms they have migrated, run `api-keys deactivate --client-name "my-service" --all`
+
+### Local Development
+
+For local development, `API_AUTH_ENABLED` defaults to `false` and the API falls back to a single shared key via `API_AUTH_INSECURE_SHARED_KEY`.
+
+A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started:
+
+```bash
 cp local.env.example .env
 ```
 
-If running natively (outside Docker), export the variable:
+**This single-key mode is not suitable for production.** Enable `API_AUTH_ENABLED=true` with the DynamoDB table for all hosted environments.
 
-```bash
-export API_AUTH_INSECURE_SHARED_KEY=your-generated-api-key
-```
+## Security Considerations
 
-**Hosted Environments**:
+- Keys are hashed with SHA-256 before storage — the plaintext key cannot be recovered from DynamoDB
+- HTTPS is enforced by the load balancer — keys are never transmitted in plaintext
+- Keys are never logged
+- Deactivation takes effect immediately (cache is invalidated on deactivate)
+- Auth failures are logged with client name (where available) but never the key itself
 
-Store the key securely at rest and inject the env var into the API server environment. If you are using template-infra, add this to your [app env-config](https://github.com/navapbc/template-infra/blob/main/docs/infra/environment-variables-and-secrets.md#secrets):
+## Known Limitations
 
-```hcl
-API_AUTH_INSECURE_SHARED_KEY = {
-  manage_method     = "generated"
-  secret_store_name = "/${var.app_name}-${var.environment}/api-auth-insecure-shared-key"
-}
-```
+The following are known gaps in the v0.1 implementation. They are suitable for internal service-to-service use with a small number of known calling systems, but should be addressed before broader rollout.
 
-### Rotating the Key
-1. Update the value in your secret store
-2. Restart/redeploy the server to pick up the new value
+**Rate limiting**
+No rate limiting is implemented at the application layer. Brute-force or abuse protection should be configured at the API Gateway or ALB level using WAF rules.
 
+**Key rotation policy**
+Keys do not expire automatically unless `expiresAt` is set at generation time. Rotation is a manual process — generate a new key, migrate the client, then deactivate the old one. Future versions could enforce a maximum key lifetime.
 
-### Security Considerations
-**This is a skeleton key implementation** - all users share the same API key. This is suitable for:
-
-- Demo environments
-- Internal tools
-- Development/staging environments
-
-**Not suitable for**:
-
-- Production systems with multiple users
-- Systems requiring user-specific permissions
-- Compliance-sensitive applications
+**HTTPS enforcement**
+HTTPS is not enforced at the application layer — it is the responsibility of the load balancer. Direct connections to the application that bypass the ALB would transmit keys in plaintext. Ensure the application is never exposed directly.

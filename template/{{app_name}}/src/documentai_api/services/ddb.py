@@ -30,6 +30,14 @@ def update_item(
     )
 
 
+def scan(table_name: str) -> list[dict[str, Any]]:
+    """Scan all items from a DynamoDB table."""
+    ddb_table = AWSClientFactory.get_ddb_table(table_name)
+    response = ddb_table.scan()
+    items = response.get("Items", [])
+    return [dict(item) for item in items]
+
+
 def query_by_key(
     table_name: str, index_name: str, key_name: str, key_value: str
 ) -> list[dict[str, Any]]:
