@@ -94,9 +94,9 @@ async def test_upload_document_for_processing_success(
     from documentai_api.config.constants import DocumentCategory
 
     await upload_document_for_processing(
-        file=blank_pdf_file.open("rb"),
+        src_file=blank_pdf_file.open("rb"),
+        dest_path=f"s3://{s3_bucket.name}/input/test-unique.pdf",
         original_file_name="test.pdf",
-        unique_file_name="test-unique.pdf",
         content_type="application/pdf",
         user_provided_document_category=DocumentCategory.INCOME,
         job_id="test-job-id",
@@ -105,22 +105,6 @@ async def test_upload_document_for_processing_success(
 
     uploaded_file_in_s3 = s3_bucket.Object("input/test-unique.pdf")
     assert uploaded_file_in_s3.content_type == "application/pdf"
-
-
-@pytest.mark.asyncio
-async def test_upload_document_for_processing_no_env(mocker):
-    """Test upload fails when DOCUMENTAI_INPUT_LOCATION not set."""
-    mock_file = mocker.MagicMock()
-
-    with (
-        pytest.raises(ValueError, match="DOCUMENTAI_INPUT_LOCATION environment variable not set"),
-    ):
-        await upload_document_for_processing(
-            file=mock_file,
-            original_file_name="test.pdf",
-            unique_file_name="test.pdf",
-            content_type="application/pdf",
-        )
 
 
 @pytest.mark.asyncio
@@ -262,13 +246,11 @@ def test_get_schema_not_found(api_client, mocker):
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_bucket, monkeypatch):
     """Test S3 upload failure raises HTTPException."""
-    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}-foo/input")
-
     with pytest.raises(HTTPException) as exc_info:
         await upload_document_for_processing(
-            file=blank_pdf_file,
+            src_file=blank_pdf_file,
+            dest_path=f"s3://{s3_bucket.name}-foo/input/test.pdf",
             original_file_name="test.pdf",
-            unique_file_name="test.pdf",
             content_type="application/pdf",
         )
 
@@ -278,14 +260,14 @@ async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_buck
 
 @pytest.mark.asyncio
 async def test_upload_document_for_processing_invalid_category_type(
-    blank_pdf_file, runtime_required_env
+    blank_pdf_file, runtime_required_env, s3_bucket
 ):
     """Test invalid document category type raises ValueError."""
     with pytest.raises(HTTPException):
         await upload_document_for_processing(
-            file=blank_pdf_file,
+            src_file=blank_pdf_file,
+            dest_path=f"s3://{s3_bucket}-foo/input/test.pdf",
             original_file_name="test.pdf",
-            unique_file_name="test.pdf",
             content_type="application/pdf",
             user_provided_document_category="invalid_string",  # should be enum
         )

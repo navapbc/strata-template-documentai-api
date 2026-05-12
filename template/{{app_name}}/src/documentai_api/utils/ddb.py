@@ -446,6 +446,29 @@ def insert_ddb(
         raise
 
 
+def insert_minimal_ddb_record(
+    ddb_key: str,
+    original_file_name: str,
+    job_id: str,
+    process_status: ProcessStatus = ProcessStatus.NOT_STARTED,
+    user_provided_document_category: str | None = None,
+    trace_id: str | None = None,
+    content_type: str | None = None,
+    file_size_bytes: int | None = None,
+) -> None:
+    """Create initial tracking record."""
+    insert_ddb(
+        object_key=ddb_key,
+        original_file_name=original_file_name,
+        user_provided_document_category=user_provided_document_category,
+        process_status=process_status,
+        file_size_bytes=file_size_bytes,
+        content_type=content_type,
+        job_id=job_id,
+        trace_id=trace_id,
+    )
+
+
 def insert_initial_ddb_record(
     source_bucket_name: str,
     source_object_key: str,
