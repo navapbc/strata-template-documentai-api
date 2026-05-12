@@ -205,9 +205,9 @@ def main(
     # strip S3 prefix for DynamoDB key (files are stored without prefix)
     ddb_key = os.path.basename(object_key)
 
-    try:
-        existing_record = get_ddb_record(ddb_key)
-    except ValueError:
+    existing_record = get_ddb_record(ddb_key)
+
+    if existing_record is None:
         # first time seeing this file
         logger.info(f"First time processing {ddb_key}")
         insert_initial_ddb_record(
@@ -221,6 +221,9 @@ def main(
         )
 
         existing_record = get_ddb_record(ddb_key)
+
+        if existing_record is None:
+            raise Exception("Could not retrieve DDB record after creation")
 
     status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
 

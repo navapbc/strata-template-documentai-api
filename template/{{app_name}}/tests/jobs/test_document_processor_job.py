@@ -278,7 +278,7 @@ def test_main_grayscale_conversion_fails(input_image, mocker, mock_invoke):
 
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
     mock_get.side_effect = [
-        ValueError("Record not found"),
+        None,
         {DocumentMetadata.PROCESS_STATUS: ProcessStatus.PENDING_GRAYSCALE_CONVERSION},
     ]
 
@@ -323,7 +323,7 @@ def test_main_propagates_s3_metadata(input_pdf, mocker):
 
     mock_get = mocker.patch("documentai_api.jobs.document_processor.main.get_ddb_record")
     mock_get.side_effect = [
-        ValueError("Record not found"),
+        None,
         {DocumentMetadata.PROCESS_STATUS: ProcessStatus.NOT_STARTED.value},
     ]
 
