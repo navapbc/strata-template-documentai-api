@@ -52,6 +52,8 @@ def runtime_required_env(monkeypatch, s3_bucket, ddb_doc_metadata_table):
     monkeypatch.setenv("BDA_REGION", "us-east-1")
     monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", f"s3://{s3_bucket.name}/input")
     monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", f"s3://{s3_bucket.name}/output")
+    monkeypatch.setenv("API_AUTH_INSECURE_SHARED_KEY", "test-key")
+    monkeypatch.setenv("ENVIRONMENT", "test")
 
 
 @pytest.fixture
