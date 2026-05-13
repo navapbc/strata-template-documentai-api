@@ -14,13 +14,13 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+import documentai_api.logging
 from documentai_api.config.constants import (
     ConfigDefaults,
     ProcessStatus,
     S3MetadataKeys,
 )
 from documentai_api.config.env import get_aws_config
-from documentai_api.logging import get_logger
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
 from documentai_api.utils.bda_invoker import invoke_bedrock_data_automation
@@ -35,7 +35,7 @@ from documentai_api.utils.ddb import (
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 
-logger = get_logger(__name__)
+logger = documentai_api.logging.get_logger(__name__)
 app = typer.Typer()
 
 
@@ -207,9 +207,9 @@ def main(
     # strip S3 prefix for DynamoDB key (files are stored without prefix)
     ddb_key = os.path.basename(object_key)
 
-    try:
-        existing_record = get_ddb_record(ddb_key)
-    except ValueError:
+    existing_record = get_ddb_record(ddb_key)
+
+    if existing_record is None:
         # first time seeing this file
         logger.info(f"First time processing {ddb_key}")
         insert_initial_ddb_record(
@@ -223,6 +223,9 @@ def main(
         )
 
         existing_record = get_ddb_record(ddb_key)
+
+        if existing_record is None:
+            raise Exception("Could not retrieve DDB record after creation")
 
     status = existing_record.get(DocumentMetadata.PROCESS_STATUS)
 
@@ -259,10 +262,11 @@ def cli(
     ),
 ) -> None:
     """Process uploaded document and invoke BDA."""
-    try:
-        main(object_key, bucket_name, user_provided_document_category, job_id, trace_id)
-    except Exception:
-        raise typer.Exit(1) from None
+    with documentai_api.logging.init(__package__):
+        try:
+            main(object_key, bucket_name, user_provided_document_category, job_id, trace_id)
+        except Exception:
+            raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":

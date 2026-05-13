@@ -6,12 +6,13 @@ from typing import Any
 
 import typer
 
+import documentai_api.logging
 from documentai_api.config.env import get_aws_config
 from documentai_api.logging import get_logger
 from documentai_api.utils.bda_output_processor import process_bda_output
 from documentai_api.utils.s3 import get_s3_prefix_from_location
 
-logger = get_logger(__name__)
+logger = documentai_api.logging.get_logger(__name__)
 app = typer.Typer()
 
 
@@ -77,12 +78,13 @@ def cli(
     object_key: str = typer.Argument(..., help="S3 object key of BDA output file"),
 ) -> None:
     """Process BDA output file."""
-    try:
-        result = main(bucket_name, object_key)
-        if result:
-            typer.echo(json.dumps(result))
-    except Exception:
-        raise typer.Exit(1) from None
+    with documentai_api.logging.init(__package__):
+        try:
+            result = main(bucket_name, object_key)
+            if result:
+                typer.echo(json.dumps(result))
+        except Exception:
+            raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":
