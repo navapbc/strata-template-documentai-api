@@ -40,7 +40,6 @@ def set_ddb_doc_metadata_table_env_vars(ddb_doc_metadata_table_resource, monkeyp
         "DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME", ddb_doc_metadata_table_resource.name
     )
     monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME", "job-id-index")
-    # required by get_aws_config() but not used by DDB operations
     monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", "s3://test/input")
     monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", "s3://test/output")
     monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:test")

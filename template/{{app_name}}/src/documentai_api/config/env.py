@@ -20,10 +20,9 @@ class AWSEnvConfig(PydanticBaseEnvConfig):
 
 
 class AppEnvConfig(PydanticBaseEnvConfig):
-    # general config
-    api_auth_insecure_shared_key: str = ""
-    image_tag: str = ""
-    environment: str = "local"
+    api_auth_insecure_shared_key: str
+    image_tag: str | None = None
+    environment: str
 
 
 @lru_cache

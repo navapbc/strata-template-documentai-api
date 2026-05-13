@@ -55,17 +55,6 @@ def runtime_required_env(monkeypatch, s3_bucket, ddb_doc_metadata_table):
 
 
 @pytest.fixture
-def base_env(monkeypatch):
-    monkeypatch.setenv("BDA_PROJECT_ARN", "arn:aws:test")
-    monkeypatch.setenv("BDA_PROFILE_ARN", "arn:aws:test")
-    monkeypatch.setenv("BDA_REGION", "us-east-1")
-    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_TABLE_NAME", "test")
-    monkeypatch.setenv("DOCUMENTAI_DOCUMENT_METADATA_JOB_ID_INDEX_NAME", "test")
-    monkeypatch.setenv("DOCUMENTAI_INPUT_LOCATION", "s3://test/input")
-    monkeypatch.setenv("DOCUMENTAI_OUTPUT_LOCATION", "s3://test/output")
-
-
-@pytest.fixture
 def api_client(runtime_required_env):
     """Create test client."""
     from fastapi.testclient import TestClient

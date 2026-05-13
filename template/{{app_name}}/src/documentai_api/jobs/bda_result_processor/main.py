@@ -8,7 +8,6 @@ import typer
 
 import documentai_api.logging
 from documentai_api.config.env import get_aws_config
-from documentai_api.logging import get_logger
 from documentai_api.utils.bda_output_processor import process_bda_output
 from documentai_api.utils.s3 import get_s3_prefix_from_location
 

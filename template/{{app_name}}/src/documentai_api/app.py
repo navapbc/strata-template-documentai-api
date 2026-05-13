@@ -39,16 +39,11 @@ from documentai_api.models.api_responses import (
 )
 from documentai_api.schemas.document_metadata import DocumentMetadata
 from documentai_api.services import s3 as s3_service
-<<<<<<< HEAD
-from documentai_api.utils.ddb import classify_as_failed, get_ddb_by_job_id
-=======
-from documentai_api.utils import env
 from documentai_api.utils.ddb import (
     classify_as_failed,
     get_ddb_by_job_id,
     insert_minimal_ddb_record,
 )
->>>>>>> main
 from documentai_api.utils.models import ClassificationData
 from documentai_api.utils.s3 import parse_s3_uri
 from documentai_api.utils.schemas import get_all_schemas, get_document_schema
@@ -165,15 +160,8 @@ async def upload_document_for_processing(
             "category_type": type(user_provided_document_category).__name__,
         },
     )
-<<<<<<< HEAD
 
-    documentai_input_location = get_aws_config().documentai_input_location
-
-    # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    bucket_name, object_key = parse_s3_uri(f"{documentai_input_location}/{unique_file_name}")
-=======
     bucket_name, object_key = parse_s3_uri(dest_path)
->>>>>>> main
 
     try:
         metadata = {}
@@ -319,7 +307,7 @@ async def create_document(
     ddb_key = unique_file_name
 
     # DOCUMENTAI_INPUT_LOCATION includes full path (e.g. s3://bucket/input)
-    input_location = env.get_required_env(env.DOCUMENTAI_INPUT_LOCATION)
+    input_location = get_aws_config().documentai_input_location
     dest_path = f"{input_location}/{unique_file_name}"
 
     insert_minimal_ddb_record(

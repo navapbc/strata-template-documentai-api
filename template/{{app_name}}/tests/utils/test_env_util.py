@@ -16,7 +16,4 @@ def test_aws_env_config_has_required_fields():
 def test_aws_env_config_defaults():
     fields = AWSEnvConfig.model_fields | AppEnvConfig.model_fields
     assert fields["bda_region"].default == "us-east-1"
-    assert fields["environment"].default == "local"
     assert fields["max_bda_invoke_retry_attempts"].default == 3
-    assert fields["api_auth_insecure_shared_key"].default == ""
-    assert fields["image_tag"].default == ""

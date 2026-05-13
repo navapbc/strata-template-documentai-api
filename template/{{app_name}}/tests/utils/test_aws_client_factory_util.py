@@ -77,13 +77,13 @@ def test_get_region_from_env(monkeypatch):
     assert region == "us-west-2"
 
 
-def test_get_bda_region_default(base_env):
+def test_get_bda_region_default(runtime_required_env):
     """Test that _get_bda_region() returns default when BDA_REGION not set."""
     region = AWSClientFactory._get_bda_region()
     assert region == "us-east-1"
 
 
-def test_get_bda_region_from_env(base_env, monkeypatch):
+def test_get_bda_region_from_env(runtime_required_env, monkeypatch):
     """Test that _get_bda_region() returns value from BDA_REGION env var."""
     from documentai_api.config.env import get_aws_config
 
@@ -126,7 +126,7 @@ def test_get_dynamodb_resource(mock_aws_session_instance):
     assert resource is not None
 
 
-def test_get_bda_client(base_env, mock_aws_session_instance):
+def test_get_bda_client(runtime_required_env, mock_aws_session_instance):
     """Test that get_bda_client() calls session.client("bedrock-data-automation")."""
     client = AWSClientFactory.get_bda_client()
 
@@ -136,7 +136,7 @@ def test_get_bda_client(base_env, mock_aws_session_instance):
     assert client is not None
 
 
-def test_get_bda_runtime_client(base_env, mock_aws_session_instance):
+def test_get_bda_runtime_client(runtime_required_env, mock_aws_session_instance):
     """Test that get_bda_runtime_client() calls session.client("bedrock-data-automation-runtime")."""
     client = AWSClientFactory.get_bda_runtime_client()
 
