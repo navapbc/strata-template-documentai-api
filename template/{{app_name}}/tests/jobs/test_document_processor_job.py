@@ -63,15 +63,15 @@ def input_pdf(s3_bucket):
 @pytest.mark.parametrize(
     ("content_type", "file_size", "expected"),
     [
-        ("image/jpeg", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value, False),
-        ("image/jpeg", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1, True),
-        ("image/png", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value, False),
-        ("image/png", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1, True),
-        ("application/pdf", ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value, False),
-        ("application/pdf", int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value) + 1, True),
-        ("image/tiff", ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value, False),
-        ("image/tiff", int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES.value) + 1, True),
-        ("unknown/type", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1, True),
+        ("image/jpeg", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES, False),
+        ("image/jpeg", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES) + 1, True),
+        ("image/png", ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES, False),
+        ("image/png", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES) + 1, True),
+        ("application/pdf", ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES, False),
+        ("application/pdf", int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES) + 1, True),
+        ("image/tiff", ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES, False),
+        ("image/tiff", int(ConfigDefaults.BDA_MAX_DOCUMENT_FILE_SIZE_BYTES) + 1, True),
+        ("unknown/type", int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES) + 1, True),
     ],
 )
 def test_is_file_too_large_for_bda(content_type, file_size, expected):
@@ -133,7 +133,7 @@ def test_convert_to_grayscale_large_image_converts_to_pdf(mock_grayscale_depende
 
     def save_side_effect(buf, format, quality=None):
         if format == "JPEG":
-            buf.write(b"x" * (int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1))
+            buf.write(b"x" * (ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES + 1))
         else:
             buf.write(b"pdf data")
 
@@ -166,7 +166,7 @@ def test_convert_s3_object_to_grayscale_file_too_large(s3_bucket, mocker):
     """Test S3 conversion returns False when file too large."""
     s3_bucket.put_object(Key="test.jpg", Body=b"image data", ContentType="image/jpeg")
 
-    large_bytes = b"x" * (int(ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES.value) + 1)
+    large_bytes = b"x" * (ConfigDefaults.BDA_MAX_IMAGE_SIZE_BYTES + 1)
     mock_convert = mocker.patch("documentai_api.jobs.document_processor.main.convert_to_grayscale")
     mock_convert.return_value = (large_bytes, "image/jpeg")
 

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 import boto3
 
 from documentai_api.logging import get_logger
-from documentai_api.utils import env
 
 if TYPE_CHECKING:
     from mypy_boto3_bedrock_data_automation.client import DataAutomationforBedrockClient
@@ -38,7 +37,9 @@ class AWSClientFactory:
 
     @classmethod
     def _get_bda_region(cls) -> str:
-        return os.getenv(env.BDA_REGION, "us-east-1")
+        from documentai_api.config import env
+
+        return env.get_aws_config().bda_region
 
     @classmethod
     def _get_dynamodb_table(cls, table_name: str) -> Table:

@@ -244,7 +244,7 @@ def test_get_schema_not_found(api_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_bucket, monkeypatch):
+async def test_upload_document_for_processing_s3_failure(blank_pdf_file, s3_bucket):
     """Test S3 upload failure raises HTTPException."""
     with pytest.raises(HTTPException) as exc_info:
         await upload_document_for_processing(

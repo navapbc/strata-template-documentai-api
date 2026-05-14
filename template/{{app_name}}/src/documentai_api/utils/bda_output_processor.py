@@ -115,7 +115,7 @@ def process_bda_output(
         text = get_text_from_standard_blueprint(bda_result_json)
 
         if text and len([c for c in text if c.isalnum()]) > int(
-            ConfigDefaults.BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH.value
+            ConfigDefaults.BDA_DOCUMENT_DETECTION_MIN_CHAR_LENGTH
         ):
             msg += "Document detected, but not implemented."
             logger.info(msg)
