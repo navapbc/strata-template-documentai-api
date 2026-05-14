@@ -23,6 +23,8 @@ class AppEnvConfig(PydanticBaseEnvConfig):
     api_auth_insecure_shared_key: str
     image_tag: str | None = None
     environment: str
+    host: str = "127.0.0.1"
+    port: int = 8000
 
 
 @lru_cache
