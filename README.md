@@ -22,7 +22,7 @@ This is a template repository for a DocumentAI API application. Unlike some
 other Strata templates, this is more of a complete application intended for use
 almost out of the box.
 
-See [`navapbc/platform`](https://github.com/navapbc/strata) for other template repos.
+See [`navapbc/strata`](https://github.com/navapbc/strata) for other template repos.
 
 ## Features
 
@@ -52,7 +52,9 @@ application to be called `<APP_NAME>`:
     ```
 
 3. Follow the steps in `<APP_NAME>/README.md` to set up the application locally.
-4. Optional, if using the Platform infrastructure template: [Follow the steps in the `template-infra` README](https://github.com/navapbc/template-infra#installation) to set up the various pieces of your infrastructure.
+4. Optional, if using the Strata infrastructure template, [follow the deployment
+   guide](/template-only-docs/demployment.md) to set up the various pieces of
+   your infrastructure.
 
 ## Updates
 

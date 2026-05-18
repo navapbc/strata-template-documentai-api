@@ -73,16 +73,9 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - **Make** - For running development commands 
 - **AWS CLI** (optional) - For interacting with AWS services during development
 
-**For deployment:**
-- AWS account with appropriate permissions
-- Infrastructure deployed (see [Deployment](#deployment) section)
-
-
 ## Configuration
 
 ### Environment Variables
-
-**Required for AWS service integration** (set by infrastructure when deployed):
 
 - `DOCUMENTAI_INPUT_LOCATION` - S3 bucket for document uploads (e.g., `s3://bucket-name`)
 - `DOCUMENTAI_OUTPUT_LOCATION` - S3 bucket for BDA processing results
@@ -91,14 +84,9 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - `BDA_PROFILE_ARN` - AWS Bedrock Data Automation profile ARN
 - `BDA_REGION` - AWS region for BDA service
 - `API_AUTH_INSECURE_SHARED_KEY` - API authentication key (see [API Authentication](../docs/{{app_name}}/api-authentication.md))
-
-
-**Optional for local development:**
-
-- `HOST` - API host (default: `localhost`)
-- `PORT` - API port (default: `{{app_local_port}}`)
 - `ENVIRONMENT` - Environment name (e.g., `dev`, `prod`, `local`)
-
+- `HOST` - API host (`local` default: `localhost`)
+- `PORT` - API port (`local` default: `{{app_local_port}}`)
 
 ### Application Constants
 
@@ -275,18 +263,3 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 - **Services** - AWS client wrappers for S3, DynamoDB, and Bedrock Data Automation
 - **Utils** - Document detection, quality analysis, response formatting
 - **FastAPI App** - Local development and testing interface
-
-## Deployment
-
-This application is deployed as part of AWS infrastructure managed in separate repositories. The application code is packaged as a Docker container and deployed to AWS ECS by infrastructure-as-code.
-
-**Deployment process:**
-
-1. Application code is built into a Docker image
-2. Image is pushed to Amazon ECR
-3. Infrastructure deploys the image to:
-   - ECS Fargate (FastAPI application)
-
-**Environment variables** listed in the [Configuration](#configuration) section are set by the infrastructure during deployment.
-
-For infrastructure setup and deployment instructions, refer to the infrastructure repository documentation.
