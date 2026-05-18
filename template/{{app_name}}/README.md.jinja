@@ -97,7 +97,9 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 
 ### Application Constants
 
-Core application settings are defined in `src/documentai_api/config/constants.json`. These constants are loaded at startup and do not require environment variables.
+Core application settings are defined in
+`src/documentai_api/config/constants.py`. These constants are loaded at startup
+and do not require environment variables.
 
 - **Document categories** - Supported document types (`income`, `expenses`, `legal_documents`, `employment_training`)
 - **File validation** - Supported content types (PDF, JPEG, PNG, TIFF)
@@ -229,7 +231,6 @@ For more details on writing tests, see [Writing Tests](../docs/{{app_name}}/writ
 │       ├── cli/                          # Miscellaneous cli scripts
 │       │   ├── export_openapi.py
 │       ├── config/                       # Configuration and constants
-│       │   ├── constants.json
 │       │   └── constants.py
 │       ├── jobs/                         # Background jobs and event handlers
 │       │   ├── bda_result_processor/     # Processes BDA output results
