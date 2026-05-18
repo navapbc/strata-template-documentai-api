@@ -29,6 +29,7 @@ Contact your system administrator to obtain an API Key for your environment.
 Include the API key in the `API-Key` header with every request:
 
 **Example with curl:**
+
 ```bash
 curl -H "API-Key: your-api-key-here" \
      -F "file=@document.pdf" \
@@ -52,10 +53,11 @@ print(response.json())
 ```
 
 ### Endpoint Authentication
-Visit `/docs` to view all available endpoints. 
 
-Protected routes are indicated by the lock icon (🔒). Public routes (e.g., `/health`) do not require authentication.
+Visit `/docs` to view all available endpoints.
 
+Protected routes are indicated by the lock icon (🔒). Public routes (e.g.,
+`/health`) do not require authentication.
 
 ### Error Responses
 
@@ -76,15 +78,18 @@ Protected routes are indicated by the lock icon (🔒). Public routes (e.g., `/h
 ```
 
 ## For Maintainers
-The DocumentAI API uses the value from `API_AUTH_INSECURE_SHARED_KEY` env var to compare against the `API-Key` header in requests.
+
+The DocumentAI API uses the value from `API_AUTH_INSECURE_SHARED_KEY` env var to
+compare against the `API-Key` header in requests.
 
 ### Storing the Key
 
 **Local Development**:
 
-A default key is preconfigured in `local.env.example`. Copy it to `.env` to get started (_you can change the value in .env if desired_):
+A default key is preconfigured in `local.env.example`. Copy it to `.env` to get
+started (_you can change the value in .env if desired_):
 
-```
+```bash
 cp local.env.example .env
 ```
 
@@ -96,7 +101,9 @@ export API_AUTH_INSECURE_SHARED_KEY=your-generated-api-key
 
 **Hosted Environments**:
 
-Store the key securely at rest and inject the env var into the API server environment. If you are using template-infra, add this to your [app env-config](https://github.com/navapbc/template-infra/blob/main/docs/infra/environment-variables-and-secrets.md#secrets):
+Store the key securely at rest and inject the env var into the API server
+environment. If you are using template-infra, add this to your [app
+env-config](https://github.com/navapbc/template-infra/blob/main/docs/infra/environment-variables-and-secrets.md#secrets):
 
 ```hcl
 API_AUTH_INSECURE_SHARED_KEY = {
@@ -106,12 +113,14 @@ API_AUTH_INSECURE_SHARED_KEY = {
 ```
 
 ### Rotating the Key
+
 1. Update the value in your secret store
 2. Restart/redeploy the server to pick up the new value
 
-
 ### Security Considerations
-**This is a skeleton key implementation** - all users share the same API key. This is suitable for:
+
+**This is a skeleton key implementation** - all users share the same API key.
+This is suitable for:
 
 - Demo environments
 - Internal tools

@@ -29,6 +29,7 @@ See [`navapbc/platform`](https://github.com/navapbc/strata) for other template r
 - API for identifying and extracting data from "document" files
 
 ## Repo structure
+
 ```text
 .
 ├── template           # The template (the things that get installed/updated)
@@ -45,9 +46,11 @@ application to be called `<APP_NAME>`:
 
 1. [Install the nava-platform tool](https://github.com/navapbc/platform-cli).
 2. Install template by running in your project's root:
+
     ```sh
     nava-platform app install --template-uri https://github.com/navapbc/strata-template-documentai-api . <APP_NAME>
     ```
+
 3. Follow the steps in `<APP_NAME>/README.md` to set up the application locally.
 4. Optional, if using the Platform infrastructure template: [Follow the steps in the `template-infra` README](https://github.com/navapbc/template-infra#installation) to set up the various pieces of your infrastructure.
 
@@ -58,9 +61,11 @@ project to use a newer version of this template:
 
 1. [Install the nava-platform tool](https://github.com/navapbc/platform-cli).
 2. Update app template by running in your project's root:
+
     ```sh
     nava-platform app update . <APP_NAME>
     ```
+
 ## License
 
 This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
