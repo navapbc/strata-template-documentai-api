@@ -3,7 +3,7 @@ from enum import StrEnum
 
 class APIConfig:
     VERSION = "v1"
-    TITLE = "Document AI API"
+    TITLE = "DocumentAI API"
     DESCRIPTION = "API for document processing"
     AUTH_KEY_HEADER_NAME = "API-Key"
     DEFAULT_TIMEOUT = 30
