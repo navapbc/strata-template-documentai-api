@@ -25,7 +25,7 @@ jobs:
       matrix:
         project:
           - repo: navapbc/platform-test
-            app: app-documentai
+            app: app-docuai
 
     concurrency:
       group: cd-${{ matrix.project.repo }}
