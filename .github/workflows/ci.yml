@@ -33,7 +33,7 @@ jobs:
     with:
       branch_name: ${{ inputs.branch_name || github.head_ref }}
       project_repo: navapbc/platform-test
-      project_app: app-documentai
+      project_app: app-docuai
     secrets:
       access_token: ${{ secrets.PLATFORM_BOT_GITHUB_TOKEN }}
 
