@@ -84,9 +84,9 @@ use the following configuration:
 
     # KMS Key for DynamoDB Encryption
     data "aws_iam_policy_document" "documentai_api_dynamodb_kms_key_policy" {
-      #checkov:skip=CKV_AWS_109
-      #checkov:skip=CKV_AWS_111
-      #checkov:skip=CKV_AWS_356
+      # checkov:skip=CKV_AWS_109:Root account requires full KMS permissions to enable IAM-based access control
+      # checkov:skip=CKV_AWS_111:Root account requires full KMS permissions to enable IAM-based access control
+      # checkov:skip=CKV_AWS_356:In a key policy, the wildcard character in the Resource element represents the KMS key to which the key policy is attached.
 
       statement {
         sid    = "Enable IAM User Permissions"
