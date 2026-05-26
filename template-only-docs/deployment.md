@@ -24,7 +24,6 @@ use the following configuration:
    docs](https://github.com/navapbc/template-infra/blob/main/docs/infra/document-data-extraction.md).
     1. Things will work out of the box, but understand the update process noted
        in the docs for tuning behavior after initial setup.
-       1. TODO after https://github.com/navapbc/template-infra/pull/1039 this should be true?
 1. In `/infra/<APP_NAME>/app-config/env-config/file_upload_jobs.tf`:
     1. Configure the service's `file_upload_jobs`:
 
