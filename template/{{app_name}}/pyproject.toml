@@ -13,7 +13,7 @@ dependencies = [
   "python-magic>=0.4.27",
   "pypdf>=3.17.4",
   "opencv-python-headless==4.9.0.80",
-  "numpy==1.26.4",
+  "numpy==2.5.1",
   "pdf2image>=1.16.0",
   "typer>=0.16.0",
   "click>=8.1,<8.3",
