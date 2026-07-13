@@ -3,7 +3,7 @@
 # - https://github.com/navapbc/platform-cli/blob/main/Dockerfile
 # - https://docs.astral.sh/uv/guides/integration/docker/
 
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS base
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS base
 
 # install runtime dependencies
 RUN apt-get update -qq \
