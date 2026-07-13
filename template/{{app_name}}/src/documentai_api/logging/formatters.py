@@ -13,16 +13,14 @@ from collections.abc import Callable
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any
 from uuid import UUID
 
 from documentai_api.logging import decodelog
 
-T = TypeVar("T")
-
 
 # identity returns an unmodified object
-def identity(obj: T) -> T:
+def identity[T](obj: T) -> T:
     return obj
 
 
