@@ -11,8 +11,8 @@ Automation (BDA) to classify and extract data from uploaded documents.
 
 The system follows an event-driven architecture with two main layers:
 
-- **API Layer** - Document upload and status endpoints  
-- **Processing** - Document classification and data extraction pipeline  
+- **API Layer** - Document upload and status endpoints
+- **Processing** - Document classification and data extraction pipeline
 
 ![Architecture Diagram](../docs/{{app_name}}/media/architecture.png)
 
@@ -70,7 +70,7 @@ For detailed component descriptions, see [Project Structure](#project-structure)
 - **Python 3.12+** - Required for running the application
 - **uv** - Fast Python package installer ([installation guide](https://docs.astral.sh/uv/getting-started/installation/))
 - **Docker & Docker Compose** - For local development environment
-- **Make** - For running development commands 
+- **Make** - For running development commands
 - **AWS CLI** (optional) - For interacting with AWS services during development
 
 ## Configuration
@@ -156,7 +156,7 @@ The Makefile automatically detects the `RUN_CMD_APPROACH` environment variable:
 
 The application will be available at http://localhost:{{app_local_port}}.
 
-API endpoints require an `API-Key` header. See [API Authentication](../docs/{{app_name}}/api-authentication.md) for details. 
+API endpoints require an `API-Key` header. See [API Authentication](../docs/{{app_name}}/api-authentication.md) for details.
 A default key is preconfigured in `local.env.example` and is copied to `.env` during `make init`/`init-local`.
 
 **Upload a document (async)** - returns immediately with `jobId` for polling:
