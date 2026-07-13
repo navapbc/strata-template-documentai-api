@@ -240,7 +240,7 @@ class DocumentDetector:
         self, file_bytes: bytes, max_pages: int | None = None
     ) -> list[ImageData]:
         """Convert TIFF frames to grayscale OpenCV images."""
-        images = []
+        images: list[ImageData] = []
 
         tiff_bytes = io.BytesIO(file_bytes)
 
@@ -319,7 +319,7 @@ class DocumentDetector:
             [ImageData, str],
             T,
         ],
-    ) -> T:
+    ) -> T | None:
         """Process image bytes with proper cleanup."""
         nparr = np.frombuffer(file_bytes, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
@@ -452,7 +452,7 @@ class DocumentDetector:
                 roi = gray_image[y_start:y_end, x_start:x_end]
 
                 # strict content detection
-                edge_pixels = np.sum(cv2.Canny(roi, 50, 150) > 0)  # type: ignore[operator]
+                edge_pixels = np.sum(cv2.Canny(roi, 50, 150) > 0)  # type: ignore[type-var]
                 edge_ratio = edge_pixels / roi.size
 
                 # only keep ROIs with some content (not pure whitespace)
@@ -483,7 +483,7 @@ class DocumentDetector:
         # edge score the ratio of edge pixels to the total number of pixels in the roi
         total_pixels_in_roi = document_roi.size
         # count non-zero pixels
-        edge_pixel_count = np.sum(edges_roi > 0)  # type: ignore[operator]
+        edge_pixel_count = np.sum(edges_roi > 0)
 
         if total_pixels_in_roi > 0:
             edge_score_raw = edge_pixel_count / total_pixels_in_roi
@@ -495,7 +495,7 @@ class DocumentDetector:
     def _calculate_sobel_score(self, document_roi: ROI, file_name: str) -> float:
         gx = cv2.Sobel(document_roi, cv2.CV_64F, 1, 0, ksize=3)
         gy = cv2.Sobel(document_roi, cv2.CV_64F, 0, 1, ksize=3)
-        grad_mag = np.sqrt(gx**2 + gy**2)  # type: ignore[operator]
+        grad_mag = np.sqrt(gx**2 + gy**2)
         sobel_score_raw = np.mean(grad_mag)
         return float(sobel_score_raw)
 
@@ -542,7 +542,7 @@ class DocumentDetector:
 
                 if mask is not None:
                     patch_mask = mask[y : y + patch_size, x : x + patch_size]
-                    if np.sum(patch_mask) == 0:  # no content in this patch
+                    if np.sum(patch_mask) == 0:  # type: ignore[type-var]  # no content in this patch
                         continue
                     patch_values = patch[patch_mask]
                 else:
